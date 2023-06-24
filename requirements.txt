@@ -1,0 +1,4 @@
+nextcord==2.4.2
+pymongo==4.3.3
+requests==2.28.0
+xrpl-py==1.7.0

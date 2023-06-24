@@ -1,0 +1,10 @@
+*.pyc
+__pycache__/
+
+logfile_wrapper.log
+config.py
+test3.py
+t2.py
+static/images
+static/bgs
+.idea
