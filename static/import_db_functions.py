@@ -25,7 +25,7 @@ def update_type(name, attrs):
 
 
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List_1.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_2.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -44,7 +44,7 @@ def import_moves():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_1.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets.csv', 'r') as csvfile:
         collection = db['MoveSets']
         csvreader = csv.reader(csvfile)
         header = next(csvreader)  # Skip the header row
@@ -140,7 +140,7 @@ def clean_attrs():
                 print(r)
 
 
-# import_moves()
+import_moves()
 import_movesets()
 # import_level()
 import_attrs_img()

@@ -99,16 +99,7 @@ async def check_battle(user_id, opponent, interaction, battle_nickname):
     # print([(k, v) for k, v in owned_nfts['zerpmons'].items()])
 
     # Sanity checks
-    if battle_nickname == 'Ranked':
-        user_rank = user_owned_nfts['data']['rank']['tier'] if 'rank' in user_owned_nfts['data'] else 'Unranked'
-        user_rank_tier = config.TIERS.index(user_rank)
-        opponent_rank = opponent_owned_nfts['data']['rank']['tier'] if 'rank' in opponent_owned_nfts['data'] else 'Unranked'
-        oppo_rank_tier = config.TIERS.index(opponent_rank)
-        print(user_rank_tier, [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1])
-        if user_rank_tier not in [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1]:
-            await interaction.send(
-                f"Sorry you can't battle **{opponent_rank}** with your current {user_rank} Rank.")
-            return False
+
     if user_id == opponent.id:
         await interaction.send(f"You want to battle yourself 🥲, sorry that's not allowed.")
         return False
@@ -141,4 +132,15 @@ async def check_battle(user_id, opponent, interaction, battle_nickname):
                     f"**{owned_nfts['user']}** your default deck contains {len(def_deck) - 1} Zerpmon, "
                     f"need 3 to do {battle_nickname} battles.")
                 return False
+
+    if battle_nickname == 'Ranked':
+        user_rank = user_owned_nfts['data']['rank']['tier'] if 'rank' in user_owned_nfts['data'] else 'Unranked'
+        user_rank_tier = config.TIERS.index(user_rank)
+        opponent_rank = opponent_owned_nfts['data']['rank']['tier'] if 'rank' in opponent_owned_nfts['data'] else 'Unranked'
+        oppo_rank_tier = config.TIERS.index(opponent_rank)
+        print(user_rank_tier, [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1])
+        if user_rank_tier not in [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1]:
+            await interaction.send(
+                f"Sorry you can't battle **{opponent_rank}** with your current {user_rank} Rank.")
+            return False
     return True

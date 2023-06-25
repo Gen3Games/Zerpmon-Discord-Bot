@@ -1785,7 +1785,7 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                                             'username2'], inline=False)
                         loser_p = points1 if winner == 2 else points2
                         embed.add_field(
-                            name=f"{t1['tier'] if winner == 2 else t2['tier']} {'🤡 Rank Down `⬇` 🤡' if (new_rank1 if winner == 2 else new_rank2) is not None else ''}",
+                            name=f"{t1['tier'] if winner == 2 else t2['tier']} {('🤡 Rank Down `⬇` 🤡' if loser_p > 0 else '⭐ Rank Up `⬆` ⭐') if (new_rank1 if winner == 2 else new_rank2) is not None else ''}",
                             value=f"{t1['points'] if winner == 2 else t2['points']} {'⬇' if loser_p > 0 else '⬆'}",
                             inline=False)
                         embed.add_field(name=f'ZP:\t{"-" if loser_p > 0 else "+"}{abs(loser_p)}', value='\u200B',

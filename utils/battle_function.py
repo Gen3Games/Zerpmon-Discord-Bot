@@ -771,7 +771,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                         ephemeral=True)
                 else:
                     await interaction.send(
-                        f"**Successfully** sent `{responses[0][2]}` {responses[0][2]}",
+                        f"**Successfully** sent `{responses[0][2]}` {responses[0][1]}",
                         ephemeral=True)
 
             db_query.update_battle_count(user_id, old_num)
