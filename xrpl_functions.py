@@ -12,35 +12,36 @@ import requests
 # look up account nfts
 async def get_nfts(address):
     try:
-        client = AsyncJsonRpcClient("https://xrplcluster.com/")
-        all_nfts = []
+        async with AsyncWebsocketClient(config.NODE_URL) as client:
+            all_nfts = []
 
-        acct_info = AccountNFTs(
-            account=address,
-            limit=400,
-        )
-        response = await client.request(acct_info)
-        result = response.result
-
-        while True:
-
-            # print(result)
-            length = len(result["account_nfts"])
-            print(length)
-            all_nfts.extend(result["account_nfts"])
-            if "marker" not in result:
-                break
             acct_info = AccountNFTs(
                 account=address,
                 limit=400,
-                marker=result['marker']
             )
             response = await client.request(acct_info)
             result = response.result
-            # print(json.dumps(result["account_nfts"], indent=4, sort_keys=True))
-        # print(all_nfts)
-        return True, all_nfts
-    except:
+
+            while True:
+
+                print(result)
+                length = len(result["account_nfts"])
+                print(length)
+                all_nfts.extend(result["account_nfts"])
+                if "marker" not in result:
+                    break
+                acct_info = AccountNFTs(
+                    account=address,
+                    limit=400,
+                    marker=result['marker']
+                )
+                response = await client.request(acct_info)
+                result = response.result
+                # print(json.dumps(result["account_nfts"], indent=4, sort_keys=True))
+            # print(all_nfts)
+            return True, all_nfts
+    except Exception as e:
+        print(e)
         return False, []
 
 

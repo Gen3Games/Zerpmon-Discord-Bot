@@ -654,7 +654,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
     move_counter = 0
     lost = 0
     while eliminate == "":
-        await asyncio.sleep(3)
+        await asyncio.sleep(4)
         result, p1, p2 = battle_zerpmons(z1['name'], z2['name'], [z1_type, z2_type], status_stack, [buffed_type1, []],
                                          p1, p2)
         t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
