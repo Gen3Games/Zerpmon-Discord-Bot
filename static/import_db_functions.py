@@ -64,25 +64,48 @@ def import_movesets():
                 doc = {
                     'number': row[0],
                     'name': row[1],
-                    'collection': row[2],
+                    # 'collection': row[2],
                     'moves': [
-                        {'name': row[5], 'dmg': int(row[6]) if row[6] != "" else "", 'type': row[7], 'id': row[8],
-                         'percent': row[9].replace("%", ""), 'color': header[4]},
-                        {'name': row[10], 'dmg': int(row[11]) if row[11] != "" else "", 'type': row[12], 'id': row[13],
-                         'percent': row[14].replace("%", ""), 'color': header[9]},
-                        {'name': row[15], 'dmg': int(row[16]) if row[16] != "" else "", 'type': row[17], 'id': row[18],
-                         'percent': row[19].replace("%", ""), 'color': header[14]},
-                        {'name': row[20], 'dmg': int(row[21]) if row[21] != "" else "", 'type': row[22], 'id': row[23],
-                         'percent': row[24].replace("%", ""), 'color': header[19]},
-                        {'name': row[25], 'stars': row[26], 'id': row[27], 'percent': row[28].replace("%", ""),
-                         'color': header[24]},
-                        {'name': row[29], 'stars': row[30], 'id': row[31], 'percent': row[32].replace("%", ""),
-                         'color': header[28]},
-                        {'name': row[33], 'id': row[34], 'percent': row[35].replace("%", ""), 'color': header[32]},
-                        {'name': row[36], 'id': row[37], 'percent': row[38].replace("%", ""), 'color': header[35]},
+                        {'name': row[4], 'dmg': int(row[5]) if row[5] != "" else "", 'type': row[6], 'id': row[7],
+                         'percent': row[8].replace("%", ""), 'color': header[3]},
+                        {'name': row[9], 'dmg': int(row[10]) if row[10] != "" else "", 'type': row[11], 'id': row[12],
+                         'percent': row[13].replace("%", ""), 'color': header[8]},
+                        {'name': row[14], 'dmg': int(row[15]) if row[15] != "" else "", 'type': row[16], 'id': row[17],
+                         'percent': row[18].replace("%", ""), 'color': header[13]},
+                        {'name': row[19], 'dmg': int(row[20]) if row[20] != "" else "", 'type': row[21], 'id': row[22],
+                         'percent': row[23].replace("%", ""), 'color': header[18]},
+                        {'name': row[24], 'stars': row[25], 'id': row[26], 'percent': row[27].replace("%", ""),
+                         'color': header[23]},
+                        {'name': row[28], 'stars': row[29], 'id': row[30], 'percent': row[31].replace("%", ""),
+                         'color': header[27]},
+                        {'name': row[32], 'id': row[33], 'percent': row[34].replace("%", ""), 'color': header[31]},
+                        {'name': row[35], 'id': row[36], 'percent': row[37].replace("%", ""), 'color': header[34]},
                     ],
-                    'nft_id': row[39]
+                    'nft_id': row[38]
                 }
+
+                # doc = {
+                #     'number': row[0],
+                #     'name': row[1],
+                #     'collection': row[2],
+                #     'moves': [
+                #         {'name': row[5], 'dmg': int(row[6]) if row[6] != "" else "", 'type': row[7], 'id': row[8],
+                #          'percent': row[9].replace("%", ""), 'color': header[4]},
+                #         {'name': row[10], 'dmg': int(row[11]) if row[11] != "" else "", 'type': row[12], 'id': row[13],
+                #          'percent': row[14].replace("%", ""), 'color': header[9]},
+                #         {'name': row[15], 'dmg': int(row[16]) if row[16] != "" else "", 'type': row[17], 'id': row[18],
+                #          'percent': row[19].replace("%", ""), 'color': header[14]},
+                #         {'name': row[20], 'dmg': int(row[21]) if row[21] != "" else "", 'type': row[22], 'id': row[23],
+                #          'percent': row[24].replace("%", ""), 'color': header[19]},
+                #         {'name': row[25], 'stars': row[26], 'id': row[27], 'percent': row[28].replace("%", ""),
+                #          'color': header[24]},
+                #         {'name': row[29], 'stars': row[30], 'id': row[31], 'percent': row[32].replace("%", ""),
+                #          'color': header[28]},
+                #         {'name': row[33], 'id': row[34], 'percent': row[35].replace("%", ""), 'color': header[32]},
+                #         {'name': row[36], 'id': row[37], 'percent': row[38].replace("%", ""), 'color': header[35]},
+                #     ],
+                #     'nft_id': row[39]
+                # }
                 collection.update_one({'name': row[1]}, {'$set': doc}, upsert=True)
             except Exception as e:
                 print(e, '\n', row)
@@ -140,7 +163,7 @@ def clean_attrs():
                 print(r)
 
 
-import_moves()
+# import_moves()
 import_movesets()
 # import_level()
 import_attrs_img()

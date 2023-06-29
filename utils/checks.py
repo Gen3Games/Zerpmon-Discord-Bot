@@ -22,7 +22,8 @@ async def get_time_left_utc():
     # Extract the hours and minutes from the time difference
     hours_left = time_difference.total_seconds() // 3600
     minutes_left = (time_difference.total_seconds() % 3600) // 60
-    return int(hours_left), int(minutes_left)
+    seconds_left = (time_difference.total_seconds() % 60)
+    return int(hours_left), int(minutes_left), int(seconds_left)
 
 
 def get_next_ts():
@@ -138,8 +139,8 @@ async def check_battle(user_id, opponent, interaction, battle_nickname):
         user_rank_tier = config.TIERS.index(user_rank)
         opponent_rank = opponent_owned_nfts['data']['rank']['tier'] if 'rank' in opponent_owned_nfts['data'] else 'Unranked'
         oppo_rank_tier = config.TIERS.index(opponent_rank)
-        print(user_rank_tier, [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1])
-        if user_rank_tier not in [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1]:
+        # print(user_rank_tier, [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1])
+        if user_rank_tier not in [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1, oppo_rank_tier - 2, oppo_rank_tier + 2]:
             await interaction.send(
                 f"Sorry you can't battle **{opponent_rank}** with your current {user_rank} Rank.")
             return False

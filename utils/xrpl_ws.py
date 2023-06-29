@@ -261,7 +261,8 @@ async def send_random_zerpmon(to_address):
                 continue
             res = await send_nft('reward', to_address, token_id)
             nft_data = await xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
-            return res, nft_data['name'] if 'name' in nft_data else token_id
+            img = ('https://ipfs.io/ipfs/' + nft_data['image'].replace("ipfs://", "")) if 'image' in nft_data else ''
+            return res, [(nft_data['name'] if 'name' in nft_data else token_id), img]
 
 
 async def send_nft(from_, to_address, token_id):
@@ -426,6 +427,6 @@ async def get_nft_data_wager(id):
 
 # asyncio.run(accept_nft('reward', offer='D1B77539A65C2B9DBD70DC8AF6048BF76A7E7ABECA6A24ECF99F701F0FA1315E', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
 #                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E266278A90000010E'))
-
+# asyncio.run(send_nft('reward', to_address='rMjN4c2p9yvuTvVozYYUwoF2U859M9tQcC', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E073C9DBE00000123'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))

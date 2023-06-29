@@ -173,11 +173,15 @@ def save_zerpmon_winrate(winner_name, loser_name):
     return True
 
 
-def get_rand_zerpmon():
+def get_rand_zerpmon(level):
     zerpmon_collection = db['MoveSets']
     random_doc = list(zerpmon_collection.aggregate([{'$sample': {'size': 1}}, {'$limit': 1}]))
+    zerp = random_doc[0]
+    zerp['level'] = level
+    for i in range(level//10):
+        zerp = update_moves(zerp, False)
     # print(random_doc[0])
-    return random_doc[0]
+    return zerp
 
 
 def get_all_z():
@@ -316,7 +320,7 @@ def get_ranked_players(user_id):
     curr_user = users_collection.find_one({'discord_id': user_id})
     if curr_user:
         curr_user_rank = users_collection.count_documents({'rank.points': {'$gt': curr_user['rank']['points'] if 'rank'
-                                                                           in curr_user else 0}})
+                                                                                                                 in curr_user else 0}})
         curr_user['ranked'] = curr_user_rank + 1
         top_users_count = users_collection.count_documents(query)
 
@@ -335,7 +339,10 @@ def get_ranked_players(user_id):
             top_users.append(curr_user)
         return top_users
     else:
-        return list(top_users[:10])
+        users = list(top_users[:10])
+        for i, user in enumerate(users):
+            users[i]['ranked'] = i + 1
+        return users
 
 
 def add_revive_potion(address, inc_by):
@@ -590,7 +597,7 @@ def update_rank(user_id, win, decay=False):
     if rank['points'] >= user_rank_d['h']:
         next_rank = [r for r, v in config.RANKS.items() if v['l'] == user_rank_d['h']][0]
         rank['tier'] = next_rank
-    elif rank['points'] <= user_rank_d['l']:
+    elif rank['points'] < user_rank_d['l']:
         next_rank = [r for r, v in config.RANKS.items() if v['h'] == user_rank_d['l']][0]
         rank['tier'] = next_rank
     if not decay:
@@ -604,7 +611,7 @@ def update_rank(user_id, win, decay=False):
 
 # MOVES UPDATE QUERY
 
-def update_moves(document):
+def update_moves(document, save_z=True):
     if 'level' in document and document['level'] / 10 >= 1:
         miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
         percent_change = 3.33 if 3.33 < miss_percent else miss_percent
@@ -618,7 +625,11 @@ def update_moves(document):
                 move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
                 document['moves'][i] = move
         del document['_id']
-        save_new_zerpmon(document)
+        if save_z:
+            save_new_zerpmon(document)
+        else:
+            return document
+
 
 # def update_all_zerp_moves():
 #     for document in db['MoveSets'].find():

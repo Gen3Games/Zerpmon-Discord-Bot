@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import traceback
 
 import nextcord
 
@@ -45,6 +46,7 @@ async def update_nft_holdings(client: nextcord.Client):
                         if serial in list(old_user['trainer_cards'].keys()):
                             t_serial.append(serial)
                             continue
+                        print(serial, list(old_user['trainer_cards'].keys()))
                         metadata = await xrpl_functions.get_nft_metadata(nft['URI'])
 
                         if "Zerpmon Trainers" in metadata['description']:
@@ -99,8 +101,8 @@ async def update_nft_holdings(client: nextcord.Client):
                                         try:
                                             role = nextcord.utils.get(guild.roles, name="Zerpmon Holder")
                                             await user.add_roles(role)
-                                        except:
-                                            print("USER already has the required role")
+                                        except Exception as e:
+                                            print(f"USER already has the required role {traceback.format_exc()}")
                                     if len(user_obj['trainer_cards']) > 0:
                                         try:
                                             role = nextcord.utils.get(guild.roles, name="Trainer")

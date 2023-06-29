@@ -24,7 +24,7 @@ async def get_nfts(address):
 
             while True:
 
-                print(result)
+                # print(result)
                 length = len(result["account_nfts"])
                 print(length)
                 all_nfts.extend(result["account_nfts"])
@@ -57,14 +57,13 @@ async def get_nft_metadata(uri):
                 response = requests.get(ascii_uri)
             else:
                 response = requests.get(base_url + ascii_uri)
-
+            response = response.json()
             # Parse the response as JSON
-            print(response.json())
+            print(response)
             # metadata = json.loads(response.content)
 
             # Print the metadata
             # print(metadata)
-            return response.json()
+            return response
         except Exception as e:
             print(f"ERROR in getting metadata: {e}")
-

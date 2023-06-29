@@ -140,7 +140,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     if _b_num > 0:
         if _user_owned_nfts['data']['battle']['reset_t'] > time.time() and _b_num >= 10:
 
-            _hours, _minutes = await checks.get_time_left_utc()
+            _hours, _minutes, _s = await checks.get_time_left_utc()
 
             button = Button(label="Use Mission Refill Potion", style=ButtonStyle.green)
             view = View()
@@ -259,7 +259,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     reset_str = ''
     if _b_num >= 10:
         if _user_owned_nfts['data']['battle']['reset_t'] > time.time():
-            _hours, _minutes = await checks.get_time_left_utc()
+            _hours, _minutes, _s = await checks.get_time_left_utc()
             reset_str = f' reset time **{_hours}**h **{_minutes}**m'
 
     sr, nft = _battle_z[0]

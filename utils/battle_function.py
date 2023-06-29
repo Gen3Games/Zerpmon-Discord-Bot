@@ -1,8 +1,11 @@
 import asyncio
 import json
+import logging
 import os
 import random
 import time
+import traceback
+
 from utils.battle_effect import apply_status_effects
 import nextcord
 import requests
@@ -30,6 +33,14 @@ def check_battle_happening(channel_id):
     wager_battles_in_channel = [i for msg, i in config.wager_battles.items() if i['channel_id'] == channel_id]
 
     return battles_in_channel == [] and wager_battles_in_channel == []
+
+
+async def send_global_message(guild, text, image):
+    try:
+        channel = nextcord.utils.get(guild.channels, name='🤖│zerpmon-caught')
+        await channel.send(content=text + '\n' + image)
+    except Exception as e:
+        logging.error(f'ERROR: {traceback.format_exc()}')
 
 
 def gen_image(_id, url1, url2, path1, path2, path3):
@@ -576,7 +587,10 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5):
 
 async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zerpmon, old_num):
     serial, z1 = active_zerpmon
-    z1_moves = db_query.get_zerpmon(z1['name'])['moves']
+    z1_moves = db_query.get_zerpmon(z1['name'])
+    z1_level = z1_moves['level'] if 'level' in z1_moves else 1
+    z1_moves = z1_moves['moves']
+
     zimg1 = z1['image']
     _data1 = db_query.get_owned(user_id)
     z1_type = [i['value'] for i in z1['attributes'] if i['trait_type'] == 'Type']
@@ -588,7 +602,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
         if buffed_type1 != []:
             buffed_type1 = buffed_type1[0]['value']
 
-    z2 = db_query.get_rand_zerpmon()
+    z2 = db_query.get_rand_zerpmon(level=z1_level)
     z2_moves = z2['moves']
     zimg2 = z2['image']
     z2_type = [i['value'] for i in z2['attributes'] if i['trait_type'] == 'Type']
@@ -756,9 +770,11 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                 else:
                     embed.add_field(name=f"{reward}" + ' Won', value=qty, inline=True)
                 if reward == "NFT":
-                    embed.add_field(name=f"NFT", value=token_id, inline=True)
-                    embed.description = f'🔥 🔥 Congratulations {interaction.user.mention} just caught **{token_id}**!! 🔥 🔥\n@everyone'
+                    embed.add_field(name=f"NFT", value=token_id[0], inline=True)
+                    embed.description = f'🔥 🔥 Congratulations {interaction.user.mention} just caught **{token_id[0]}**!! 🔥 🔥\n@everyone'
+                    embed.set_thumbnail(token_id[1])
                     private = False
+                    await send_global_message(guild=interaction.guild, text=embed.description, image=token_id[1])
 
             await interaction.send(
                 embed=embed,
