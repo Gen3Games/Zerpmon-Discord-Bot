@@ -8,6 +8,7 @@ import nextcord
 import config
 import db_query
 from utils.checks import get_next_ts, get_time_left_utc
+from utils.xrpl_ws import get_balance
 
 
 class CustomEmbed(nextcord.Embed):
@@ -65,10 +66,10 @@ async def send_reset_message(client: nextcord.Client):
                                 if index == "trainer":
                                     zerp_msg = f'> Main Trainer:\n' \
                                                f'> \n' \
-                                               f'> 🧙 {user["trainer_cards"][v]["name"]} 🧙\n' \
+                                               f'> 🧙 {user["trainer_cards"][v]["name"]} 🧙\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
                                                f'> \n' + zerp_msg
                                 else:
-                                    zerp_msg += f'> ⭐ {user["zerpmons"][v]["name"]} ⭐\n'
+                                    zerp_msg += f'> ⭐ {user["zerpmons"][v]["name"]} ⭐\t[view](https://xrp.cafe/nft/{user["zerpmons"][v]["token_id"]})\n'
                             msg = '#{0:<4} {1:<25}'.format(user['ranked'], user['username'])
 
                             embed.add_field(name=f'{msg}', value=f"{zerp_msg}", inline=True)
@@ -99,6 +100,14 @@ async def send_reset_message(client: nextcord.Client):
                     if len(channel) > 0:
                         channel = channel[0]
                         await channel.edit(name=f"⏰ Restore: {str(h).zfill(2)}:{str(m).zfill(2)}")
+
+                    channel = [i for i in guild.channels if 'Mission XRP' in i.name]
+                    bal = await get_balance(config.REWARDS_ADDR)
+                    amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
+                    # print(channel, time.time()//1)
+                    if len(channel) > 0:
+                        channel = channel[0]
+                        await channel.edit(name=f"💰 Mission XRP: {amount_to_send:.4f}")
                         # await asyncio.sleep(5)
                 except Exception as e:
                     logging.error(f'ERROR: {traceback.format_exc()}')

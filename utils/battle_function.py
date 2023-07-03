@@ -135,13 +135,14 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
     }
 
     if 'dmg' in move1:
-        d1m = 1
+        d1m = 1.0
         # print(types[1], types[0])
 
         _t1 = move1['type'].lower().replace(" ", "")
         for _t2 in types[1]:
             _t2 = _t2.lower().replace(" ", "")
             d1m = d1m * type_mapping[_t1][_t2]
+            d1m = int(d1m) if float(d1m).is_integer() else d1m
         # print(d1m)
 
         move1['dmg'] = round(d1m * int(move1['dmg']))
@@ -154,12 +155,13 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             winner['move1']['mul'] += " 🎯"
 
     if 'dmg' in move2:
-        d2m = 1
+        d2m = 1.0
 
         _t1 = move2['type'].lower().replace(" ", "")
         for _t2 in types[0]:
             _t2 = _t2.lower().replace(" ", "")
             d2m = d2m * type_mapping[_t1][_t2]
+            d2m = int(d2m) if float(d2m).is_integer() else d2m
         # print(d2m)
         move2['dmg'] = round(d2m * int(move2['dmg']))
         winner['move2']['dmg'] = round(move2['dmg'])
@@ -603,6 +605,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             buffed_type1 = buffed_type1[0]['value']
 
     z2 = db_query.get_rand_zerpmon(level=z1_level)
+    while z2['name'] == z1['name']:
+        z2 = db_query.get_rand_zerpmon(level=z1_level)
     z2_moves = z2['moves']
     zimg2 = z2['image']
     z2_type = [i['value'] for i in z2['attributes'] if i['trait_type'] == 'Type']

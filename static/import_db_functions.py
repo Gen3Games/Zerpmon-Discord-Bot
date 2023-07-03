@@ -1,9 +1,13 @@
+import json
+
 import pymongo
 import csv
 import requests
 
 client = pymongo.MongoClient('mongodb://localhost:27017/')
 db = client['Zerpmon']
+
+
 # users_c = db['users']
 # users_c.drop()
 
@@ -46,6 +50,8 @@ def import_moves():
 def import_movesets():
     with open('Zerpmon_Moves_-_Zerpmon_Movesets.csv', 'r') as csvfile:
         collection = db['MoveSets']
+        # c2 = db['MoveSets2']
+        # c2.drop()
         csvreader = csv.reader(csvfile)
         header = next(csvreader)  # Skip the header row
         header = [field.lower().split()[0] for field in header if field]
@@ -79,7 +85,7 @@ def import_movesets():
                         {'name': row[28], 'stars': row[29], 'id': row[30], 'percent': row[31].replace("%", ""),
                          'color': header[27]},
                         {'name': row[32], 'id': row[33], 'percent': row[34].replace("%", ""), 'color': header[31]},
-                        {'name': row[35], 'id': row[36], 'percent': row[37].replace("%", ""), 'color': header[34]},
+                        {'name': 'Miss', 'id': row[36], 'percent': row[37].replace("%", ""), 'color': header[34]},
                     ],
                     'nft_id': row[38]
                 }
@@ -107,6 +113,7 @@ def import_movesets():
                 #     'nft_id': row[39]
                 # }
                 collection.update_one({'name': row[1]}, {'$set': doc}, upsert=True)
+                # c2.insert_one(document=doc)
             except Exception as e:
                 print(e, '\n', row)
 
@@ -161,6 +168,50 @@ def clean_attrs():
                 r = zerpmon_collection.find_one_and_update({'name': i['name']},
                                                            {'$set': {'attributes': i['attributes']}})
                 print(r)
+    c2 = db['MoveSets2']
+    c2.drop()
+    for doc in zerpmon_collection.find():
+        del doc['_id']
+        c2.insert_one(doc)
+
+
+def save_new_zerpmon(zerpmon):
+    zerpmon_collection = db['MoveSets']
+    print(zerpmon)
+
+    doc_str = json.dumps(zerpmon)
+    zerpmon = json.loads(doc_str)
+
+    result = zerpmon_collection.update_one(
+        {'name': zerpmon['name']},
+        {'$set': zerpmon},
+        upsert=True)
+
+    if result.upserted_id:
+        print(f"Created new Zerpmon with id {result.upserted_id}")
+        return f"Successfully added a new Zerpmon {zerpmon['name']}"
+    else:
+        print(f"Updated Zerpmon with name {zerpmon['name']}")
+        return f"Successfully updated Zerpmon {zerpmon['name']}"
+
+
+def update_all_zerp_moves():
+    for document in db['MoveSets'].find():
+        if 'level' in document and document['level'] / 10 >= 1:
+            miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
+            percent_change = 3.33 * (document['level'] // 10)
+            percent_change = percent_change if percent_change < miss_percent else miss_percent
+            count = len([i for i in document['moves'] if i['name'] != ""]) - 1
+            print(document)
+            for i, move in enumerate(document['moves']):
+                if move['color'] == 'miss':
+                    move['percent'] = str(round(float(move['percent']) - percent_change, 2))
+                    document['moves'][i] = move
+                elif move['name'] != "" and float(move['percent']) > 0:
+                    move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
+                    document['moves'][i] = move
+            del document['_id']
+            save_new_zerpmon(document)
 
 
 # import_moves()
@@ -168,3 +219,4 @@ import_movesets()
 # import_level()
 import_attrs_img()
 clean_attrs()
+update_all_zerp_moves()

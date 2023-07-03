@@ -127,7 +127,7 @@ async def listener(client, store_address, wager_address):
                                                 amount == round((config.POTION[0] * (qty - 1 / 2)),
                                                                 6) and user_id not in config.store_24_hr_buyers):
                                             # If it's a Revive potion transaction
-                                            db_query.add_revive_potion(message['Account'], qty)
+                                            db_query.add_revive_potion(message['Account'], qty, purchased=True, amount=amount)
                                             config.store_24_hr_buyers.append(user_id)
                                             config.latest_purchases.append(user_id)
                                             del config.revive_potion_buyers[user_id]
@@ -138,7 +138,7 @@ async def listener(client, store_address, wager_address):
                                                 amount == round((config.MISSION_REFILL[0] * (qty - 1 / 2)),
                                                                 6) and user_id not in config.store_24_hr_buyers):
                                             # If it's a Mission refill potion transaction
-                                            db_query.add_mission_potion(message['Account'], qty)
+                                            db_query.add_mission_potion(message['Account'], qty, purchased=True, amount=amount)
                                             config.store_24_hr_buyers.append(user_id)
                                             config.latest_purchases.append(user_id)
                                             del config.mission_potion_buyers[user_id]
@@ -425,8 +425,9 @@ async def get_nft_data_wager(id):
         logging.error(f"ERROR while getting nft url: {id} \n{e}")
         return '', 'Missing Name in metadata'
 
-# asyncio.run(accept_nft('reward', offer='D1B77539A65C2B9DBD70DC8AF6048BF76A7E7ABECA6A24ECF99F701F0FA1315E', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
-#                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E266278A90000010E'))
+# asyncio.run(accept_nft('reward', offer='E53A05F1C2C714C41D6707E561E6060812D56B1F3548153E0799D7DDEEB952AF', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
+#                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E994AF9290000018E'))
 # asyncio.run(send_nft('reward', to_address='rMjN4c2p9yvuTvVozYYUwoF2U859M9tQcC', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E073C9DBE00000123'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
+# asyncio.run(xrpl_functions.get_offers(config.ISSUER['Zerpmon']))
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))

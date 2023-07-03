@@ -2,7 +2,8 @@ import asyncio
 
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models.requests.account_nfts import AccountNFTs
-from xrpl.models.requests import AccountTx
+
+from xrpl.models.requests import AccountOffers
 from xrpl.models.requests import Subscribe
 import config
 import json
@@ -40,6 +41,42 @@ async def get_nfts(address):
                 # print(json.dumps(result["account_nfts"], indent=4, sort_keys=True))
             # print(all_nfts)
             return True, all_nfts
+    except Exception as e:
+        print(e)
+        return False, []
+
+
+# look up account offers
+async def get_offers(address):
+    try:
+        async with AsyncWebsocketClient(config.NODE_URL) as client:
+            all_offers = []
+
+            acct_info = AccountOffers(
+                account=address,
+                limit=400,
+            )
+            response = await client.request(acct_info)
+            result = response.result
+
+            while True:
+
+                print(result)
+                length = len(result["account_nfts"])
+                print(length)
+                all_offers.extend(result["account_nfts"])
+                if "marker" not in result:
+                    break
+                acct_info = AccountOffers(
+                    account=address,
+                    limit=400,
+                    marker=result['marker']
+                )
+                response = await client.request(acct_info)
+                result = response.result
+                # print(json.dumps(result["account_nfts"], indent=4, sort_keys=True))
+            # print(all_nfts)
+            return True, all_offers
     except Exception as e:
         print(e)
         return False, []

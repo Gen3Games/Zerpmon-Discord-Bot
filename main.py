@@ -259,27 +259,32 @@ async def battle(interaction: nextcord.Interaction, opponent: Optional[nextcord.
     await interaction.send("Battle conditions met", ephemeral=True)
     config.ongoing_battles.append(user_id)
     config.ongoing_battles.append(opponent.id)
-    msg = await interaction.channel.send(
-        f"**{type}v{type}** Friendly **battle** challenge to {opponent.mention} by {interaction.user.mention}. Click the **swords** to accept!")
-    await msg.add_reaction("⚔")
-    config.battle_dict[msg.id] = {
-        "type": 'friendly',
-        "challenger": user_id,
-        "username1": interaction.user.mention,
-        "challenged": opponent.id,
-        "username2": opponent.mention,
-        "active": False,
-        "channel_id": interaction.channel_id,
-        "timeout": time.time() + 60,
-        'battle_type': type,
-    }
+    try:
+        msg = await interaction.channel.send(
+            f"**{type}v{type}** Friendly **battle** challenge to {opponent.mention} by {interaction.user.mention}. Click the **swords** to accept!")
+        await msg.add_reaction("⚔")
+        config.battle_dict[msg.id] = {
+            "type": 'friendly',
+            "challenger": user_id,
+            "username1": interaction.user.mention,
+            "challenged": opponent.id,
+            "username2": opponent.mention,
+            "active": False,
+            "channel_id": interaction.channel_id,
+            "timeout": time.time() + 60,
+            'battle_type': type,
+        }
 
-    # Sleep for a while and notify timeout
-    await asyncio.sleep(60)
-    if msg.id in config.battle_dict and config.battle_dict[msg.id]['active'] == False:
-        del config.battle_dict[msg.id]
-        await msg.edit("Timed out")
-        await msg.add_reaction("❌")
+        # Sleep for a while and notify timeout
+        await asyncio.sleep(60)
+        if msg.id in config.battle_dict and config.battle_dict[msg.id]['active'] == False:
+            del config.battle_dict[msg.id]
+            await msg.edit("Timed out")
+            await msg.add_reaction("❌")
+            config.ongoing_battles.remove(user_id)
+            config.ongoing_battles.remove(opponent.id)
+    except Exception as e:
+        logging.error(f'ERROR in battle: {traceback.format_exc()}')
         config.ongoing_battles.remove(user_id)
         config.ongoing_battles.remove(opponent.id)
 
@@ -869,9 +874,13 @@ async def revive_potion(interaction: nextcord.Interaction, quantity: int):
     user = interaction.user
     user_id = user.id
 
-    user_owned_nfts = {'data': db_query.get_owned(user.id), 'user': user.name}
+    user_owned_nfts = db_query.get_owned(user_id)
 
     # Sanity checks
+
+    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
+        await interaction.send("Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", ephemeral=True)
+        return
     await interaction.send("Please wait...", ephemeral=True)
     if quantity <= 0:
         await interaction.send(
@@ -894,10 +903,12 @@ async def mission_refill(interaction: nextcord.Interaction, quantity: int):
     user = interaction.user
     user_id = user.id
 
-    user_owned_nfts = {'data': db_query.get_owned(user.id), 'user': user.name}
+    user_owned_nfts = db_query.get_owned(user.id)
 
     # Sanity checks
-
+    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
+        await interaction.send("Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", ephemeral=True)
+        return
     await interaction.send("Please wait...", ephemeral=True)
     if quantity <= 0:
         await interaction.send(
@@ -1513,6 +1524,26 @@ async def pvp(interaction: nextcord.Interaction):
     await interaction.send(embed=embed, ephemeral=True)
 
 
+@show_leaderboard.subcommand(description="Show Top purchasers Leaderboard of in-store items")
+async def top_purchasers(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    # ...
+    users = db_query.get_top_purchasers(interaction.user.id)
+    embed = CustomEmbed(color=0x01f39d,
+                        title=f"TOP PURCHASERS LEADERBOARD")
+    for i, user in enumerate(users):
+        if i == 10:
+            msg = '#{0:<4} {1:<25} XRP Spent : {2:<5} 🍶/🍹: {3:<2}/{4:<2}'.format(user['rank'], user['username'], round(user['xrp_spent'], 2),
+                                                               user['mission_purchase']  if 'mission_purchase' in user else 0, user['revive_purchase'] if 'revive_purchase' in user else 0)
+            embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
+        else:
+            msg = '#{0:<4} {1:<25} XRP Spent : {2:<5} 🍶/🍹: {3:<2}/{4:<2}'.format(i + 1, user['username'], round(user['xrp_spent'], 2),
+                                                               user['mission_purchase']  if 'mission_purchase' in user else 0, user['revive_purchase'] if 'revive_purchase' in user else 0)
+            embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
+
+    await interaction.send(embed=embed, ephemeral=True)
+
+
 @client.slash_command(name='battle_royale', description='Start Battle Royale -> 1 Zerpmon from each player ( max 50 )',
                       )
 async def battle_royale(interaction: nextcord.Interaction, start_after: int = SlashOption(
@@ -1721,64 +1752,70 @@ async def trade_potion(interaction: nextcord.Interaction, amount: int,
         return False
     user_owned_nfts = db_query.get_owned(user.id)
     opponent_owned_nfts = db_query.get_owned(trade_with.id)
-    if trade_type == 1:
-        if user_owned_nfts is None or user_owned_nfts['mission_potion'] < amount:
-            await interaction.send(
-                f"Sorry you don't have {amount} Mission Refill Potion.")
-            return False
-        elif opponent_owned_nfts is None or opponent_owned_nfts['revive_potion'] < amount:
-            await interaction.send(
-                f"Sorry {trade_with.name} doesn't have {amount} Revive All Potion.")
-            return False
-        else:
-            # Put potions on hold os user doesn't spam
-            db_query.add_mission_potion(user_owned_nfts['address'], -amount)
-            embed = CustomEmbed(title="Trade request",
-                                description=f'{trade_with.mention}, {user.mention} wants to trade their {amount} Mission Refill Potion for your {amount} Revive All Potion\n',
-                                color=0x01f39d)
-            embed.add_field(name="React with a ✅ if you agree to this Trade", value='\u200B')
-            msg = await interaction.channel.send(embed=embed)
-
-    elif trade_type == 2:
-        if opponent_owned_nfts is None or opponent_owned_nfts['mission_potion'] < amount:
-            await interaction.send(
-                f"Sorry {trade_with.name} doesn't have {amount} Mission Refill Potion.")
-            return False
-        elif user_owned_nfts is None or user_owned_nfts['revive_potion'] < amount:
-            await interaction.send(
-                f"Sorry you don't have {amount} Revive All Potion.")
-            return False
-        else:
-            # Put potions on hold os user doesn't spam
-            db_query.add_revive_potion(user_owned_nfts['address'], -amount)
-            embed = CustomEmbed(title="Trade request",
-                                description=f'{trade_with.mention}, {user.mention} wants to trade their {amount} Revive All Potion for your {amount} Mission Refill Potion\n',
-                                color=0x01f39d)
-            embed.add_field(name="React with a ✅ if you agree to this Trade", value='\u200B')
-            msg = await interaction.channel.send(embed=embed)
-    await msg.add_reaction("✅")
-    config.potion_trades[msg.id] = {
-        "challenger": user.id,
-        "username1": interaction.user.mention,
-        "address1": user_owned_nfts['address'],
-        "challenged": trade_with.id,
-        "username2": trade_with.mention,
-        "address2": opponent_owned_nfts['address'],
-        "active": False,
-        "channel_id": interaction.channel_id,
-        "timeout": time.time() + 60,
-        "amount": amount,
-        "trade_type": trade_type
-    }
-    await asyncio.sleep(60)
-    if msg.id in config.potion_trades and config.potion_trades[msg.id]['active'] == False:
-        del config.potion_trades[msg.id]
-        await msg.edit(embeds=[CustomEmbed(title="Timed out!")])
-        await msg.add_reaction("❌")
+    potion_on_hold = False
+    try:
         if trade_type == 1:
-            db_query.add_mission_potion(user_owned_nfts['address'], amount)
+            if user_owned_nfts is None or user_owned_nfts['mission_potion'] < amount:
+                await interaction.send(
+                    f"Sorry you don't have {amount} Mission Refill Potion.")
+                return False
+            elif opponent_owned_nfts is None or opponent_owned_nfts['revive_potion'] < amount:
+                await interaction.send(
+                    f"Sorry {trade_with.name} doesn't have {amount} Revive All Potion.")
+                return False
+            else:
+                # Put potions on hold os user doesn't spam
+                db_query.add_mission_potion(user_owned_nfts['address'], -amount)
+                potion_on_hold = True
+                embed = CustomEmbed(title="Trade request",
+                                    description=f'{trade_with.mention}, {user.mention} wants to trade their {amount} Mission Refill Potion for your {amount} Revive All Potion\n',
+                                    color=0x01f39d)
+                embed.add_field(name="React with a ✅ if you agree to this Trade", value='\u200B')
+                msg = await interaction.channel.send(embed=embed)
+
         elif trade_type == 2:
-            db_query.add_revive_potion(user_owned_nfts['address'], amount)
+            if opponent_owned_nfts is None or opponent_owned_nfts['mission_potion'] < amount:
+                await interaction.send(
+                    f"Sorry {trade_with.name} doesn't have {amount} Mission Refill Potion.")
+                return False
+            elif user_owned_nfts is None or user_owned_nfts['revive_potion'] < amount:
+                await interaction.send(
+                    f"Sorry you don't have {amount} Revive All Potion.")
+                return False
+            else:
+                # Put potions on hold os user doesn't spam
+                db_query.add_revive_potion(user_owned_nfts['address'], -amount)
+                potion_on_hold = True
+                embed = CustomEmbed(title="Trade request",
+                                    description=f'{trade_with.mention}, {user.mention} wants to trade their {amount} Revive All Potion for your {amount} Mission Refill Potion\n',
+                                    color=0x01f39d)
+                embed.add_field(name="React with a ✅ if you agree to this Trade", value='\u200B')
+                msg = await interaction.channel.send(embed=embed)
+        await msg.add_reaction("✅")
+        config.potion_trades[msg.id] = {
+            "challenger": user.id,
+            "username1": interaction.user.mention,
+            "address1": user_owned_nfts['address'],
+            "challenged": trade_with.id,
+            "username2": trade_with.mention,
+            "address2": opponent_owned_nfts['address'],
+            "active": False,
+            "channel_id": interaction.channel_id,
+            "timeout": time.time() + 60,
+            "amount": amount,
+            "trade_type": trade_type
+        }
+        await asyncio.sleep(60)
+        if msg.id in config.potion_trades and config.potion_trades[msg.id]['active'] == False:
+            del config.potion_trades[msg.id]
+            await msg.edit(embeds=[CustomEmbed(title="Timed out!")])
+            await msg.add_reaction("❌")
+    except:
+        if potion_on_hold:
+            if trade_type == 1:
+                db_query.add_mission_potion(user_owned_nfts['address'], amount)
+            elif trade_type == 2:
+                db_query.add_revive_potion(user_owned_nfts['address'], amount)
 
 
 # RANKED COMMANDS
@@ -1803,27 +1840,32 @@ async def ranked_battle(interaction: nextcord.Interaction,
     await interaction.send("Ranked Battle conditions met", ephemeral=True)
     config.ongoing_battles.append(user_id)
     config.ongoing_battles.append(opponent.id)
-    msg = await interaction.channel.send(
-        f"**3v3** Ranked **battle** challenge to {opponent.mention} by {interaction.user.mention}. Click the **swords** to accept!")
-    await msg.add_reaction("⚔")
-    config.battle_dict[msg.id] = {
-        "type": 'ranked',
-        "challenger": user_id,
-        "username1": interaction.user.mention,
-        "challenged": opponent.id,
-        "username2": opponent.mention,
-        "active": False,
-        "channel_id": interaction.channel_id,
-        "timeout": time.time() + 60,
-        'battle_type': 3,
-    }
+    try:
+        msg = await interaction.channel.send(
+            f"**3v3** Ranked **battle** challenge to {opponent.mention} by {interaction.user.mention}. Click the **swords** to accept!")
+        await msg.add_reaction("⚔")
+        config.battle_dict[msg.id] = {
+            "type": 'ranked',
+            "challenger": user_id,
+            "username1": interaction.user.mention,
+            "challenged": opponent.id,
+            "username2": opponent.mention,
+            "active": False,
+            "channel_id": interaction.channel_id,
+            "timeout": time.time() + 60,
+            'battle_type': 3,
+        }
 
-    # Sleep for a while and notify timeout
-    await asyncio.sleep(60)
-    if msg.id in config.battle_dict and config.battle_dict[msg.id]['active'] == False:
-        del config.battle_dict[msg.id]
-        await msg.edit("Timed out")
-        await msg.add_reaction("❌")
+        # Sleep for a while and notify timeout
+        await asyncio.sleep(60)
+        if msg.id in config.battle_dict and config.battle_dict[msg.id]['active'] == False:
+            del config.battle_dict[msg.id]
+            await msg.edit("Timed out")
+            await msg.add_reaction("❌")
+            config.ongoing_battles.remove(user_id)
+            config.ongoing_battles.remove(opponent.id)
+    except Exception as e:
+        logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
         config.ongoing_battles.remove(user_id)
         config.ongoing_battles.remove(opponent.id)
 
@@ -1931,7 +1973,7 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
         for _id, potion_trade in config.potion_trades.copy().items():
             if user.id == potion_trade["challenged"] and _id == reaction.message.id:
                 config.potion_trades[_id]['active'] = True
-                await reaction.message.edit(embeds=[CustomEmbed(title="**Trade Accepted**!")])
+                await reaction.message.edit(embeds=[CustomEmbed(title="**Trade Successful**!")])
                 if potion_trade['trade_type'] == 1:
                     db_query.add_revive_potion(potion_trade['address2'], -potion_trade['amount'])
                     db_query.add_mission_potion(potion_trade['address2'], potion_trade['amount'])

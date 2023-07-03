@@ -174,11 +174,11 @@ def save_zerpmon_winrate(winner_name, loser_name):
 
 
 def get_rand_zerpmon(level):
-    zerpmon_collection = db['MoveSets']
+    zerpmon_collection = db['MoveSets2']
     random_doc = list(zerpmon_collection.aggregate([{'$sample': {'size': 1}}, {'$limit': 1}]))
     zerp = random_doc[0]
     zerp['level'] = level
-    for i in range(level//10):
+    for i in range(level // 10):
         zerp = update_moves(zerp, False)
     # print(random_doc[0])
     return zerp
@@ -312,6 +312,29 @@ def get_pvp_top_players(user_id):
     return [i for i in top_users]
 
 
+def get_top_purchasers(user_id):
+    users_collection = db['users']
+    user_id = str(user_id)
+    query = {'xrp_spent': {'$exists': True}}
+    top_users = users_collection.find(query).sort('xrp_spent', DESCENDING).limit(10)
+    top_users = [i for i in top_users]
+    if user_id not in [i['discord_id'] for i in top_users]:
+        curr_user = users_collection.find_one({'discord_id': user_id})
+        if curr_user and 'xrp_spent' not in curr_user:
+            curr_user['xrp_spent'] = 0
+            curr_user['mission_purchase'] = 0
+            curr_user['revive_purchase'] = 0
+            curr_user['rank'] = "-"
+
+            top_users.append(curr_user)
+        elif curr_user:
+            curr_user_rank = users_collection.count_documents({'xrp_spent': {'$gt': curr_user['xrp_spent']}})
+            curr_user['rank'] = curr_user_rank + 1
+            top_users.append(curr_user)
+
+    return [i for i in top_users]
+
+
 def get_ranked_players(user_id):
     users_collection = db['users']
     user_id = str(user_id)
@@ -345,24 +368,29 @@ def get_ranked_players(user_id):
         return users
 
 
-def add_revive_potion(address, inc_by):
+def add_revive_potion(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
+    query = {'revive_potion': inc_by}
+    if purchased:
+        query['xrp_spent'] = amount
+        query['revive_purchase'] = inc_by
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
 
-    r = users_collection.find_one_and_update({'address': str(address)},
-                                             {'$inc': {'revive_potion': inc_by}},
-                                             upsert=True,
-                                             return_document=ReturnDocument.AFTER)
-    # print(r)
     return True
 
 
-def add_mission_potion(address, inc_by):
+def add_mission_potion(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
 
-    r = users_collection.find_one_and_update({'address': str(address)},
-                                             {'$inc': {'mission_potion': inc_by}},
-                                             upsert=True,
-                                             return_document=ReturnDocument.AFTER)
+    query = {'mission_potion': inc_by}
+    if purchased:
+        query['xrp_spent'] = amount
+        query['mission_purchase'] = inc_by
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
     # print(r)
 
 
@@ -624,12 +652,11 @@ def update_moves(document, save_z=True):
             elif move['name'] != "" and float(move['percent']) > 0:
                 move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
                 document['moves'][i] = move
-        del document['_id']
         if save_z:
+            del document['_id']
             save_new_zerpmon(document)
         else:
             return document
-
 
 # def update_all_zerp_moves():
 #     for document in db['MoveSets'].find():
@@ -650,3 +677,5 @@ def update_moves(document, save_z=True):
 #             save_new_zerpmon(document)
 #
 # update_all_zerp_moves()
+# get_rand_zerpmon(level=22)
+# print(len(get_ranked_players(0)))

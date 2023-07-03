@@ -20,7 +20,17 @@ class CustomEmbed(nextcord.Embed):
                         icon_url=config.ICON_URL)
 
 
+button_cache = {'revive': [], 'mission': []}
+
+
 async def purchase_callback(_i: nextcord.Interaction, amount, qty=1):
+    user_owned_nfts = db_query.get_owned(_i.user.id)
+
+    # Sanity checks
+
+    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
+        await _i.send("Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", ephemeral=True)
+        return
     try:
         await _i.edit(content="Generating transaction QR code...", embeds=[], view=None)
     except:
@@ -163,7 +173,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
                                        view=view,
                                        ephemeral=True
                                        )
-            button.callback = lambda i: use_missionP_callback(i)
+            button.callback = lambda i: use_missionP_callback(i, True)
             return
         elif _user_owned_nfts['data']['battle']['reset_t'] < time.time():
             db_query.update_battle_count(user_id, -1)
@@ -173,14 +183,15 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
                         if 'active_t' not in i or
                         i['active_t'] < time.time()]
     mission_deck_zerpmons = [] if 'mission_deck' not in _user_owned_nfts['data'] else \
-        [k for k in list(_user_owned_nfts['data']['mission_deck'].values()) if k in [s for (s, i) in _active_zerpmons]]
+        [_i for k, _i in sorted(_user_owned_nfts['data']['mission_deck'].items(), key=lambda x: int(x[0])) if
+         _i in [s for (s, i) in _active_zerpmons]]
 
     # print(active_zerpmons[0])
     r_button = Button(label="Revive Zerpmon", style=ButtonStyle.green)
     r_view = View()
     r_view.add_item(r_button)
     r_view.timeout = 120
-    r_button.callback = lambda i: use_reviveP_callback(interaction)
+    r_button.callback = lambda i: use_reviveP_callback(interaction, True)
     if len(_active_zerpmons) == 0:
 
         try:
@@ -253,7 +264,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     view2 = View()
     view2.add_item(button2)
     view2.timeout = 120
-    button2.callback = lambda i: use_missionP_callback(i)
+    button2.callback = lambda i: use_missionP_callback(i, True)
 
     _b_num += 1
     reset_str = ''
@@ -297,13 +308,21 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     button.callback = lambda i: button_callback(user_id, i, loser, mission_zerpmon_used)
 
 
-async def use_missionP_callback(interaction: nextcord.Interaction):
+async def use_missionP_callback(interaction: nextcord.Interaction, button=False):
     user = interaction.user
     user_id = user.id
     user_owned_nfts = {'data': db_query.get_owned(user.id), 'user': user.name}
 
+    if button:
+        i_id = interaction.id
+        if len(button_cache['mission']) > 300:
+            button_cache['mission'] = button_cache['mission'][200:]
+        if i_id in button_cache['mission']:
+            return
+        else:
+            button_cache['mission'].append(i_id)
     # Sanity checks
-    if user.id in config.ongoing_battles:
+    if user.id in config.ongoing_missions:
         await interaction.send(f"Please wait, potions can't be used during a Battle.",
                                ephemeral=True)
         return
@@ -333,13 +352,21 @@ async def use_missionP_callback(interaction: nextcord.Interaction):
         return True
 
 
-async def use_reviveP_callback(interaction: nextcord.Interaction):
+async def use_reviveP_callback(interaction: nextcord.Interaction, button=False):
     user = interaction.user
 
     user_owned_nfts = {'data': db_query.get_owned(user.id), 'user': user.name}
 
+    if button:
+        i_id = interaction.id
+        if len(button_cache['revive']) > 300:
+            button_cache['revive'] = button_cache['revive'][200:]
+        if i_id in button_cache['revive']:
+            return
+        else:
+            button_cache['revive'].append(i_id)
     # Sanity checks
-    if user.id in config.ongoing_battles:
+    if user.id in config.ongoing_missions:
         await interaction.send(f"Please wait, potions can't be used during a Battle.",
                                ephemeral=True)
         return
