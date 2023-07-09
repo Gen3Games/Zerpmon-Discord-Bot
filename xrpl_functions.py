@@ -92,4 +92,15 @@ def get_nft_metadata(uri):
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
 
+def get_nft_metadata_by_id(nftid):
+    try:
+        with open("./static/metadata.json", "r") as f:
+            data = json.load(f)
+            for item in data:
+                if item["nftid"] == nftid:
+                    return item
+        return None
+    except Exception as e:
+        print(f"ERROR in getting metadata: {e}")
+
 # print(get_nft_metadata("697066733A2F2F516D57366677545953376F6741614C6159576247766658546A786758585357734643535256654E544A70396B347A2F3231382E6A736F6E"))
