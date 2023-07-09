@@ -871,28 +871,15 @@ async def buy(interaction: nextcord.Interaction):
 @buy.subcommand(description="Purchase Revive All Potion using XRP (1 use)")
 async def revive_potion(interaction: nextcord.Interaction, quantity: int):
     execute_before_command(interaction)
-    user = interaction.user
-    user_id = user.id
-
-    user_owned_nfts = db_query.get_owned(user_id)
 
     # Sanity checks
 
-    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
-        await interaction.send("Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", ephemeral=True)
-        return
     await interaction.send("Please wait...", ephemeral=True)
     if quantity <= 0:
         await interaction.send(
             f"Sorry, the quantity can't be less than 1",
             ephemeral=True)
         return
-    for owned_nfts in [user_owned_nfts]:
-        if owned_nfts['data'] is None:
-            await interaction.send(
-                f"Sorry no User found named **{owned_nfts['user']}** or haven't yet verified your wallet",
-                ephemeral=True)
-            return
 
     await callback.purchase_callback(interaction, config.POTION[0], quantity)
 
@@ -900,26 +887,14 @@ async def revive_potion(interaction: nextcord.Interaction, quantity: int):
 @buy.subcommand(description="Purchase Mission Refill Potion using XRP (10 Missions)")
 async def mission_refill(interaction: nextcord.Interaction, quantity: int):
     execute_before_command(interaction)
-    user = interaction.user
-    user_id = user.id
-
-    user_owned_nfts = db_query.get_owned(user.id)
 
     # Sanity checks
-    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
-        await interaction.send("Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", ephemeral=True)
-        return
     await interaction.send("Please wait...", ephemeral=True)
     if quantity <= 0:
         await interaction.send(
             f"Sorry, the quantity can't be less than 1",
             ephemeral=True)
         return
-    for owned_nfts in [user_owned_nfts]:
-        if owned_nfts['data'] is None:
-            await interaction.send(
-                f"Sorry no XRP found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
-            return
 
     await callback.purchase_callback(interaction, config.MISSION_REFILL[0], quantity)
 

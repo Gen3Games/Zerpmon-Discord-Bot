@@ -569,7 +569,11 @@ def add_xp(zerpmon_name, user_address):
             add_revive_potion(user_address, next_lvl['revive_potion_reward'])
             add_mission_potion(user_address, next_lvl['mission_potion_reward'])
         else:
-            zerpmon_collection.update_one({'name': zerpmon_name}, {'$inc': {'xp': 10}})
+            maxed = old.get('maxed_out', 0)
+            if level != 30:
+                zerpmon_collection.update_one({'name': zerpmon_name}, {'$inc': {'xp': 10}})
+            elif level == 30 and maxed == 0:
+                zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'maxed_out': 1}})
     else:
         # Zerpmon not found, handle the case accordingly
         # For example, you can raise an exception or return False
@@ -584,7 +588,8 @@ def get_lvl_xp(zerpmon_name, in_mission=False) -> tuple:
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
     level = old['level'] + 1 if 'level' in old else 1
-    if in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and old['xp'] == 0:
+    maxed = old.get('maxed_out', 0)
+    if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and old['xp'] == 0:
         update_moves(old)
     if level > 30:
         level = 30

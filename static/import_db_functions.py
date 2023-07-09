@@ -29,7 +29,7 @@ def update_type(name, attrs):
 
 
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List_2.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -214,9 +214,9 @@ def update_all_zerp_moves():
             save_new_zerpmon(document)
 
 
-# import_moves()
-import_movesets()
+import_moves()
+# import_movesets()
 # import_level()
-import_attrs_img()
-clean_attrs()
-update_all_zerp_moves()
+# import_attrs_img()
+# clean_attrs()
+# update_all_zerp_moves()

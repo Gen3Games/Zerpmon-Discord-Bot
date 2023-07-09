@@ -31,6 +31,8 @@ async def update_nft_holdings(client: nextcord.Client):
                 if 'address' not in user_obj:
                     continue
                 good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
+                if not good_status:
+                    continue
 
                 mission_trainer = user_obj["mission_trainer"] if 'mission_trainer' in user_obj else ""
                 mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}

@@ -274,7 +274,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
             reset_str = f' reset time **{_hours}**h **{_minutes}**m'
 
     sr, nft = _battle_z[0]
-    lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'], in_mission=True)
+    lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'], in_mission=True if loser == 2 else False)
     embed = CustomEmbed(title=f"Level Up ⬆{lvl}" if xp == 0 else f"\u200B",
                         color=0xff5252,
                         )
