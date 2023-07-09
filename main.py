@@ -143,7 +143,7 @@ async def wallet(interaction: nextcord.Interaction):
 
                 if nft["Issuer"] == config.ISSUER["Trainer"]:
 
-                    metadata = await xrpl_functions.get_nft_metadata(nft['URI'])
+                    metadata = xrpl_functions.get_nft_metadata(nft['URI'])
                     serial = nft["nft_serial"]
                     if "Zerpmon Trainers" in metadata['description']:
                         # Add to MongoDB here
@@ -154,7 +154,7 @@ async def wallet(interaction: nextcord.Interaction):
                                                              }
 
                 if nft["Issuer"] == config.ISSUER["Zerpmon"]:
-                    metadata = await xrpl_functions.get_nft_metadata(nft['URI'])
+                    metadata = xrpl_functions.get_nft_metadata(nft['URI'])
                     serial = nft["nft_serial"]
                     if "Zerpmon " in metadata['description']:
                         # Add to MongoDB here

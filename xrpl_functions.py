@@ -81,26 +81,26 @@ async def get_offers(address):
         print(e)
         return False, []
 
+def get_nft_metadata(uri):
+    try:
+        with open("./static/metadata.json", "r") as f:
+            data = json.load(f)
+            for item in data:
+                if item["uri"] == uri:
+                    return item
+        return None
+    except Exception as e:
+        print(f"ERROR in getting metadata: {e}")
 
-async def get_nft_metadata(uri):
-    # Convert the URI from hex to ASCII
-    ascii_uri = bytes.fromhex(uri).decode('ascii')
-    ascii_uri = ascii_uri.replace("ipfs://", "")
-    print('https://ipfs.io/ipfs/' + ascii_uri)
-    # Make the API request
-    for base_url in config.BASE_URLS:
-        try:
-            if "https:/" in ascii_uri:
-                response = requests.get(ascii_uri)
-            else:
-                response = requests.get(base_url + ascii_uri)
-            response = response.json()
-            # Parse the response as JSON
-            print(response)
-            # metadata = json.loads(response.content)
+def get_nft_metadata_by_id(nftid):
+    try:
+        with open("./static/metadata.json", "r") as f:
+            data = json.load(f)
+            for item in data:
+                if item["nftid"] == nftid:
+                    return item
+        return None
+    except Exception as e:
+        print(f"ERROR in getting metadata: {e}")
 
-            # Print the metadata
-            # print(metadata)
-            return response
-        except Exception as e:
-            print(f"ERROR in getting metadata: {e}")
+# print(get_nft_metadata("697066733A2F2F516D57366677545953376F6741614C6159576247766658546A786758585357734643535256654E544A70396B347A2F3231382E6A736F6E"))
