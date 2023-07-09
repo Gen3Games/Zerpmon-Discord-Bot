@@ -140,21 +140,39 @@ def import_level():
                 'mission_potion_reward': 0 if row[5].strip() == "" else int(row[5]),
             })
 
+def check_nft_cached(id,data):
+    for i in data:
+        if i['nftid'] == id:
+            return True
+    return False
+
+def get_cached():
+    with open("./site/metadata.json","r") as f:
+        return json.load(f)
 
 def import_attrs_img():
     data = get_all_z()
+    tba = get_cached() #[{nftid, metadata, uri},...]
     for i in data:
         id = i['nft_id']
-        if 'image' in i and 'attributes' in i:
+        if 'image' in i and 'attributes' in i and check_nft_cached(id,tba):
             continue
         path = f"./static/images/{i['name']}.png"
         rr2 = requests.get(
             f"https://bithomp.com/api/cors/v2/nft/{id}?uri=true&metadata=true&history=true&sellOffers=true&buyOffers=true&offersValidate=true&offersHistory=true")
-        meta = rr2.json()['metadata']['attributes']
-        url = rr2.json()['metadata']['image']
+        res = rr2.json()
+        meta = res['metadata']['attributes']
+        url = res['metadata']['image']
         print(url)
         update_type(i['name'], meta)
         update_image(i['name'], url)
+        tba.append({
+            "nftid": id,
+            "metadata": meta,
+            "uri": res['uri'],
+        })
+    with open("./site/metadata.json","w") as f:
+        json.dump(tba,f)
 
 
 def clean_attrs():
@@ -213,10 +231,62 @@ def update_all_zerp_moves():
             del document['_id']
             save_new_zerpmon(document)
 
+def get_trainer_nfts_data():
+    try:
+        print("get_collection_5kk")
+        url = "https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer=rUv6Bmw6GRQHgJaiVcXnnNFCeTMKUE6FCa"
+        response = requests.get(url)
+        response = response.json()
+
+        nfts = response['nfts']
+
+        marker = False
+        markerVal = ''
+        if 'marker' in response:
+            marker = True
+            markerVal = response['marker']
+
+        while marker:
+            url2 = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer=rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy&marker={markerVal}"
+            response2 = requests.get(url2)
+            response2 = response2.json()
+
+            nfts2 = response2['nfts']
+            nfts.extend(nfts2)
+
+            if 'marker' in response2:
+                marker = True
+                markerVal = response2['marker']
+            else:
+                marker = False
+
+        print("Total NFTs: ", len(nfts))
+        return nfts
+    except Exception as e:
+        print(str(e), ' error')
+
+def cache_trainer_data():
+    try:
+        nfts = get_trainer_nfts_data()
+        tba = get_cached()
+        for nft in nfts:
+            if not check_nft_cached(nft['nftokenID'],tba):
+                tba.append({
+                    'nftid': nft['nftokenID'],
+                    'metadata': nft['metadata'],
+                    'uri': nft['uri']
+                })
+        with open("./site/metadata.json","w") as f:
+            json.dump(tba,f)
+
+    except Exception as e:
+        print(str(e), ' error')
+
 
 import_moves()
 # import_movesets()
 # import_level()
-# import_attrs_img()
-# clean_attrs()
-# update_all_zerp_moves()
+import_attrs_img()
+clean_attrs()
+update_all_zerp_moves()
+cache_trainer_data()
