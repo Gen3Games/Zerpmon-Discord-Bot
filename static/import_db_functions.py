@@ -231,6 +231,57 @@ def update_all_zerp_moves():
             del document['_id']
             save_new_zerpmon(document)
 
+def get_trainer_nfts_data():
+    try:
+        print("get_collection_5kk")
+        url = "https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer=rUv6Bmw6GRQHgJaiVcXnnNFCeTMKUE6FCa"
+        response = requests.get(url)
+        response = response.json()
+
+        nfts = response['nfts']
+
+        marker = False
+        markerVal = ''
+        if 'marker' in response:
+            marker = True
+            markerVal = response['marker']
+
+        while marker:
+            url2 = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer=rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy&marker={markerVal}"
+            response2 = requests.get(url2)
+            response2 = response2.json()
+
+            nfts2 = response2['nfts']
+            nfts.extend(nfts2)
+
+            if 'marker' in response2:
+                marker = True
+                markerVal = response2['marker']
+            else:
+                marker = False
+
+        print("Total NFTs: ", len(nfts))
+        return nfts
+    except Exception as e:
+        print(str(e), ' error')
+
+def cache_trainer_data():
+    try:
+        nfts = get_trainer_nfts_data()
+        tba = get_cached()
+        for nft in nfts:
+            if not check_nft_cached(nft['nftokenID'],tba):
+                tba.append({
+                    'nftid': nft['nftokenID'],
+                    'metadata': nft['metadata'],
+                    'uri': nft['uri']
+                })
+        with open("./site/metadata.json","w") as f:
+            json.dump(tba,f)
+
+    except Exception as e:
+        print(str(e), ' error')
+
 
 # import_moves()
 import_movesets()
@@ -238,3 +289,4 @@ import_movesets()
 import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
+cache_trainer_data()
