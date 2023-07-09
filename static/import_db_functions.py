@@ -140,21 +140,39 @@ def import_level():
                 'mission_potion_reward': 0 if row[5].strip() == "" else int(row[5]),
             })
 
+def check_nft_cached(id,data):
+    for i in data:
+        if i['nftid'] == id:
+            return True
+    return False
+
+def get_cached():
+    with open("./site/metadata.json","r") as f:
+        return json.load(f)
 
 def import_attrs_img():
     data = get_all_z()
+    tba = get_cached() #[{nftid, metadata, uri},...]
     for i in data:
         id = i['nft_id']
-        if 'image' in i and 'attributes' in i:
+        if 'image' in i and 'attributes' in i and check_nft_cached(id,tba):
             continue
         path = f"./static/images/{i['name']}.png"
         rr2 = requests.get(
             f"https://bithomp.com/api/cors/v2/nft/{id}?uri=true&metadata=true&history=true&sellOffers=true&buyOffers=true&offersValidate=true&offersHistory=true")
-        meta = rr2.json()['metadata']['attributes']
-        url = rr2.json()['metadata']['image']
+        res = rr2.json()
+        meta = res['metadata']['attributes']
+        url = res['metadata']['image']
         print(url)
         update_type(i['name'], meta)
         update_image(i['name'], url)
+        tba.append({
+            "nftid": id,
+            "metadata": meta,
+            "uri": res['uri'],
+        })
+    with open("./site/metadata.json","w") as f:
+        json.dump(tba,f)
 
 
 def clean_attrs():
