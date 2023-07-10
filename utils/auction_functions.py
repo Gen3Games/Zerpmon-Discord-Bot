@@ -23,6 +23,14 @@ def get_auctions():
     with open(JSON_FILE, "r") as f:
         data = json.load(f)
         return data["auctions"]
+
+def get_auctions_names():
+    with open(JSON_FILE, "r") as f:
+        data = json.load(f)
+        names = []
+        for auction in data["auctions"]:
+            names.append(auction["name"])
+        return names
     
 def get_auction_by_name(name):
     with open(JSON_FILE, "r") as f:
@@ -31,6 +39,14 @@ def get_auction_by_name(name):
             if auction["name"] == name:
                 return auction
         return None
+    
+def check_auction_exists(name):
+    with open(JSON_FILE, "r") as f:
+        data = json.load(f)
+        for auction in data["auctions"]:
+            if auction["name"] == name:
+                return True
+        return False
     
 def update_auction_endtime(name, endtime):
     with open(JSON_FILE, "r") as f:
@@ -57,6 +73,8 @@ def get_highest_bidder(name):
         data = json.load(f)
         for auction in data["auctions"]:
             if auction["name"] == name:
+                if len(auction["bids_track"]) == 0:
+                    return None
                 return auction["bids_track"][-1]["bidder"]
         return None
     
@@ -65,6 +83,8 @@ def get_highest_bid(name):
         data = json.load(f)
         for auction in data["auctions"]:
             if auction["name"] == name:
+                if len(auction["bids_track"]) == 0:
+                    return auction["floor"]
                 return auction["bids_track"][-1]["bid"]
         return None
     

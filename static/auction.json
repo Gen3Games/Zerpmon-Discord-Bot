@@ -4,11 +4,11 @@
             "bids_track": [],
             "duration": 3600,
             "duration_type": "hours",
-            "end_time": 1688889936,
+            "end_time": 1689006333,
             "floor": 300,
             "name": "Ghostor",
             "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E40FCE32400000089",
-            "start_time": 1688886336
+            "start_time": 1689006033
         }
     ]
 }
