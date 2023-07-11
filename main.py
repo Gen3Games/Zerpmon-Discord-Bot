@@ -1827,11 +1827,13 @@ async def trade_potion(interaction: nextcord.Interaction, amount: int,
                 elif trade_type == 2:
                     db_query.add_revive_potion(user_owned_nfts['address'], amount)
     except:
-        if potion_on_hold:
-            if trade_type == 1:
-                db_query.add_mission_potion(user_owned_nfts['address'], amount)
-            elif trade_type == 2:
-                db_query.add_revive_potion(user_owned_nfts['address'], amount)
+        if msg.id in config.potion_trades and config.potion_trades[msg.id]['active'] == False:
+            del config.potion_trades[msg.id]
+            if potion_on_hold:
+                if trade_type == 1:
+                    db_query.add_mission_potion(user_owned_nfts['address'], amount)
+                elif trade_type == 2:
+                    db_query.add_revive_potion(user_owned_nfts['address'], amount)
 
 
 # RANKED COMMANDS
@@ -2061,13 +2063,22 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                         config.battle_royale_participants.append({'id': user.id, 'username': user.mention})
         for _id, potion_trade in config.potion_trades.copy().items():
             if user.id == potion_trade["challenged"] and _id == reaction.message.id:
+                oppo = db_query.get_owned(user.id)
                 config.potion_trades[_id]['active'] = True
                 await reaction.message.edit(embeds=[CustomEmbed(title="**Trade Successful**!")])
                 if potion_trade['trade_type'] == 1:
+                    if oppo['revive_potion'] < potion_trade['amount']:
+                        del config.potion_trades[_id]
+                        db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount'])
+                        return
                     db_query.add_revive_potion(potion_trade['address2'], -potion_trade['amount'])
                     db_query.add_mission_potion(potion_trade['address2'], potion_trade['amount'])
                     db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount'])
                 elif potion_trade['trade_type'] == 2:
+                    if oppo['mission_potion'] < potion_trade['amount']:
+                        del config.potion_trades[_id]
+                        db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount'])
+                        return
                     db_query.add_mission_potion(potion_trade['address2'], -potion_trade['amount'])
                     db_query.add_revive_potion(potion_trade['address2'], potion_trade['amount'])
                     db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount'])
