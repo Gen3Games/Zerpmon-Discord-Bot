@@ -10,12 +10,22 @@ from db_query import get_owned
 from utils import battle_function
 
 
-async def get_time_left_utc():
+def convert_timestamp_to_hours_minutes(timestamp):
+    current_time = int(time.time())
+    time_difference = timestamp - current_time
+    if time_difference < 0:
+        return None  # Timestamp is in the past
+    hours = time_difference // 3600
+    minutes = (time_difference % 3600) // 60
+    return hours, minutes
+
+
+async def get_time_left_utc(days=1):
     # Get current UTC time
     current_time = datetime.datetime.utcnow()
 
     # Calculate the time difference until the next UTC 00:00
-    next_day = current_time + datetime.timedelta(days=1)
+    next_day = current_time + datetime.timedelta(days=days)
     target_time = next_day.replace(hour=0, minute=0, second=0, microsecond=0)
     time_difference = target_time - current_time
 
@@ -143,5 +153,54 @@ async def check_battle(user_id, opponent, interaction, battle_nickname):
         if user_rank_tier not in [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1, oppo_rank_tier - 2, oppo_rank_tier + 2]:
             await interaction.send(
                 f"Sorry you can't battle **{opponent_rank}** with your current {user_rank} Rank.")
+            return False
+    return True
+
+
+async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type):
+    owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
+
+    # Sanity checks
+
+    user_d = owned_nfts['data']
+    if user_d is None:
+        await interaction.send(
+            f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
+        return False
+
+    if len(user_d['zerpmons']) == 0:
+        await interaction.send(
+            f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing Gym battles", ephemeral=True)
+        return False
+
+    if len(user_d['trainer_cards']) == 0:
+        await interaction.send(
+            f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing Gym battles", ephemeral=True)
+        return False
+    if 'battle_deck' in user_d and len(user_d['battle_deck']) > 0 and len(user_d['battle_deck']['0']) < 2:
+        def_deck = user_d['battle_deck']['0']
+        if 'trainer' not in def_deck:
+            await interaction.send(
+                f"**{owned_nfts['user']}** you haven't set your Trainer in default deck, "
+                f"please set it and try again", ephemeral=True)
+            return False
+        else:
+            await interaction.send(
+                f"**{owned_nfts['user']}** your default deck contains 0 Zerpmon, "
+                f"need 1 to do Gym battles.", ephemeral=True)
+            return False
+    if 'gym' in user_d:
+        # if user_d['gym']['active_t'] > time.time():
+        #     _hours, _minutes, _s = await get_time_left_utc()
+        #     await interaction.send(
+        #         f"Sorry please wait **{_hours}**h **{_minutes}**m for your next Gym Battle.", ephemeral=True)
+        #     return False
+        exclude = [i for i in user_d['gym']['won'] if
+                       user_d['gym']['won'][i]['next_battle_t'] > time.time()]
+        type_ = gym_type.lower().title()
+        print(type_)
+        if type_ in exclude or type_ not in config.GYMS:
+            await interaction.send(
+                f"Sorry please enter a valid Gym.", ephemeral=True)
             return False
     return True

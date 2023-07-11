@@ -1,6 +1,9 @@
+import datetime
 import json
+import random
 import time
 
+import pytz
 from pymongo import MongoClient, ReturnDocument, DESCENDING
 import config
 
@@ -11,6 +14,16 @@ db = client['Zerpmon']
 
 move_collection = db['MoveList']
 level_collection = db['levels']
+
+
+def get_next_ts(days=1):
+    # Get the current time in UTC
+    current_time = datetime.datetime.now(pytz.utc)
+
+    # Calculate the time difference until the next UTC 00:00
+    next_day = current_time + datetime.timedelta(days=days)
+    target_time = next_day.replace(hour=0, minute=0, second=0, microsecond=0)
+    return target_time.timestamp()
 
 
 def save_user(user):
@@ -642,6 +655,145 @@ def update_rank(user_id, win, decay=False):
     # print(r)
 
 
+def get_random_doc_with_type(type_value):
+    collection = db['MoveSets2']
+    query = {'attributes': {'$elemMatch': {'trait_type': 'Type', 'value': type_value}}}
+    documents = list(collection.find(query))
+    if documents:
+        random_documents = random.sample(documents, 5)
+        return random_documents
+    else:
+        return None
+
+
+def choose_gym_zerp():
+    collection_name = 'gym_zerp'
+    gym_col = db[collection_name]
+    for leader_type in config.GYMS:
+        leader_name = f'{leader_type} Gym Leader'
+        gym_obj = {'name': leader_name,
+                   'zerpmons': None,
+                   'image': f'./static/gym/{leader_name}.png',
+                   'bg': f'./static/gym/{leader_type}.png'}
+        while gym_obj['zerpmons'] is None:
+            gym_obj['zerpmons'] = get_random_doc_with_type(leader_type)
+        gym_col.update_one({'name': leader_name},
+                           {'$set': gym_obj}, upsert=True)
+
+
+def get_gym_leader(gym_type):
+    collection_name = 'gym_zerp'
+    gym_col = db[collection_name]
+    leader_name = f'{gym_type} Gym Leader'
+    res = gym_col.find_one({'name': leader_name})
+    return res
+
+
+def reset_gym(discord_id, gym_obj, gym_type, lost=True):
+    users_collection = db['users']
+    if gym_obj == {}:
+        gym_obj = {
+            'won': {
+                gym_type: {
+                    'stage': 1,
+                    'next_battle_t': get_next_ts(1) if lost else 0,
+                    'lose_streak': 1
+                }
+            },
+            'active_t': 0,
+            'gp': 0
+        }
+    else:
+        l_streak = 1 if gym_type not in gym_obj['won'] else gym_obj['won'][gym_type]['lose_streak'] + 1
+        gym_obj['won'][gym_type] = {
+            'stage': 1 if l_streak == 3 else (gym_obj['won'][gym_type]['stage'] if gym_type in gym_obj['won'] else 1),
+            'next_battle_t': get_next_ts(1) if lost else 0,
+            'lose_streak': 0 if l_streak == 3 else l_streak
+        }
+    users_collection.update_one(
+        {'discord_id': str(discord_id)},
+        {'$set': {'gym': gym_obj}}
+    )
+
+
+def add_gp(discord_id, gym_obj, gym_type, stage):
+    users_collection = db['users']
+    if gym_obj == {}:
+        gym_obj = {
+            'won': {
+                gym_type: {
+                    'stage': 2,
+                    'next_battle_t': get_next_ts(3),
+                    'lose_streak': 0
+                }
+            },
+            'active_t': 0,
+            'gp': 1
+        }
+    else:
+        gym_obj['won'][gym_type] = {
+            'stage': stage + 1 if stage < 10 else 1,
+            'next_battle_t': get_next_ts(3),
+            'lose_streak': 0
+        }
+        gym_obj['gp'] += stage
+    users_collection.update_one(
+        {'discord_id': str(discord_id)},
+        {'$set': {'gym': gym_obj}}
+    )
+
+
+def get_gym_leaderboard(user_id):
+    users_collection = db['users']
+    user_id = str(user_id)
+    query = {'gym': {'$exists': True}}
+    top_users = users_collection.find(query).sort('gym.gp', DESCENDING)
+    curr_user = users_collection.find_one({'discord_id': user_id})
+    top_users_count = users_collection.count_documents(query)
+    if curr_user:
+        curr_user_rank = users_collection.count_documents(
+            {'gym.gp': {'$gt': curr_user['gym']['gp'] if 'gym' in curr_user else 0}})
+        curr_user['ranked'] = curr_user_rank + 1
+
+        rank_limit = 4  # Number of players above and below to show
+        rank_above = max(0, curr_user['ranked'] - rank_limit)
+        rank_below = min(top_users_count, curr_user['ranked'] + rank_limit + 1)
+
+        top_users = list(top_users[rank_above:rank_below])
+        for i, user in enumerate(top_users):
+            top_users[i]['ranked'] = rank_above + 1
+            rank_above += 1
+
+        if curr_user['discord_id'] not in [i['discord_id'] for i in top_users]:
+            if 'gym' not in curr_user:
+                curr_user['gym'] = {'won': {}, 'gp': 0, 'active_t': 0}
+            top_users.append(curr_user)
+
+    else:
+        top_users = list(top_users[:10])
+        for i, user in enumerate(top_users):
+            top_users[i]['ranked'] = i + 1
+            top_users[i]['rank_title'] = 'Trainer'
+            # Set rank titles based on position
+
+    for user in top_users:
+        rank_position = user['ranked']
+        if rank_position <= (top_users_count * 0.05):  # Top 5%
+            user['rank_title'] = 'Legendary Trainer'
+        elif rank_position <= (top_users_count * 0.13):  # Top 8%
+            user['rank_title'] = 'Grand Warlord'
+        elif rank_position <= (top_users_count * 0.23):  # Top 10%
+            user['rank_title'] = 'Master Tamer'
+        elif rank_position <= (top_users_count * 0.41):  # Top 10%
+            user['rank_title'] = 'Elite Explorer'
+        elif rank_position <= (top_users_count * 0.67):  # Top 10%
+            user['rank_title'] = 'Apprentice Battler'
+        else:
+            user['rank_title'] = 'Novice Trainer'
+    return top_users
+
+
+# choose_gym_zerp()
 # MOVES UPDATE QUERY
 
 def update_moves(document, save_z=True):
@@ -660,8 +812,8 @@ def update_moves(document, save_z=True):
         if save_z:
             del document['_id']
             save_new_zerpmon(document)
-        else:
-            return document
+
+    return document
 
 # def update_all_zerp_moves():
 #     for document in db['MoveSets'].find():
@@ -682,5 +834,5 @@ def update_moves(document, save_z=True):
 #             save_new_zerpmon(document)
 #
 # update_all_zerp_moves()
-# get_rand_zerpmon(level=22)
+# print(get_rand_zerpmon(level=1))
 # print(len(get_ranked_players(0)))

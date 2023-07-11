@@ -7,5 +7,6 @@ test3.py
 t2.py
 static/images
 static/bgs
+static/gym
 .idea
 test.json

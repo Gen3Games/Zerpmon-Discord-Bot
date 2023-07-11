@@ -1,9 +1,12 @@
+import inspect
 import re
 
 import config
 
 
 def update_next_atk(p1, p2, index1, index2, status_affect_solo):
+    p1 = p1[:]
+    p2 = p2[:]
     for effect in status_affect_solo.copy():
         if 'next attack' in effect and index2 < 4 and ('oppo' in effect or 'enemy' in effect):
             match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
@@ -12,7 +15,7 @@ def update_next_atk(p1, p2, index1, index2, status_affect_solo):
             p2 = update_array(p2, index2, val)
             status_affect_solo.remove(effect)
 
-        elif 'next attack' in effect and index1 < 4:
+        elif 'next attack' in effect and index1 < 4 and not ('oppo' in effect or 'enemy' in effect):
             match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
             val = int(float(match.group()))
             val = val if 'increase' in effect else -val
@@ -43,6 +46,10 @@ def update_purple_stars(total, status_affect_solo):
 
 
 def update_array(arr, index, value, own=False):
+    caller_name = inspect.currentframe().f_back.f_code.co_name
+    print("Caller function:", caller_name)
+    print('ARR RECV: ', arr)
+
     if arr[index] is None:
         return arr
     # Distribute the value change among the other elements
@@ -53,6 +60,7 @@ def update_array(arr, index, value, own=False):
     if value < 0 and arr[-1] is not None and not own:
         arr[index] -= remaining_value
         arr[-1] += remaining_value
+        print('ARR RET: ', arr)
         return arr
 
     # if value > 0 and value
@@ -73,7 +81,9 @@ def update_array(arr, index, value, own=False):
     # Set the index value to the desired value
     arr[index] += value
     if arr[index] >= 100:
-        return [0 if (i != index and i is not None) else (100 if i == index else arr[i]) for i in range(len(arr))]
+        arr = [0 if (i != index and i is not None) else (100 if i == index else arr[i]) for i in range(len(arr))]
+        print('ARR RET: ', arr)
+        return arr
     # Check if any values are out of bounds (i.e. negative or greater than 100)
     for i in range(len(arr)):
         if arr[i] is None:
@@ -82,7 +92,7 @@ def update_array(arr, index, value, own=False):
             arr[i] = 0
         elif arr[i] > 100:
             arr[i] = 100
-
+    print('ARR RET: ', arr)
     return arr
 
 
