@@ -406,3 +406,17 @@ async def use_reviveP_callback(interaction: nextcord.Interaction, button=False):
         button.callback = lambda i: button_callback(interaction.user.id, i, )
         await interaction.send("**SUCCESS**", view=view, ephemeral=True)
         return True
+
+
+async def gym_callback(user_id, interaction: nextcord.Interaction, gym_leader):
+    if user_id in config.ongoing_gym_battles:
+        await interaction.send('Please wait another gym battle is already taking place!', ephemeral=True)
+        return
+    config.ongoing_gym_battles.append(user_id)
+    await interaction.send('Battle beginning!', ephemeral=True)
+    try:
+        winner = await battle_function.proceed_gym_battle(interaction, gym_leader)
+    except Exception as e:
+        logging.error(f'ERROR in gym battle: {traceback.format_exc()}')
+    finally:
+        config.ongoing_gym_battles.remove(user_id)
