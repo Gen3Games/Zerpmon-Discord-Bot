@@ -165,7 +165,8 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             d1m = d1m * type_mapping[_t1][_t2]
             d1m = int(d1m) if float(d1m).is_integer() else d1m
         # print(d1m)
-        d1m, status_affects[0] = update_next_dmg(status_affect_solo=status_affects[0])
+        d1m_t, status_affects[0] = update_next_dmg(status_affect_solo=status_affects[0])
+        d1m = d1m * d1m_t
 
         move1['dmg'] = round(d1m * int(move1['dmg']))
         winner['move1']['dmg'] = round(move1['dmg'])
@@ -185,7 +186,8 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             d2m = d2m * type_mapping[_t1][_t2]
             d2m = int(d2m) if float(d2m).is_integer() else d2m
 
-        d2m, status_affects[1] = update_next_dmg(status_affect_solo=status_affects[1])
+        d2m_t, status_affects[1] = update_next_dmg(status_affect_solo=status_affects[1])
+        d2m = d2m * d2m_t
         # print(d2m)
         move2['dmg'] = round(d2m * int(move2['dmg']))
         winner['move2']['dmg'] = round(move2['dmg'])
@@ -340,6 +342,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         buffed_type1 = buffed_type1[0]['value']
 
     user2_zerpmons = leader['zerpmons']
+    random.shuffle(user2_zerpmons)
     tc2i = leader['image']
 
     path1 = f"./static/images/{tc1['name']}.png"
