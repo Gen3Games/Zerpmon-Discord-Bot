@@ -1956,6 +1956,7 @@ async def view_gyms(interaction: nextcord.Interaction):
         emj = config.TYPE_MAPPING[gym[0]]
         leader = db_query.get_gym_leader(gym[0])
         zerps = leader["zerpmons"]
+        zerps = sorted(zerps, key=lambda i: i['name'])
         embed.add_field(name=f'{emj} {gym[0]} Gym {emj} (Stage {gym[1]}){f" - Reset <t:{gym[2]}:R>" if gym[2] > time.time() else ""}',
                         value=f'> {zerps[0]["name"]}\n'
                               f'> {zerps[1]["name"]}\n'

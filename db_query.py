@@ -375,7 +375,7 @@ def get_ranked_players(user_id):
             top_users.append(curr_user)
         return top_users
     else:
-        users = list(top_users[:10])
+        users = list(top_users[:8])
         for i, user in enumerate(users):
             users[i]['ranked'] = i + 1
         return users
@@ -770,7 +770,7 @@ def get_gym_leaderboard(user_id):
             top_users.append(curr_user)
 
     else:
-        top_users = list(top_users[:10])
+        top_users = list(top_users[:8])
         for i, user in enumerate(top_users):
             top_users[i]['ranked'] = i + 1
             top_users[i]['rank_title'] = 'Trainer'
