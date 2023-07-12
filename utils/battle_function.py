@@ -325,9 +325,9 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
     leader = db_query.get_gym_leader(gym_type)
     gym_won = {} if 'gym' not in _data1 else _data1['gym']['won']
     stage = 1 if gym_type not in gym_won else gym_won[gym_type]['stage']
-
+    leader_name = config.LEADER_NAMES[gym_type]
     trainer_embed = CustomEmbed(title=f"Gym Battle",
-                                description=f"({interaction.user.mention} VS {leader['name']})",
+                                description=f"({interaction.user.mention} VS {leader_name} {config.TYPE_MAPPING[gym_type]})",
                                 color=0xf23557)
 
     user1_zerpmons = _data1['zerpmons']
@@ -354,7 +354,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
     trainer_embed.add_field(name=f"🆚", value="\u200B", inline=True)
 
     trainer_embed.add_field(
-        name=f"{leader['name']} (Stage {stage})",
+        name=f"{leader_name} (Stage {stage})",
         value="\u200B", inline=True)
 
     gen_image(str(interaction.id) + '0', url1, '', path1, path2, path3, leader['bg'])
@@ -643,7 +643,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
     total_gp = 0 if "gym" not in _data1 else _data1["gym"]["gp"] + stage
     if len(user1_zerpmons) == 0:
         await interaction.send(
-            f"Sorry you **LOST** 💀 \nYou can try battling **{leader['name']}** again tomorrow",
+            f"Sorry you **LOST** 💀 \nYou can try battling **{leader_name}** again tomorrow",
             ephemeral=True)
         # Save user's match
         db_query.reset_gym(_data1['discord_id'], _data1['gym'] if 'gym' in _data1 else {}, gym_type, lost=True)
@@ -653,7 +653,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         db_query.add_gp(_data1['discord_id'], _data1['gym'] if 'gym' in _data1 else {}, gym_type, stage)
 
         embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
-                            description=f"{interaction.user.mention} vs {leader['name']} {config.TYPE_MAPPING[gym_type]}")
+                            description=f"{interaction.user.mention} vs {leader_name} {config.TYPE_MAPPING[gym_type]}")
         embed.add_field(name='\u200B', value='\u200B')
         embed.add_field(name='🏆 WINNER 🏆',
                         value=interaction.user.mention,
