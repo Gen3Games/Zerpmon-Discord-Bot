@@ -45,7 +45,7 @@ async def send_reset_message(client: nextcord.Client):
             for user in all_users:
                 if 'gym' in user:
                     won_gyms = user['gym']['won']
-                    for gym, obj in won_gyms:
+                    for gym, obj in won_gyms.items():
                         if obj['next_battle_t'] < time.time() - 84600 and obj['stage'] > 1:
                             db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False)
                 if 'rank' in user:
