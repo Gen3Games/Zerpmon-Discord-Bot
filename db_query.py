@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import random
 import time
 
@@ -44,6 +45,44 @@ def save_user(user):
         print(f"Created new user with id {result.upserted_id}")
     else:
         print(f"Updated user with username {user['username']}")
+
+
+def update_user_decks(discord_id, serials, t_serial):
+    user_obj = get_owned(discord_id)
+
+    mission_trainer = user_obj["mission_trainer"] if 'mission_trainer' in user_obj else ""
+    mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
+    battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {}
+    gym_deck = user_obj["gym_deck"] if 'gym_deck' in user_obj else {}
+
+    new_mission_deck = {}
+    for k, v in mission_deck.items():
+        if v in serials:
+            new_mission_deck[k] = v
+    if mission_trainer not in t_serial:
+        mission_trainer = ""
+    new_battle_deck = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}}
+    for k, v in battle_deck.items():
+        for serial in v:
+            if serial == "trainer":
+                if v[serial] in t_serial:
+                    new_battle_deck[k][serial] = v[serial]
+            elif v[serial] in serials:
+                new_battle_deck[k][serial] = v[serial]
+
+    new_gym_deck = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}}
+    for k, v in gym_deck.items():
+        for serial in v:
+            if serial == "trainer":
+                if v[serial] in t_serial:
+                    new_gym_deck[k][serial] = v[serial]
+            elif v[serial] in serials:
+                new_gym_deck[k][serial] = v[serial]
+
+    logging.error(f'Serials {serials} \nnew deck: {new_battle_deck}')
+    save_user({'mission_trainer': mission_trainer, 'mission_deck': new_mission_deck,
+               'battle_deck': new_battle_deck, 'gym_deck': new_gym_deck,
+               'discord_id': user_obj["discord_id"]})
 
 
 def remove_user_nft(discord_id, serial, trainer=False):
@@ -375,7 +414,7 @@ def get_ranked_players(user_id):
             top_users.append(curr_user)
         return top_users
     else:
-        users = list(top_users[:8])
+        users = list(top_users[:7])
         for i, user in enumerate(users):
             users[i]['ranked'] = i + 1
         return users
@@ -407,6 +446,19 @@ def add_mission_potion(address, inc_by, purchased=False, amount=0):
     # print(r)
 
 
+def add_gym_refill_potion(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+
+    query = {'gym.refill_potion': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+        query['gym.refill_purchase'] = inc_by
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+    # print(r)
+
+
 def reset_respawn_time(user_id):
     users_collection = db['users']
     old = users_collection.find_one({'discord_id': str(user_id)})
@@ -421,11 +473,16 @@ def reset_respawn_time(user_id):
                                              return_document=ReturnDocument.AFTER)
 
 
-def update_trainer_deck(trainer_serial, user_id, deck_no):
+def update_trainer_deck(trainer_serial, user_id, deck_no, gym=False):
     users_collection = db['users']
-    update_query = {
-        f'battle_deck.{deck_no}.trainer': trainer_serial
-    }
+    if gym:
+        update_query = {
+            f'gym_deck.{deck_no}.trainer': trainer_serial
+        }
+    else:
+        update_query = {
+            f'battle_deck.{deck_no}.trainer': trainer_serial
+        }
 
     r = users_collection.update_one({'discord_id': str(user_id)},
                                     {'$set': update_query})
@@ -473,13 +530,24 @@ def update_mission_deck(zerpmon_id, place, user_id):
         return False
 
 
+def clear_mission_deck(user_id):
+    users_collection = db['users']
+    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': {}}})
+
+    if r.acknowledged:
+        return True
+    else:
+        return False
+
+
 def update_battle_deck(zerpmon_id, deck_no, place, user_id):
     users_collection = db['users']
 
     doc = users_collection.find_one({'discord_id': str(user_id)})
 
     # add the element to the array
-    arr = {'0': {}, '1': {}, '2': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else doc["battle_deck"]
+    arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
+        doc["battle_deck"]
     if arr[deck_no] != {}:
         for k, v in arr[deck_no].copy().items():
             if v == zerpmon_id:
@@ -495,16 +563,69 @@ def update_battle_deck(zerpmon_id, deck_no, place, user_id):
         return False
 
 
-def set_default_deck(deck_no, user_id):
+def clear_battle_deck(deck_no, user_id, gym=False):
+    users_collection = db['users']
+    if gym:
+        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'gym_deck.{deck_no}': {}}})
+    else:
+        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'battle_deck.{deck_no}': {}}})
+
+    if r.acknowledged:
+        return True
+    else:
+        return False
+
+
+def update_gym_deck(zerpmon_id, deck_no, place, user_id):
     users_collection = db['users']
 
     doc = users_collection.find_one({'discord_id': str(user_id)})
 
-    arr = {'0': {}, '1': {}, '2': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else doc["battle_deck"]
-    arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
+    # add the element to the array
+    arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "gym_deck" not in doc or doc["gym_deck"] == {} else doc[
+        "gym_deck"]
+    if arr[deck_no] != {}:
+        for k, v in arr[deck_no].copy().items():
+            if v == zerpmon_id:
+                del arr[deck_no][k]
 
+    arr[deck_no][str(place - 1)] = zerpmon_id
     # save the updated document
-    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'battle_deck': arr}})
+    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'gym_deck': arr}})
+
+    if r.acknowledged:
+        return True
+    else:
+        return False
+
+
+def clear_gym_deck(deck_no, user_id):
+    users_collection = db['users']
+    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'gym_deck.{deck_no}': {}}})
+    if r.acknowledged:
+        return True
+    else:
+        return False
+
+
+def set_default_deck(deck_no, user_id, gym=False):
+    users_collection = db['users']
+
+    doc = users_collection.find_one({'discord_id': str(user_id)})
+    if gym:
+        arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "gym_deck" not in doc or doc["gym_deck"] == {} else doc[
+            "gym_deck"]
+        arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
+
+        # save the updated document
+        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'gym_deck': arr}})
+    else:
+        arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
+            doc["battle_deck"]
+        arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
+
+        # save the updated document
+        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'battle_deck': arr}})
 
     if r.acknowledged:
         return True
@@ -558,6 +679,24 @@ def mission_refill(user_id):
         return False
 
 
+def gym_refill(user_id):
+    users_collection = db['users']
+    old = users_collection.find_one({'discord_id': str(user_id)})
+    addr = old['address']
+    if 'gym' in old:
+        for i in old['gym']['won']:
+            if old['gym']['won'][i]['lose_streak'] > 0:
+                old['gym']['won'][i]['next_battle_t'] = -1
+    r = users_collection.update_one({'discord_id': str(user_id)},
+                                    {'$set': old}, )
+    add_gym_refill_potion(addr, -1)
+
+    if r.acknowledged:
+        return True
+    else:
+        return False
+
+
 def add_xrp(user_id, amount):
     users_collection = db['users']
 
@@ -568,23 +707,27 @@ def add_xrp(user_id, amount):
     # print(r)
 
 
-def add_xp(zerpmon_name, user_address):
+def add_xp(zerpmon_name, user_address, double_xp=False):
     zerpmon_collection = db['MoveSets']
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
+    xp_add = 10
+    if double_xp:
+        xp_add = 20
     if old:
         level = old.get('level', 0)
         xp = old.get('xp', 0)
         next_lvl = level_collection.find_one({'level': level + 1}) if level < 30 else None
 
-        if next_lvl and xp + 10 >= next_lvl['xp_required']:
-            zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'level': next_lvl['level'], 'xp': 0}})
+        if next_lvl and xp + xp_add >= next_lvl['xp_required']:
+            zerpmon_collection.update_one({'name': zerpmon_name}, {
+                '$set': {'level': next_lvl['level'], 'xp': (xp + xp_add) - next_lvl['xp_required']}})
             add_revive_potion(user_address, next_lvl['revive_potion_reward'])
             add_mission_potion(user_address, next_lvl['mission_potion_reward'])
         else:
             maxed = old.get('maxed_out', 0)
             if level != 30:
-                zerpmon_collection.update_one({'name': zerpmon_name}, {'$inc': {'xp': 10}})
+                zerpmon_collection.update_one({'name': zerpmon_name}, {'$inc': {'xp': xp_add}})
             elif level == 30 and maxed == 0:
                 zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'maxed_out': 1}})
     else:
@@ -770,7 +913,7 @@ def get_gym_leaderboard(user_id):
             top_users.append(curr_user)
 
     else:
-        top_users = list(top_users[:8])
+        top_users = list(top_users[:7])
         for i, user in enumerate(top_users):
             top_users[i]['ranked'] = i + 1
             top_users[i]['rank_title'] = 'Trainer'
@@ -793,8 +936,125 @@ def get_gym_leaderboard(user_id):
     return top_users
 
 
+def update_user_bg(user_id, gym_type):
+    users_collection = db['users']
+    user_id = str(user_id)
+    bg_value = f'./static/gym/{gym_type}.png'
+    users_collection.update_one({'discord_id': user_id},
+                                {'$push': {'bg': bg_value}})
+
+
+def double_xp_24hr(user_id):
+    users_collection = db['users']
+    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'double_xp': time.time() + 86400}})
+
+    if r.acknowledged:
+        return True
+    else:
+        return False
+
+
+def increase_lvl(user_id, amount, zerpmon_name):
+    zerpmon_collection = db['MoveSets']
+    users_collection = db['users']
+    user = users_collection.find_one_and_update({'discord_id': str(user_id)}, {'$inc': {'zrp_spent': amount}},
+                                                return_document=ReturnDocument.AFTER)
+
+    old = zerpmon_collection.find_one({'name': zerpmon_name})
+    user_address = user['address']
+    if old:
+        level = old.get('level', 0)
+        xp = old.get('xp', 0)
+        next_lvl = level_collection.find_one({'level': level + 1}) if level < 30 else None
+
+        if next_lvl:
+            zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'level': next_lvl['level'], 'xp': xp}})
+            add_revive_potion(user_address, next_lvl['revive_potion_reward'])
+            add_mission_potion(user_address, next_lvl['mission_potion_reward'])
+            return True
+    add_lvl_candy(user_address, -1)
+    return False
+
+
 # choose_gym_zerp()
 # MOVES UPDATE QUERY
+
+
+def add_equipment(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'equipment': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+
+    return True
+
+
+def add_white_candy(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'white_candy': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+
+    return True
+
+
+def add_gold_candy(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'gold_candy': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+
+    return True
+
+
+def add_lvl_candy(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'lvl_candy': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+
+    return True
+
+
+def apply_white_candy(user_id, amount, zerp_name):
+    z_collection = db['MoveSets']
+    users_collection = db['users']
+    user = users_collection.find_one_and_update({'discord_id': str(user_id)}, {'$inc': {'zrp_spent': amount}},
+                                                return_document=ReturnDocument.AFTER)
+    zerp = z_collection.find_one({'name': zerp_name})
+    for i, move in enumerate(zerp['moves']):
+        if move['color'].lower() == 'white':
+            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] * 1.02, 1)
+    del zerp['_id']
+    save_new_zerpmon(zerp)
+    add_white_candy(user['address'], -1)
+
+
+def apply_gold_candy(user_id, amount, zerp_name):
+    z_collection = db['MoveSets']
+    users_collection = db['users']
+    user = users_collection.find_one_and_update({'discord_id': str(user_id)}, {'$inc': {'zrp_spent': amount}},
+                                                return_document=ReturnDocument.AFTER)
+    zerp = z_collection.find_one({'name': zerp_name})
+    for i, move in enumerate(zerp['moves']):
+        if move['color'].lower() == 'gold':
+            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] * 1.02, 1)
+    del zerp['_id']
+    save_new_zerpmon(zerp)
+    add_gold_candy(user['address'], -1)
+
 
 def update_moves(document, save_z=True):
     if 'level' in document and document['level'] / 10 >= 1:
