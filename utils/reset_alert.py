@@ -72,9 +72,18 @@ async def send_reset_message(client: nextcord.Client):
                                         f'> \n') if len(battle_deck) > 0 else '> Battle Zerpmons:\n'
                             for index, v in battle_deck.items():
                                 if index == "trainer":
+                                    attrs = user['trainer_cards'][v]['attributes']
+                                    emj = '🧙'
+                                    for attr in attrs:
+                                        if 'Trainer Number' in attr['trait_type']:
+                                            emj = '⭐'
+                                            break
+                                        if attr['value'] == 'Legendary':
+                                            emj = '🌟'
+                                            break
                                     zerp_msg = f'> Main Trainer:\n' \
                                                f'> \n' \
-                                               f'> 🧙 {user["trainer_cards"][v]["name"]} 🧙\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
+                                               f'> {emj} {user["trainer_cards"][v]["name"]} {emj}\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
                                                f'> \n' + zerp_msg
                                 else:
                                     zerp_msg += f'> ⭐ {user["zerpmons"][v]["name"]} ⭐\t[view](https://xrp.cafe/nft/{user["zerpmons"][v]["token_id"]})\n'
@@ -112,9 +121,18 @@ async def send_reset_message(client: nextcord.Client):
                                         f'> \n') if len(battle_deck) > 0 else '> Battle Zerpmons:\n'
                             for index, v in battle_deck.items():
                                 if index == "trainer":
+                                    attrs = user['trainer_cards'][v]['attributes']
+                                    emj = '🧙'
+                                    for attr in attrs:
+                                        if 'Trainer Number' in attr['trait_type']:
+                                            emj = '⭐'
+                                            break
+                                        if attr['value'] == 'Legendary':
+                                            emj = '🌟'
+                                            break
                                     zerp_msg = f'> Main Trainer:\n' \
                                                f'> \n' \
-                                               f'> 🧙 {user["trainer_cards"][v]["name"]} 🧙\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
+                                               f'> {emj} {user["trainer_cards"][v]["name"]} {emj}\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
                                                f'> \n' + zerp_msg
                                 else:
                                     zerp_msg += f'> ⭐ {user["zerpmons"][v]["name"]} ⭐\t[view](https://xrp.cafe/nft/{user["zerpmons"][v]["token_id"]})\n'
