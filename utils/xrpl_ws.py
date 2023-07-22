@@ -261,7 +261,7 @@ async def send_random_zerpmon(to_address):
                 continue
             res = await send_nft('reward', to_address, token_id)
             tokens_sent.append(token_id)
-            nft_data = await xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
+            nft_data = xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
             img = ('https://ipfs.io/ipfs/' + nft_data['image'].replace("ipfs://", "")) if 'image' in nft_data else ''
             return res, [(nft_data['name'] if 'name' in nft_data else token_id), img]
 
