@@ -4,12 +4,13 @@ import random
 
 import requests
 from xrpl.models.requests import AccountInfo
-from xrpl.asyncio.transaction import safe_sign_and_submit_transaction
+from xrpl.asyncio.transaction import safe_sign_and_submit_transaction, get_transaction_from_hash
 import config
 from xrpl.asyncio.clients import AsyncWebsocketClient, AsyncJsonRpcClient
+from xrpl.clients import JsonRpcClient
 from xrpl.asyncio.wallet.wallet_generation import Wallet
 from xrpl.models import Subscribe, Unsubscribe, StreamParameter, Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag, \
-    NFTokenAcceptOffer
+    NFTokenAcceptOffer,IssuedCurrencyAmount
 
 import db_query
 import xrpl_functions
@@ -425,6 +426,77 @@ async def get_nft_data_wager(id):
     except Exception as e:
         logging.error(f"ERROR while getting nft url: {id} \n{e}")
         return '', 'Missing Name in metadata'
+
+async def create_nft_offer(from_, token_id, price,to_address,currency='XRP'):
+    async with AsyncWebsocketClient(URL) as client:
+        try:
+            for i in range(3):
+                if from_ == 'reward': #auction
+                    acc_info = AccountInfo(
+                        account=config.AUCTION_ADDR
+                    )
+                    account_info = await client.request(acc_info)
+                    sequence = account_info.result["account_data"]["Sequence"] if reward_seq is None else reward_seq
+                    # Load the sending account's secret and address from a wallet
+                    sending_wallet = Wallet(seed=config.AUCTION_SEED, sequence=sequence)
+                    sending_address = config.AUCTION_ADDR
+                
+                if currency == 'XRP':
+                    tx = NFTokenCreateOffer(
+                        account=sending_address,
+                        amount=price,
+                        sequence=sequence,  # set the next sequence number for your account
+                        nftoken_id=token_id,  # set to 0 for a new offer
+                        flags=NFTokenCreateOfferFlag.TF_SELL_NFTOKEN,  # set to 0 for a new offer
+                        destination=to_address,  # set to the address of the user you want to sell to
+                    )
+                else:
+                    tx = NFTokenCreateOffer(
+                        account=sending_address,
+                        sequence=sequence,  # set the next sequence number for your account
+                        nftoken_id=token_id,  # set to 0 for a new offer
+                        flags=NFTokenCreateOfferFlag.TF_SELL_NFTOKEN,  # set to 0 for a new offer
+                        destination=to_address,  # set to the address of the user you want to sell to
+                        amount=IssuedCurrencyAmount(
+                            currency=currency,
+                            issuer="rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe",
+                            value=price
+                        )
+                    )
+                response = await safe_sign_and_submit_transaction(tx, sending_wallet, client)
+                
+                # Print the response
+                # print(response.result)
+                try:
+                    if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
+                        clientRPC = JsonRpcClient(config.NODE_URL_S)
+                        print("Success, node url: ", config.NODE_URL_S)
+                        resHash = response.result['tx_json']['hash']
+                        print(resHash)
+                        await asyncio.sleep(5)
+                        t = await get_transaction_from_hash(resHash, clientRPC)
+                        print(t)
+                        t = t.result
+                        print()
+                        print(t)
+                        affectedNodes = t['meta']['AffectedNodes']
+                        for node in affectedNodes:
+                            if 'CreatedNode' in node:
+                                if 'LedgerEntryType' in node['CreatedNode']:
+                                    return True, node['CreatedNode']['LedgerIndex']
+                        return True, None
+
+                    elif response.result['engine_result'] in ["tefPAST_SEQ"]:
+                        await asyncio.sleep(2)
+                    else:
+                        await asyncio.sleep(2)
+                except Exception as e:
+                    logging.error(f"Something went wrong while sending NFT: {e}")
+                    break
+        except Exception as e:
+            logging.error(f"Something went wrong while sending NFT outside loop: {e}")
+        return False
+
 
 # asyncio.run(accept_nft('reward', offer='22FC29F159F14A9672D5E231EFEB6DB9E0FE5483A7CCE1E1C122BEC2FF79E1FD', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
 #                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E549986260000018B'))
