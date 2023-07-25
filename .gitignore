@@ -3,9 +3,9 @@ __pycache__/
 
 logfile_wrapper.log
 config.py
-test3.py
-t2.py
+tests
 static/images
 static/bgs
+static/gym
 .idea
 test.json

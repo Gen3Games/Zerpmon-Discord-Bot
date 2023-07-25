@@ -65,6 +65,8 @@ def execute_before_command(ctx: nextcord.Interaction):
 @client.event
 async def on_ready():
     print('Bot connected to Discord!')
+    for guild in client.guilds:
+        print(guild.name)
 
 
 @client.event
@@ -386,7 +388,8 @@ async def mission_refill(interaction: nextcord.Interaction, qty: int,
             # Put potions on hold os user doesn't spam
             db_query.add_mission_potion(sender['address'], -qty)
             db_query.add_mission_potion(user_owned_nfts['data']['address'], qty)
-            await interaction.send(f"Successfully gifted **{qty}** Mission Refill Potion to **{user.name}**!", ephemeral=False)
+            await interaction.send(f"Successfully gifted **{qty}** Mission Refill Potion to **{user.name}**!",
+                                   ephemeral=False)
             return
 
     for owned_nfts in [user_owned_nfts]:
@@ -430,7 +433,8 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
             # Put potions on hold os user doesn't spam
             db_query.add_revive_potion(sender['address'], -qty)
             db_query.add_revive_potion(user_owned_nfts['data']['address'], qty)
-            await interaction.send(f"Successfully gifted **{qty}** Revive All Potion to **{user.name}**!", ephemeral=False)
+            await interaction.send(f"Successfully gifted **{qty}** Revive All Potion to **{user.name}**!",
+                                   ephemeral=False)
             return
 
     for owned_nfts in [user_owned_nfts]:
@@ -871,28 +875,15 @@ async def buy(interaction: nextcord.Interaction):
 @buy.subcommand(description="Purchase Revive All Potion using XRP (1 use)")
 async def revive_potion(interaction: nextcord.Interaction, quantity: int):
     execute_before_command(interaction)
-    user = interaction.user
-    user_id = user.id
-
-    user_owned_nfts = db_query.get_owned(user_id)
 
     # Sanity checks
 
-    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
-        await interaction.send("Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", ephemeral=True)
-        return
     await interaction.send("Please wait...", ephemeral=True)
     if quantity <= 0:
         await interaction.send(
             f"Sorry, the quantity can't be less than 1",
             ephemeral=True)
         return
-    for owned_nfts in [user_owned_nfts]:
-        if owned_nfts['data'] is None:
-            await interaction.send(
-                f"Sorry no User found named **{owned_nfts['user']}** or haven't yet verified your wallet",
-                ephemeral=True)
-            return
 
     await callback.purchase_callback(interaction, config.POTION[0], quantity)
 
@@ -900,26 +891,14 @@ async def revive_potion(interaction: nextcord.Interaction, quantity: int):
 @buy.subcommand(description="Purchase Mission Refill Potion using XRP (10 Missions)")
 async def mission_refill(interaction: nextcord.Interaction, quantity: int):
     execute_before_command(interaction)
-    user = interaction.user
-    user_id = user.id
-
-    user_owned_nfts = db_query.get_owned(user.id)
 
     # Sanity checks
-    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
-        await interaction.send("Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", ephemeral=True)
-        return
     await interaction.send("Please wait...", ephemeral=True)
     if quantity <= 0:
         await interaction.send(
             f"Sorry, the quantity can't be less than 1",
             ephemeral=True)
         return
-    for owned_nfts in [user_owned_nfts]:
-        if owned_nfts['data'] is None:
-            await interaction.send(
-                f"Sorry no XRP found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
-            return
 
     await callback.purchase_callback(interaction, config.MISSION_REFILL[0], quantity)
 
@@ -1514,11 +1493,11 @@ async def pvp(interaction: nextcord.Interaction):
         rank = user['rank']['tier'] if 'rank' in user else 'Unranked'
         if i == 10:
             msg = '#{0:<4} {1:<25} W/L : {2:<2}/{3:<6} {4:<15}'.format(user['rank'], user['username'], user['pvp_win'],
-                                                               user['pvp_loss'], rank)
+                                                                       user['pvp_loss'], rank)
             embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
         else:
             msg = '#{0:<4} {1:<25} W/L : {2:<2}/{3:<6} {4:<15}'.format(i + 1, user['username'], user['pvp_win'],
-                                                               user['pvp_loss'], rank)
+                                                                       user['pvp_loss'], rank)
             embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
 
     await interaction.send(embed=embed, ephemeral=True)
@@ -1533,12 +1512,44 @@ async def top_purchasers(interaction: nextcord.Interaction):
                         title=f"TOP PURCHASERS LEADERBOARD")
     for i, user in enumerate(users):
         if i == 10:
-            msg = '#{0:<4} {1:<25} XRP Spent : {2:<5} 🍶/🍹: {3:<2}/{4:<2}'.format(user['rank'], user['username'], round(user['xrp_spent'], 2),
-                                                               user['mission_purchase']  if 'mission_purchase' in user else 0, user['revive_purchase'] if 'revive_purchase' in user else 0)
+            msg = '#{0:<4} {1:<25} XRP Spent : {2:<5} 🍶/🍹: {3:<2}/{4:<2}'.format(user['rank'], user['username'],
+                                                                                   round(user['xrp_spent'], 2),
+                                                                                   user[
+                                                                                       'mission_purchase'] if 'mission_purchase' in user else 0,
+                                                                                   user[
+                                                                                       'revive_purchase'] if 'revive_purchase' in user else 0)
             embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
         else:
-            msg = '#{0:<4} {1:<25} XRP Spent : {2:<5} 🍶/🍹: {3:<2}/{4:<2}'.format(i + 1, user['username'], round(user['xrp_spent'], 2),
-                                                               user['mission_purchase']  if 'mission_purchase' in user else 0, user['revive_purchase'] if 'revive_purchase' in user else 0)
+            msg = '#{0:<4} {1:<25} XRP Spent : {2:<5} 🍶/🍹: {3:<2}/{4:<2}'.format(i + 1, user['username'],
+                                                                                   round(user['xrp_spent'], 2),
+                                                                                   user[
+                                                                                       'mission_purchase'] if 'mission_purchase' in user else 0,
+                                                                                   user[
+                                                                                       'revive_purchase'] if 'revive_purchase' in user else 0)
+            embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
+
+    await interaction.send(embed=embed, ephemeral=True)
+
+
+@show_leaderboard.subcommand(name='gym', description="Show Gym Leaderboard")
+async def gym_ld(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    # ...
+    users = db_query.get_gym_leaderboard(interaction.user.id)
+    embed = CustomEmbed(color=0xa56cc1,
+                        title=f"GYM LEADERBOARD")
+
+    for i, user in enumerate(users):
+        if str(interaction.user.id) == user['discord_id']:
+            msg = '#{0:<4} {1:<25} TIER: {2:<20} GP : {3:>2}'.format(user['ranked'], user['username'],
+                                                                     user['rank_title'],
+                                                                     user['gym']['gp'])
+            print(msg)
+            embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
+        else:
+            msg = '#{0:<4} {1:<25} TIER: {2:<20} GP : {3:>2}'.format(user['ranked'], user['username'],
+                                                                     user['rank_title'],
+                                                                     user['gym']['gp'])
             embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
 
     await interaction.send(embed=embed, ephemeral=True)
@@ -1810,12 +1821,19 @@ async def trade_potion(interaction: nextcord.Interaction, amount: int,
             del config.potion_trades[msg.id]
             await msg.edit(embeds=[CustomEmbed(title="Timed out!")])
             await msg.add_reaction("❌")
+            if potion_on_hold:
+                if trade_type == 1:
+                    db_query.add_mission_potion(user_owned_nfts['address'], amount)
+                elif trade_type == 2:
+                    db_query.add_revive_potion(user_owned_nfts['address'], amount)
     except:
-        if potion_on_hold:
-            if trade_type == 1:
-                db_query.add_mission_potion(user_owned_nfts['address'], amount)
-            elif trade_type == 2:
-                db_query.add_revive_potion(user_owned_nfts['address'], amount)
+        if msg.id in config.potion_trades and config.potion_trades[msg.id]['active'] == False:
+            del config.potion_trades[msg.id]
+            if potion_on_hold:
+                if trade_type == 1:
+                    db_query.add_mission_potion(user_owned_nfts['address'], amount)
+                elif trade_type == 2:
+                    db_query.add_revive_potion(user_owned_nfts['address'], amount)
 
 
 # RANKED COMMANDS
@@ -1901,7 +1919,81 @@ async def view_rank(interaction: nextcord.Interaction):
     await interaction.send(embed=embed, ephemeral=True)
 
 
+@view_main.subcommand(name="gyms", description="Show Gyms")
+async def view_gyms(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    # ...
+    embed = CustomEmbed(color=0x01f39d,
+                        title=f"Gym Info")
+    user_d = db_query.get_owned(interaction.user.id)
+    won_list = []
+    if user_d is not None:
+        embed.add_field(name='GYMS COMPLETED', value='\u200B', inline=False)
+        if 'gym' not in user_d:
+            user_d['gym'] = {
+                'won': {}, 'active_t': 0, 'gp': 0
+            }
+
+        won_list = [[k, v['stage'], int(v['next_battle_t'])] for k, v in user_d['gym']['won'].items() if v['lose_streak'] == 0]
+        won_list = sorted(won_list, key=lambda x: x[0])
+        lost_list = [[k, v['stage'], int(v['next_battle_t'])] for k, v in user_d['gym']['won'].items() if [k, v['stage'], int(v['next_battle_t'])] not in won_list]
+        lost_list = sorted(lost_list, key=lambda x: x[0])
+        won_list.append(['', 0])
+        won_list.extend(lost_list)
+
+    not_played = [[k, 1, 0] for k in config.GYMS if k not in [i[0] for i in won_list]]
+    not_played = sorted(not_played, key=lambda x: x[0])
+    won_list.append(['x', 0])
+    won_list.extend(not_played)
+    for gym in won_list:
+        print(gym)
+        if gym[0] == '':
+            embed.add_field(name='GYMS LOST', value='\u200B', inline=False)
+            continue
+        elif gym[0] == 'x':
+            embed.add_field(name='GYMS NOT BATTLED', value='\u200B', inline=False)
+            continue
+        emj = config.TYPE_MAPPING[gym[0]]
+        leader = db_query.get_gym_leader(gym[0])
+        zerps = leader["zerpmons"]
+        zerps = sorted(zerps, key=lambda i: i['name'])
+        embed.add_field(name=f'{emj} {gym[0]} Gym {emj} (Stage {gym[1]}){f" - Reset <t:{gym[2]}:R>" if gym[2] > time.time() else ""}',
+                        value=f'> {zerps[0]["name"]}\n'
+                              f'> {zerps[1]["name"]}\n'
+                              f'> {zerps[2]["name"]}\n'
+                              f'> {zerps[3]["name"]}\n'
+                              f'> {zerps[4]["name"]}\n',
+                        inline=False)
+    h, m, s = await checks.get_time_left_utc(1)
+    embed.set_footer(icon_url=config.ICON_URL, text=f'Time left in Gym Leader Reset {h}h {m}m')
+    await interaction.send(embed=embed, ephemeral=True)
+
+
 # RANKED COMMANDS
+
+# GYM COMMANDS
+
+@client.slash_command(name="gym",
+                      description="Shows Gym commands",
+                      )
+async def gym(interaction: nextcord.Interaction):
+    pass
+
+
+@gym.subcommand(name="battle", description="Start Battle against a selected Gym Leader (PvE)")
+async def gym_battle(interaction: nextcord.Interaction,
+                     gym_leader: str = SlashOption(name="gym_leader", description="Gym Leader Type"), ):
+    execute_before_command(interaction)
+    user = interaction.user
+
+    proceed = await checks.check_gym_battle(user.id, interaction, gym_leader)
+    if not proceed:
+        return
+
+    await callback.gym_callback(user.id, interaction, gym_leader)
+
+
+# GYM COMMANDS
 
 # Reaction Tracker
 
@@ -1972,13 +2064,22 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                         config.battle_royale_participants.append({'id': user.id, 'username': user.mention})
         for _id, potion_trade in config.potion_trades.copy().items():
             if user.id == potion_trade["challenged"] and _id == reaction.message.id:
+                oppo = db_query.get_owned(user.id)
                 config.potion_trades[_id]['active'] = True
                 await reaction.message.edit(embeds=[CustomEmbed(title="**Trade Successful**!")])
                 if potion_trade['trade_type'] == 1:
+                    if oppo['revive_potion'] < potion_trade['amount']:
+                        del config.potion_trades[_id]
+                        db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount'])
+                        return
                     db_query.add_revive_potion(potion_trade['address2'], -potion_trade['amount'])
                     db_query.add_mission_potion(potion_trade['address2'], potion_trade['amount'])
                     db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount'])
                 elif potion_trade['trade_type'] == 2:
+                    if oppo['mission_potion'] < potion_trade['amount']:
+                        del config.potion_trades[_id]
+                        db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount'])
+                        return
                     db_query.add_mission_potion(potion_trade['address2'], -potion_trade['amount'])
                     db_query.add_revive_potion(potion_trade['address2'], potion_trade['amount'])
                     db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount'])
@@ -1988,6 +2089,20 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
 
 
 # Autocomplete functions
+
+@gym_battle.on_autocomplete("gym_leader")
+async def gym_autocomplete(interaction: nextcord.Interaction, item: str):
+    # Determine the choices for the trainer_name option based on a condition
+    user_owned = db_query.get_owned(interaction.user.id)
+    if 'gym' in user_owned:
+        exclude = [i for i in user_owned['gym']['won'] if user_owned['gym']['won'][i]['next_battle_t'] > time.time()]
+        leaders = [leader for leader in config.GYMS if (leader not in exclude) and (item.lower() in leader.lower())]
+        choices = {i: i for i in leaders}
+    else:
+        choices = {leader:leader for leader in config.GYMS}
+    choices = dict(sorted(choices.items()))
+    await interaction.response.send_autocomplete(choices)
+
 
 @mission_trainer.on_autocomplete("trainer_name")
 @trainer_deck.on_autocomplete("trainer_name")

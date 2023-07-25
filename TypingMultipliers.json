@@ -48,7 +48,7 @@
         "fairy": 1,
         "cosmic": 0.5,
         "undead": 0
-        
+
     },
 
     "water": {
@@ -125,7 +125,7 @@
         "undead": 1
 
     },
-    
+
     "ice": {
         "normal": 1,
         "fire": 0.5,
@@ -150,7 +150,7 @@
         "undead": 0.5
 
     },
-    
+
     "fighting": {
         "normal": 2,
         "fire": 1,
@@ -175,7 +175,7 @@
         "undead": 2
 
     },
-    
+
     "poison": {
         "normal": 1,
         "fire": 1,
@@ -194,13 +194,13 @@
         "dragon": 1,
         "dragonling": 1,
         "dark": 1,
-        "steel": 1,
+        "steel": 0,
         "fairy": 2,
         "cosmic": 1,
         "undead": 0
 
     },
-    
+
     "ground": {
         "normal": 1,
         "fire": 2,
@@ -225,7 +225,7 @@
         "undead": 0.5
 
     },
-    
+
     "flying": {
         "normal": 1,
         "fire": 1,
@@ -250,7 +250,7 @@
         "undead": 1
 
     },
-    
+
     "psychic": {
         "normal": 1,
         "fire": 1,
@@ -275,7 +275,7 @@
         "undead": 2
 
     },
-    
+
     "bug": {
         "normal": 1,
         "fire": 0.5,
@@ -300,7 +300,7 @@
         "undead": 0.5
 
     },
-    
+
     "rock": {
         "normal": 1,
         "fire": 2,
@@ -325,7 +325,7 @@
         "undead": 1
 
     },
-    
+
     "ghost": {
         "normal": 0,
         "fire": 1,
@@ -350,7 +350,7 @@
         "undead": 0.5
 
     },
-    
+
     "dragon": {
         "normal": 1,
         "fire": 1,
@@ -399,7 +399,7 @@
         "undead": 2
 
     },
-    
+
     "dark": {
         "normal": 1,
         "fire": 1,
@@ -424,7 +424,7 @@
         "undead": 1
 
     },
-    
+
     "steel": {
         "normal": 1,
         "fire": 0.5,
@@ -449,7 +449,7 @@
         "undead": 1
 
     },
-    
+
     "fairy": {
         "normal": 1,
         "fire": 0.5,
@@ -474,7 +474,7 @@
         "undead": 2
 
     },
-    
+
     "cosmic": {
         "normal": 0,
         "fire": 1,
@@ -499,7 +499,7 @@
         "undead": 2
 
     },
-    
+
     "undead": {
         "normal": 2,
         "fire": 2,
@@ -524,6 +524,6 @@
         "undead": 0.5
 
     }
-    
-    
+
+
 }
