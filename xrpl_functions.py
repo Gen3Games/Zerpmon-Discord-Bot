@@ -3,12 +3,12 @@ import asyncio
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models.requests.account_nfts import AccountNFTs
 
-from xrpl.models.requests import AccountOffers
+from xrpl.models.requests import AccountOffers, AccountInfo
 from xrpl.models.requests import Subscribe
 import config
 import json
 import requests
-
+from xrpl.utils import drops_to_xrp
 
 # look up account nfts
 async def get_nfts(address):
@@ -44,7 +44,6 @@ async def get_nfts(address):
     except Exception as e:
         print(e)
         return False, []
-
 
 # look up account offers
 async def get_offers(address):
@@ -103,4 +102,51 @@ def get_nft_metadata_by_id(nftid):
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
 
-# print(get_nft_metadata("697066733A2F2F516D57366677545953376F6741614C6159576247766658546A786758585357734643535256654E544A70396B347A2F3231382E6A736F6E"))
+async def get_xrp_balance(address):
+    try:
+        async with AsyncWebsocketClient(config.NODE_URL) as client:
+            acct_info = AccountInfo(
+                account=address,
+                ledger_index="validated",
+                queue=True,
+            )
+            response = await client.request(acct_info)
+            result = response.result
+            return drops_to_xrp(result["account_data"]["Balance"])
+    except Exception as e:
+        print(e)
+        return 0
+    
+async def get_zrp_balance(address):
+    try:
+        async with AsyncWebsocketClient(config.NODE_URL) as client:
+            if not client.is_open():
+                print("Reconnecting to websocket")
+                await asyncio.sleep(20)
+                await client.open()
+            marker = True
+            markerVal = None
+            balance = 0
+            while marker:
+                acct_info = AccountLines(
+                    account=address,
+                    ledger_index="validated",
+                    limit=400,
+                    marker=markerVal
+                )
+                response = await client.request(acct_info)
+                result = response.result
+
+                for line in result["lines"]:
+                    if line["currency"] == "ZRP" or line["account"] == "rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe":
+                        balance = line["balance"]
+                        print("Hit")
+                        break
+                if "marker" in result:
+                    markerVal = result["marker"]
+                else:
+                    marker = False
+            return balance
+    except Exception as e:
+        print(e)
+        return 0

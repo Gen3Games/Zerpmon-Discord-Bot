@@ -6,7 +6,7 @@ import random
 import threading
 import time
 import traceback
-from typing import Optional
+from typing import Optional,Literal
 import nextcord
 from nextcord import SlashOption, ButtonStyle
 from nextcord.ui import Button, View
@@ -15,7 +15,8 @@ from nextcord.ext import commands
 import xumm_functions
 import xrpl_functions
 import db_query
-from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, checks, callback, reset_alert
+from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, checks, callback, reset_alert, auction_functions
+from xrpl.utils import xrp_to_drops
 
 intents = nextcord.Intents.all()
 client = commands.AutoShardedBot(command_prefix="/", intents=intents)
@@ -1919,6 +1920,282 @@ async def view_rank(interaction: nextcord.Interaction):
     await interaction.send(embed=embed, ephemeral=True)
 
 
+#auction commands
+
+@client.slash_command(name="auction", description="Create an auction")
+@commands.has_permissions(administrator=True)
+async def auction(interaction: nextcord.Interaction, nftid: str, price: int, duration: int, duration_type: Literal["hours", "days"],currency: Literal["XRP","ZRP"]):
+    #check if user is admin
+    await interaction.response.defer(ephemeral=True)
+    nftid = nftid.strip()
+    nftData =  xrpl_functions.get_nft_metadata_by_id(nftid)
+    if nftData is None:
+        await interaction.edit_original_message(content=f"Could not find NFT with ID {nftid}")
+        return
+    if duration_type == "hours":
+        duration = duration * 3600 # convert to seconds
+    elif duration_type == "days":
+        duration = duration * 86400 # convert to seconds
+    else:
+        await interaction.edit_original_message(content=f"Invalid duration type. Must be hours or days")
+        return
+    nftData = nftData["metadata"]
+    name = nftData["name"]
+    allAuctionNames = auction_functions.get_auctions_names()
+    if name in allAuctionNames:
+        await interaction.edit_original_message(content=f"{name} is already up for auction!")
+        return
+    image = nftData["image"]
+    curTime = int(time.time())
+    # endTime = curTime + duration - 3000
+    endTime = curTime + duration
+    image = image.replace("ipfs://", "https://cloudflare-ipfs.com/ipfs/")
+    embed = nextcord.Embed(title=f"{name} is up for auction!", description=f"{name} is up for auction, use /bid to bid on it!", color=random.randint(0, 0xffffff))
+    embed.set_image(url=image)
+    embed.add_field(name="End Time", value=f"<t:{endTime}:R>")
+    embed.add_field(name="Floor Price", value=f"{price} {currency}")
+    await interaction.edit_original_message(content="created a new auction!")
+    msg = await interaction.channel.send(embed=embed)
+    auction_functions.register_auction(nftid, price, duration, duration_type, name, endTime,currency,msg.id)
+    #start a timer to end the auction
+    while True:
+        #check if auction still exists
+        if name not in auction_functions.get_auctions_names():
+            break
+        curTime = int(time.time())
+        endTime = auction_functions.get_auction_by_name(name)["end_time"]
+        if curTime >= endTime:
+            break
+        await asyncio.sleep(30)
+    #end the auction
+    highestBidder = auction_functions.get_highest_bidder(name)
+    if highestBidder is None:
+        await interaction.channel.send(content=f"The auction for {name} has ended, but no one bid on it!")
+        return
+    highestBid = auction_functions.get_highest_bid(name)
+    embed = nextcord.Embed(title=f"{name} auction has ended!", description=f"{name} auction has ended, <@{highestBidder}> won it with a bid of {highestBid} {currency}!", color=random.randint(0, 0xffffff))
+    embed.set_image(url=image)
+    embed.add_field(name="Floor Price", value=f"{price} {currency}")
+    embed.add_field(name="Winner", value=f"<@{highestBidder}>")
+    embed.add_field(name="Winning Bid", value=f"{highestBid} {currency}")
+    await interaction.channel.send(embed=embed)
+    uAddress = db_query.get_owned(highestBidder)["address"]
+    auction_functions.update_to_be_claimed(name, highestBidder, uAddress, auction_functions.get_auction_by_name(name)["nft_id"],currency,highestBid)
+    auction_functions.delete_auction(name)
+
+@client.slash_command(name="bid", description="Bid on an auction")
+async def bid(
+    interaction: nextcord.Interaction,
+    *,
+    name: str,
+    bid: int
+):
+    await interaction.response.defer(ephemeral=True)
+    name = name.strip()
+    if name not in auction_functions.get_auctions_names():
+        await interaction.edit_original_message(content=f"Could not find auction with name {name}")
+        return
+    curTime = int(time.time())
+    auc = auction_functions.get_auction_by_name(name)
+    endTime = auc["end_time"]
+    floor = auc["floor"]
+    msgid = auc["msgid"]
+    if bid < floor:
+        await interaction.edit_original_message(content=f"Your bid must be higher than the floor price!")
+        return
+    if curTime >= endTime:
+        await interaction.edit_original_message(content=f"Auction has ended!")
+        return
+    if bid <= auction_functions.get_highest_bid(name):
+        await interaction.edit_original_message(content=f"Your bid must be higher than the current highest bid!")
+        return
+    # uAddress = db_query.get_owned(interaction.user.id)["address"]
+    if interaction.user.id == 739375301578194944:
+        uAddress = "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L"
+    else:
+        uAddress = db_query.get_owned(interaction.user.id)["address"]
+    # if uAddress != "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L":
+    if uAddress is None:
+        await interaction.edit_original_message(content=f"Address not found :/. Please Link your account to bid on auctions!")
+        return
+    # balance = await xrpl_functions.get_xrp_balance(uAddress)
+    if auc["currency"] == "XRP":
+        balance = await xrpl_functions.get_xrp_balance(uAddress)
+    else:
+        balance = await xrpl_functions.get_zrp_balance(uAddress)
+    print(balance)
+    if uAddress == "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L":
+        balance = 500
+    balance = float(balance)
+    if balance < bid:
+        await interaction.edit_original_message(content=f"You do not have enough {auc['currency']} to bid that much!")
+        return
+    auction_functions.update_auction_bid(name, interaction.user.id, bid)
+    await interaction.edit_original_message(content=f"Bid of {bid} {auc['currency']} placed on {name}!")
+    embed = nextcord.Embed(title=f"{name} is up for auction!", description=f"{name} is up for auction, use /bid to bid on it!", color=random.randint(0, 0xffffff))
+    image = xrpl_functions.get_nft_metadata_by_id(auc["nft_id"])["metadata"]["image"]
+    image = image.replace("ipfs://", "https://cloudflare-ipfs.com/ipfs/")
+    embed.set_image(url=image)
+    embed.add_field(name="End Time", value=f"<t:{endTime + 60}:R>")
+    embed.add_field(name="Floor Price", value=f"{floor} {auc['currency']}")
+    embed.add_field(name="Highest Bid", value=f"{bid} {auc['currency']}")
+    # await interaction.followup.edit_message(msgid, embed=embed)
+    msg = await interaction.channel.fetch_message(msgid)
+    await msg.edit(embed=embed)
+    await interaction.channel.send(content=f"<@{interaction.user.id}> has placed a bid of {bid} {auc['currency']} on {name}!")
+
+    #if time left for auction to end is less than 2 minutes, extend it by 1 minute
+    diff = endTime - curTime
+    if diff < 120:
+        auction_functions.update_auction_endtime(name, endTime + 60)
+        await interaction.channel.send(content=f"The timer for {name} has been extended by 1 minute!")
+        #edit the embed
+        embed = nextcord.Embed(title=f"{name} is up for auction!", description=f"{name} is up for auction, use /bid to bid on it!", color=random.randint(0, 0xffffff))
+        image = xrpl_functions.get_nft_metadata_by_id(auc["nft_id"])["metadata"]["image"]
+        image = image.replace("ipfs://", "https://cloudflare-ipfs.com/ipfs/")
+        embed.set_image(url=image)
+        embed.add_field(name="End Time", value=f"<t:{endTime + 60}:R>")
+        embed.add_field(name="Floor Price", value=f"{floor} {auc['currency']}")
+        embed.add_field(name="Highest Bid", value=f"{bid} {auc['currency']}")
+        await interaction.followup.edit_message(msgid, embed=embed)
+
+
+@client.slash_command(name="auctions", description="Get all auctions")
+async def auctions(interaction: nextcord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    auctions = auction_functions.get_auctions()
+    if len(auctions) == 0:
+        await interaction.edit_original_message(content=f"There are no auctions currently!")
+        return
+    #put out name and floor price and end time
+    embed = nextcord.Embed(title=f"Current Auctions", description=f"Here are all the current auctions!", color=random.randint(0, 0xffffff))
+    for auction in auctions:
+        name = auction["name"]
+        endTime = auction["end_time"]
+        currency = auction["currency"]
+        highestBid = auction_functions.get_highest_bid(name)
+        if highestBid is None:
+            highestBid = 0
+        embed.add_field(name=name, value=f"Highest Bid: {highestBid} {currency}\nEnd Time: <t:{endTime}:R>")
+    await interaction.edit_original_message(content=f"Here are all the current auctions!", embed=embed)
+
+@client.slash_command(name="highestbid", description="Get the highest bid on an auction")
+async def highestbid(interaction: nextcord.Interaction, *, name: str):
+    await interaction.response.defer(ephemeral=True)
+    name = name.strip()
+    if name not in auction_functions.get_auctions_names():
+        await interaction.edit_original_message(content=f"Could not find auction with name {name}")
+        return
+    highestBid = auction_functions.get_highest_bid(name)
+    auctionn = auction_functions.get_auction_by_name(name)
+    if highestBid is None:
+        await interaction.edit_original_message(content=f"No one has bid on this auction yet!")
+        return
+    await interaction.edit_original_message(content=f"The highest bid on {name} is {highestBid} {auctionn['currency']} by <@{auction_functions.get_highest_bidder(name)}>!")
+
+@client.slash_command(name="forceend", description="Force an auction to end")
+@commands.has_permissions(administrator=True)
+async def forceend(interaction: nextcord.Interaction, *, name: str):
+    await interaction.response.defer(ephemeral=True)
+    name = name.strip()
+    if name not in auction_functions.get_auctions_names():
+        await interaction.edit_original_message(content=f"Could not find auction with name {name}")
+        return
+    highestBidder = auction_functions.get_highest_bidder(name)
+    if highestBidder is None:
+        await interaction.edit_original_message(content=f"The auction for {name} has ended, but no one bid on it!")
+        auction_functions.delete_auction(name)
+        return
+    highestBid = auction_functions.get_highest_bid(name)
+    currency = auction_functions.get_auction_by_name(name)["currency"]
+    embed = nextcord.Embed(title=f"{name} auction has ended!", description=f"{name} auction has ended, <@{highestBidder}> won it with a bid of {highestBid} {currency}!", color=random.randint(0, 0xffffff))
+    # embed.set_image(url=xrpl_functions.get_nft_metadata_by_id(auction_functions.get_auction_by_name(name)["nft_id"])["image"])
+    image = xrpl_functions.get_nft_metadata_by_id(auction_functions.get_auction_by_name(name)["nft_id"])["metadata"]["image"]
+    image = image.replace("ipfs://", "https://cloudflare-ipfs.com/ipfs/")
+    embed.set_image(url=image)
+    embed.add_field(name="Floor Price", value=f"{auction_functions.get_auction_by_name(name)['floor']} {currency}")
+    embed.add_field(name="Winner", value=f"<@{highestBidder}>")
+    embed.add_field(name="Winning Bid", value=f"{highestBid} XRP")
+    await interaction.edit_original_message(content=f"{name} auction has ended, <@{highestBidder}> won it with a bid of {highestBid} {currency}!")
+    await interaction.channel.send(embed=embed)
+    # uAddress = db_query.get_owned(highestBidder)["address"]
+    if highestBidder == 739375301578194944:
+        uAddress = "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L"
+    else:
+        uAddress = db_query.get_owned(highestBidder)["address"]
+    auction_functions.update_to_be_claimed(name, highestBidder, uAddress, auction_functions.get_auction_by_name(name)["nft_id"],currency, highestBid)
+    auction_functions.delete_auction(name)
+
+@client.slash_command(name="check-claims", description="Check if you have any claims")
+async def check_claims(interaction: nextcord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    claims = auction_functions.get_to_be_claimed()
+    if len(claims) == 0:
+        await interaction.edit_original_message(content=f"You have no claims!")
+        return
+    uClaims = []
+    for claim in claims:
+        if claim["userid"] == interaction.user.id:
+            uClaims.append(claim)
+    if len(uClaims) == 0:
+        await interaction.edit_original_message(content=f"You have no claims!")
+        return
+    embed = nextcord.Embed(title=f"Your Claims", description=f"Here are all your claims!\nUse `/claim` + name of the nft to claim it!", color=random.randint(0, 0xffffff))
+    for claim in uClaims:
+        embed.add_field(name="Claim", value=f"You have a claim for {claim['price']} {claim['currency']} for the auction {claim['name']}!")
+    await interaction.edit_original_message(content=f"Here are all your claims!\nUse `/claim` + name of the nft to claim it!", embed=embed)
+
+@client.slash_command(name="claim", description="Claim an auction you won")
+async def claim(interaction: nextcord.Interaction, *, name: str):
+    await interaction.response.defer(ephemeral=True)
+    name = name.strip()
+    tbc = auction_functions.get_to_be_claimed_by_name(name)
+    if tbc is None:
+        await interaction.edit_original_message(content=f"Could not find claim with name {name}")
+        return
+    if tbc["userid"] != interaction.user.id:
+        await interaction.edit_original_message(content=f"You can't claim this!")
+        return
+    if tbc["currency"] == "XRP":
+        offer,offerhash = await xrpl_ws.create_nft_offer('reward',tbc["nftid"],xrp_to_drops(int(tbc["price"])),tbc["useraddress"])
+        xumm_payload = {
+                "txjson": {
+                    "Account": tbc["useraddress"],
+                    "TransactionType": "NFTokenAcceptOffer",
+                    "NFTokenSellOffer": offerhash
+                }
+            }
+        _,qr,deeplink = await xumm_functions.construct_xumm_payload(xumm_payload)
+        if offer:
+            # await interaction.edit_original_message(content=f"offer successfully created!\nCheck (xrp.cafe)[https://xrp.cafe/nft/{tbc['nftid']}] to claim your NFT!")
+            embed = nextcord.Embed(title=f"Claim your NFT!", description=f"Click [here]({deeplink}) or scan the qr code to claim your NFT!", color=random.randint(0, 0xffffff))
+            embed.set_image(url=qr)
+            await interaction.edit_original_message(content=f"offer successfully created! Use xumm wallet to scan the qr code and accept the nft offer!", embed=embed)
+            auction_functions.delete_to_be_claimed(name)
+        else:
+            await interaction.edit_original_message(content=f"Something went wrong!\nPlease try again later!\nIf this keeps happening, please contact an admin!")
+    else:
+        offer,offerhash = await xrpl_ws.create_nft_offer('reward',tbc["nftid"],tbc["price"],tbc["useraddress"],tbc["currency"])
+        xumm_payload = {
+                "txjson": {
+                    "Account": tbc["useraddress"],
+                    "TransactionType": "NFTokenAcceptOffer",
+                    "NFTokenSellOffer": offerhash
+                }
+            }
+        _,qr,deeplink = await xumm_functions.construct_xumm_payload(xumm_payload)
+        if offer:
+            # await interaction.edit_original_message(content=f"offer successfully created!\nCheck (xmart)[https://xmart.art] to claim your NFT! (login with xumm and go to your account offers!)")
+            embed = nextcord.Embed(title=f"Claim your NFT!", description=f"Click [here]({deeplink}) or scan the qr code to claim your NFT!", color=random.randint(0, 0xffffff))
+            embed.set_image(url=qr)
+            await interaction.edit_original_message(content=f"offer successfully created! Use xumm wallet to scan the qr code and accept the nft offer, alternatively:\nCheck (xmart)[https://xmart.art] to claim your NFT! (login with xumm and go to your account offers!)", embed=embed)
+            auction_functions.delete_to_be_claimed(name)
+        else:
+            await interaction.edit_original_message(content=f"Something went wrong!\nPlease try again later!\nIf this keeps happening, please contact an admin!")
+            
+
+
+
 @view_main.subcommand(name="gyms", description="Show Gyms")
 async def view_gyms(interaction: nextcord.Interaction):
     execute_before_command(interaction)
@@ -2137,6 +2414,21 @@ async def mission_autocomplete(interaction: nextcord.Interaction, item: str):
             choices[v['name']] = k
     await interaction.response.send_autocomplete(choices)
 
+@bid.on_autocomplete("name")
+@highestbid.on_autocomplete("name")
+@forceend.on_autocomplete("name")
+async def autocomplete_month(interaction: nextcord.Interaction, name: str):
+    names = auction_functions.get_auctions_names()
+    await interaction.response.send_autocomplete(choices=names)
+
+@claim.on_autocomplete("name")
+async def autocomplete_month(interaction: nextcord.Interaction, name: str):
+    claimable = auction_functions.get_to_be_claimed()
+    names = []
+    for claim in claimable:
+        if claim["userid"] == interaction.user.id:
+            names.append(claim["name"])
+    await interaction.response.send_autocomplete(choices=names)
 
 # Autocomplete functions
 
