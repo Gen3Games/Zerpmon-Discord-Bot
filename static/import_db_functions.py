@@ -4,6 +4,7 @@ import pymongo
 import csv
 import requests
 
+
 client = pymongo.MongoClient('mongodb://localhost:27017/')
 db = client['Zerpmon']
 
@@ -29,7 +30,7 @@ def update_type(name, attrs):
 
 
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_2.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -48,7 +49,7 @@ def import_moves():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_2.csv', 'r') as csvfile:
         collection = db['MoveSets']
         # c2 = db['MoveSets2']
         # c2.drop()
@@ -149,16 +150,16 @@ def check_nft_cached(id, data):
 
 
 def get_cached():
-    with open("./site/metadata.json", "r") as f:
+    with open("./metadata.json", "r") as f:
         return json.load(f)
 
 
 def import_attrs_img():
     data = get_all_z()
-    tba = get_cached()  # [{nftid, metadata, uri},...]
+    # tba = get_cached()  # [{nftid, metadata, uri},...]
     for i in data:
         id = i['nft_id']
-        if 'image' in i and 'attributes' in i and check_nft_cached(id, tba):
+        if 'image' in i and 'attributes' in i:
             continue
         path = f"./static/images/{i['name']}.png"
         rr2 = requests.get(
@@ -169,13 +170,13 @@ def import_attrs_img():
         print(url)
         update_type(i['name'], meta)
         update_image(i['name'], url)
-        tba.append({
-            "nftid": id,
-            "metadata": meta,
-            "uri": res['uri'],
-        })
-    with open("./site/metadata.json", "w") as f:
-        json.dump(tba, f)
+    #     tba.append({
+    #         "nftid": id,
+    #         "metadata": res['metadata'],
+    #         "uri": res['uri'],
+    #     })
+    # with open("./metadata.json", "w") as f:
+    #     json.dump(tba, f)
 
 
 def clean_attrs():
@@ -218,9 +219,12 @@ def save_new_zerpmon(zerpmon):
 
 def update_all_zerp_moves():
     for document in db['MoveSets'].find():
+        del document['_id']
         if 'level' in document and document['level'] / 10 >= 1:
             miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
             percent_change = 3.33 * (document['level'] // 10)
+            if percent_change == 9.99:
+                percent_change = 10
             percent_change = percent_change if percent_change < miss_percent else miss_percent
             count = len([i for i in document['moves'] if i['name'] != ""]) - 1
             print(document)
@@ -231,14 +235,31 @@ def update_all_zerp_moves():
                 elif move['name'] != "" and float(move['percent']) > 0:
                     move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
                     document['moves'][i] = move
-            del document['_id']
+            save_new_zerpmon(document)
+        w_candy = document.get('white_candy', 0)
+        g_candy = document.get('gold_candy', 0)
+        if w_candy > 0:
+
+            original_zerp = db['MoveSets2'].find_one({'name': document['name']})
+            for i in range(w_candy):
+                for i, move in enumerate(document['moves']):
+                    if move['color'].lower() == 'white':
+                        document['moves'][i]['dmg'] = round(document['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * 0.02),
+                                                        1)
+            save_new_zerpmon(document)
+        if g_candy > 0:
+            original_zerp = db['MoveSets2'].find_one({'name': document['name']})
+            for i in range(g_candy):
+                for i, move in enumerate(document['moves']):
+                    if move['color'].lower() == 'gold':
+                        document['moves'][i]['dmg'] = round(document['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * 0.02,
+                                                        1)
             save_new_zerpmon(document)
 
-
-def get_trainer_nfts_data():
+def get_issuer_nfts_data(issuer):
     try:
         print("get_collection_5kk")
-        url = "https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer=rUv6Bmw6GRQHgJaiVcXnnNFCeTMKUE6FCa"
+        url = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer={issuer}"
         response = requests.get(url)
         response = response.json()
 
@@ -251,7 +272,7 @@ def get_trainer_nfts_data():
             markerVal = response['marker']
 
         while marker:
-            url2 = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer=rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy&marker={markerVal}"
+            url2 = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer={issuer}&marker={markerVal}"
             response2 = requests.get(url2)
             response2 = response2.json()
 
@@ -270,18 +291,20 @@ def get_trainer_nfts_data():
         print(str(e), ' error')
 
 
-def cache_trainer_data():
+def cache_data():
     try:
-        nfts = get_trainer_nfts_data()
+        z_nfts = get_issuer_nfts_data('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME')
+        nfts = get_issuer_nfts_data('rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy')
+        z_nfts.extend(nfts)
         tba = get_cached()
-        for nft in nfts:
+        for nft in z_nfts:
             if not check_nft_cached(nft['nftokenID'], tba):
                 tba.append({
                     'nftid': nft['nftokenID'],
                     'metadata': nft['metadata'],
                     'uri': nft['uri']
                 })
-        with open("./site/metadata.json", "w") as f:
+        with open("./metadata.json", "w") as f:
             json.dump(tba, f)
 
     except Exception as e:
@@ -289,9 +312,9 @@ def cache_trainer_data():
 
 
 import_moves()
-# import_movesets()
-# import_level()
-# import_attrs_img()
-# clean_attrs()
-# update_all_zerp_moves()
-# cache_trainer_data()
+import_movesets()
+# # import_level()
+import_attrs_img()
+clean_attrs()
+update_all_zerp_moves()
+cache_data()

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import time
 import traceback
 
@@ -9,8 +10,10 @@ from nextcord.ui import Button, View
 
 import config
 import db_query
+import xrpl_functions
 import xumm_functions
 from utils import checks, battle_function
+from utils.xrpl_ws import send_random_zerpmon, send_zrp, get_zrp_balance
 
 
 class CustomEmbed(nextcord.Embed):
@@ -48,15 +51,17 @@ async def purchase_callback(_i: nextcord.Interaction, amount, qty=1):
 
     embed.set_image(url=url)
 
-    await _i.send(embed=embed, ephemeral=True, )
+    await _i.send(embed=embed, ephemeral=True, delete_after=120)
 
     for i in range(18):
-        if user_id in config.latest_purchases:
-            config.latest_purchases.remove(user_id)
+        if user_id in config.latest_purchases and config.latest_purchases[user_id] == send_amt:
+            del config.latest_purchases[user_id]
             await _i.send(embed=CustomEmbed(title="**Success**",
-                                            description=f"Bought **{qty}** {'Revive All Potion' if amount in [8.99, 4.495] else 'Mission Refill Potion'}",
+                                            description=f"Bought **{qty}** {'Revive All Potion' if amount in [8.99, 4.495] else ('Double XP Potion' if amount == config.DOUBLE_XP_POTION else 'Mission Refill Potion')}",
                                             ), ephemeral=True)
+            return True
         await asyncio.sleep(10)
+    return False
 
 
 async def show_store(interaction: nextcord.Interaction):
@@ -84,9 +89,9 @@ async def show_store(interaction: nextcord.Interaction):
                          value=f"**{0 if 'mission_potion' not in user_owned_nfts else user_owned_nfts['mission_potion']}**"
                                + '\t🍶',
                          inline=False)
-
-    main_embed.add_field(name="XRP Earned: ",
-                         value=f"**{0 if 'xrp_earned' not in user_owned_nfts else user_owned_nfts['xrp_earned']}**"
+    active = 'double_xp' in user_owned_nfts and user_owned_nfts['double_xp'] > time.time()
+    main_embed.add_field(name="Double XP Buff: ",
+                         value=f"**{'Inactive' if not active else '🔥 Active 🔥'}**{'' if not active else ' <t:' + str(int(user_owned_nfts['double_xp'])) + ':R>'}"
                          ,
                          inline=False)
     main_embed.set_footer(text=f"Usage guide: \n"
@@ -106,6 +111,9 @@ async def store_callback(interaction: nextcord.Interaction):
                          value=f"Cost: `{config.MISSION_REFILL[0]} XRP`" if str(
                              user_id) in config.store_24_hr_buyers else
                          f"Cost: `{config.MISSION_REFILL[0] / 2:.5f} XRP` \n(🥳 Half price for first purchase every 24hr 🥳)",
+                         inline=False)
+    main_embed.add_field(name="**Double XP Potions**" + '\t🍉',
+                         value=f"Cost: `{config.DOUBLE_XP_POTION} XRP`",
                          inline=False)
 
     main_embed.add_field(name=f"\u200B",
@@ -129,23 +137,36 @@ async def store_callback(interaction: nextcord.Interaction):
 
     sec_embed = await show_store(interaction)
 
-    b1 = Button(label="Buy Revive All Potion", style=ButtonStyle.blurple)
-    b2 = Button(label="Buy Mission Refill Potion", style=ButtonStyle.blurple)
+    b1 = Button(label="Buy Revive All Potion", style=ButtonStyle.blurple, row=0, emoji='🍹')
+    b2 = Button(label="Buy Mission Refill Potion", style=ButtonStyle.blurple, row=0, emoji='🍶')
+    b3 = Button(label="Buy Double XP Potion", style=ButtonStyle.green, row=1, emoji='🍉')
     view = View()
     view.add_item(b1)
     view.add_item(b2)
+    view.add_item(b3)
     view.timeout = 120  # Set a timeout of 60 seconds for the view to automatically remove it after the time is up
 
     # Add the button callback to the button
     b1.callback = lambda i: purchase_callback(i, config.POTION[0])
     b2.callback = lambda i: purchase_callback(i, config.MISSION_REFILL[0])
-
+    b3.callback = lambda i: double_xp_callback(i)
     await interaction.send(embeds=[main_embed, sec_embed], ephemeral=True, view=view)
+
+
+async def double_xp_callback(i: nextcord.Interaction):
+    purchased = await purchase_callback(i, config.DOUBLE_XP_POTION)
+    if purchased:
+        # double xp
+        db_query.double_xp_24hr(i.user.id)
 
 
 async def button_callback(user_id, interaction: nextcord.Interaction, loser: int = None,
                           mission_zerpmon_used: bool = False):
     _user_owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
+    u_flair = f' | {_user_owned_nfts["data"].get("flair", [])[0]}' if len(
+        _user_owned_nfts["data"].get("flair", [])) > 0 else ''
+    _user_owned_nfts['user'] += u_flair
+    user_mention = interaction.user.mention + u_flair
     _b_num = 0 if 'battle' not in _user_owned_nfts['data'] else _user_owned_nfts['data']['battle']['num']
     if _b_num > 0:
         if _user_owned_nfts['data']['battle']['reset_t'] > time.time() and _b_num >= 10:
@@ -413,10 +434,398 @@ async def gym_callback(user_id, interaction: nextcord.Interaction, gym_leader):
         await interaction.send('Please wait another gym battle is already taking place!', ephemeral=True)
         return
     config.ongoing_gym_battles.append(user_id)
-    await interaction.send('Battle beginning!', ephemeral=True)
     try:
+        await interaction.send('Battle beginning!', ephemeral=True)
         winner = await battle_function.proceed_gym_battle(interaction, gym_leader)
     except Exception as e:
         logging.error(f'ERROR in gym battle: {traceback.format_exc()}')
     finally:
         config.ongoing_gym_battles.remove(user_id)
+
+
+async def show_zrp_holdings(interaction: nextcord.Interaction):
+    user = interaction.user
+
+    user_owned_nfts = db_query.get_owned(user.id)
+    main_embed = CustomEmbed(title="ZRP Store Holdings", color=0xfcff82)
+    # Sanity checks
+
+    for owned_nfts in [user_owned_nfts]:
+        if owned_nfts is None:
+            main_embed.description = \
+                f"Sorry no NFTs found for **{interaction.user.name}** or haven't yet verified your wallet"
+            return main_embed
+
+    main_embed.add_field(name="Gym Refill: ",
+                         value=f"**{0 if ('gym' not in user_owned_nfts or 'refill_potion' not in user_owned_nfts['gym']) else user_owned_nfts['gym']['refill_potion']}**"
+                               + '\t🍯',
+                         inline=False)
+    main_embed.add_field(name="Power Candy (White): ",
+                         value=f"**{0 if 'white_candy' not in user_owned_nfts else user_owned_nfts['white_candy']}**"
+                               + '\t🍬',
+                         inline=False)
+    main_embed.add_field(name="Power Candy (Gold): ",
+                         value=f"**{0 if 'gold_candy' not in user_owned_nfts else user_owned_nfts['gold_candy']}**"
+                               + '\t🍭',
+                         inline=False)
+    main_embed.add_field(name="Battle Zones: ",
+                         value=f"**{len(user_owned_nfts.get('bg', []))}**"
+                               + '\t🏟️',
+                         inline=False)
+    main_embed.add_field(name="Name Flair:",
+                         value=f"**{len(user_owned_nfts.get('name_flair', []))}**"
+                               + '\t💠',
+                         inline=False)
+    main_embed.set_footer(text=f"Usage guide: \n"
+                               f"/use revive_potion zerpmon_id\n"
+                               f"/use mission_refill\n")
+    return main_embed
+
+
+async def zrp_store_callback(interaction: nextcord.Interaction):
+    user_id = interaction.user.id
+    main_embed = CustomEmbed(title="ZRP Store", color=0xfcff82)
+    res, zrp_price = await xrpl_functions.get_zrp_price()
+    refill_p = config.ZRP_STORE['refill'] / zrp_price
+    candy_white_p = config.ZRP_STORE['candy_white'] / zrp_price
+    candy_gold_p = config.ZRP_STORE['candy_gold'] / zrp_price
+    liquor_p = config.ZRP_STORE['liquor'] / zrp_price
+    battle_zone_p = config.ZRP_STORE['battle_zone'] / zrp_price
+    name_flair_p = config.ZRP_STORE['name_flair'] / zrp_price
+    safari_p = config.ZRP_STORE['safari'] / zrp_price
+
+    main_embed.add_field(name="**Gym Refill**" + '\t🍯',
+                         value=f"Cost: `{refill_p:.2f} ZRP`",
+                         inline=False)
+    # main_embed.add_field(name='🍬 **CANDY 🍬', value='\u200B', inline=False)
+    main_embed.add_field(name="**Power Candy (White)**" + '\t🍬',
+                         value=f"Cost: `{candy_white_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Power Candy (Gold)**" + '\t🍭',
+                         value=f"Cost: `{candy_gold_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Golden Liquorice**" + '\t🍵',
+                         value=f"Cost: `{liquor_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Battle Zones**" + '\t🏟️',
+                         value=f"Cost: `{battle_zone_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Name Flair**" + '\t💠',
+                         value=f"Cost: `{name_flair_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Safari Trip**" + '\t🎰',
+                         value=f"Cost: `{safari_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name=f"\u200B",
+                         value=f"Items will be available within a few minutes after transaction is successful",
+                         inline=False)
+
+    main_embed.set_footer(text=f"Usage guide: \n"
+                               f"/use gym_refill\n"
+                               f"/use power_candy_white\n"
+                               f"/use power_candy_gold\n"
+                               f"/use golden_liquorice")
+
+    sec_embed = await show_zrp_holdings(interaction)
+
+    b1 = Button(label="Buy Gym Refill", style=ButtonStyle.blurple, emoji='🍯', row=0)
+    b2 = Button(label="Buy Power Candy (White)", style=ButtonStyle.blurple, emoji='🍬', row=0)
+    b3 = Button(label="Buy Power Candy (Gold)", style=ButtonStyle.blurple, emoji='🍭', row=0)
+    b4 = Button(label="Buy Golden Liquorice", style=ButtonStyle.green, emoji='🍵', row=1)
+    b5 = Button(label="Buy Battle Zones", style=ButtonStyle.green, emoji='🏟️', row=1)
+    b6 = Button(label="Buy Name Flair", style=ButtonStyle.green, emoji='💠', row=1)
+    b7 = Button(label="Buy Safari Trip", style=ButtonStyle.green, emoji='🎰', row=1)
+
+    view = View()
+    for item in [b1, b2, b3, b4, b5, b6, b7]:
+        view.add_item(item)
+    view.timeout = 120  # Set a timeout of 60 seconds for the view to automatically remove it after the time is up
+
+    # Add the button callback to the button
+    b1.callback = lambda i: on_button_click(i, label=b1.label, amount=refill_p)
+    b2.callback = lambda i: on_button_click(i, label=b2.label, amount=candy_white_p)
+    b3.callback = lambda i: on_button_click(i, label=b3.label, amount=candy_gold_p)
+    b4.callback = lambda i: on_button_click(i, label=b4.label, amount=liquor_p)
+    b5.callback = lambda i: on_button_click(i, label=b5.label, amount=battle_zone_p)
+    b6.callback = lambda i: on_button_click(i, label=b6.label, amount=name_flair_p)
+    b7.callback = lambda i: on_button_click(i, label=b7.label, amount=safari_p)
+
+    await interaction.send(embeds=[main_embed, sec_embed], ephemeral=True, view=view)
+
+
+async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=False):
+    user_owned_nfts = db_query.get_owned(_i.user.id)
+
+    # Sanity checks
+
+    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
+        await _i.edit_original_message(content="Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", embeds=[], view=View())
+        return
+    await _i.edit_original_message(content="Generating transaction QR code...", embeds=[], view=View())
+    user_id = str(_i.user.id)
+    user_address = db_query.get_owned(_i.user.id)['address']
+    uuid, url, href = await xumm_functions.gen_zrp_txn_url(config.ISSUER['ZRP'] if not safari else config.SAFARI_ADDR, user_address, amount)
+    embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here.",
+                        url=href)
+
+    embed.set_image(url=url)
+
+    await _i.edit_original_message(embed=embed, view=View())
+    for i in range(18):
+        if user_id in config.zrp_purchases and config.zrp_purchases[user_id] == amount:
+            try:
+                del config.zrp_purchases[user_id]
+                await _i.edit_original_message(embed=CustomEmbed(title="**Success**",
+                                                description=f"Bought {item}.", view=View()
+                                                ))
+            finally:
+                return user_address, True
+        await asyncio.sleep(10)
+    return user_address, False
+
+
+async def use_gym_refill_callback(interaction: nextcord.Interaction):
+    user = interaction.user
+    user_id = user.id
+    user_owned_nfts = {'data': db_query.get_owned(user.id), 'user': user.name}
+
+    # Sanity checks
+    if user.id in config.ongoing_gym_battles:
+        await interaction.send(f"Please wait, Gym Refill can't be used during a Gym Battle.",
+                               ephemeral=True)
+        return
+
+    for owned_nfts in [user_owned_nfts]:
+        if owned_nfts['data'] is None:
+            await interaction.send(
+                f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
+            return
+
+        if 'gym' not in owned_nfts['data'] or 'refill_potion' not in owned_nfts['data']['gym'] or int(owned_nfts['data']['gym']['refill_potion']) <= 0:
+            return (await zrp_store_callback(interaction))
+
+    saved = db_query.gym_refill(user_id)
+    if not saved:
+        await interaction.send(
+            f"**Failed**",
+            ephemeral=True)
+        return False
+    else:
+        await interaction.send("**SUCCESS**", ephemeral=True)
+
+
+async def use_candy_callback(interaction: nextcord.Interaction, label):
+    owned_nfts = db_query.get_owned(interaction.user.id)
+    if owned_nfts is None:
+        await interaction.send(
+            f"Sorry no NFTs found for **{interaction.user.mention}** or haven't yet verified your wallet", ephemeral=True)
+        return
+
+    if 'white' in label.lower():
+        if 'white_candy' not in owned_nfts or int(owned_nfts['white_candy']) <= 0:
+            return (await zrp_store_callback(interaction))
+    elif 'gold' in label.lower():
+        if 'gold_candy' not in owned_nfts or int(owned_nfts['gold_candy']) <= 0:
+            return (await zrp_store_callback(interaction))
+    else:
+        if 'lvl_candy' not in owned_nfts or int(owned_nfts['white_candy']) <= 0:
+            return (await zrp_store_callback(interaction))
+
+    await interaction.response.defer(ephemeral=True)
+
+    select_menu = nextcord.ui.StringSelect(placeholder="Which Zerpmon to use it on")
+    user_owned = db_query.get_owned(interaction.user.id)
+
+    cards = {k: v for k, v in user_owned['zerpmons'].items()} if user_owned is not None else {}
+    for i in cards:
+        select_menu.add_option(label=cards[i]['name'], value=cards[i]['name'])
+    view = View()
+    view.add_item(select_menu)
+    await interaction.edit_original_message(content="Choose one **zerpmon**:", view=view)
+
+    async def handle_select_menu(_i: nextcord.Interaction):
+        print(_i.data)
+        selected_option = _i.data["values"][0]  # Get the selected option
+        await _i.response.defer(ephemeral=True)
+        await _i.edit_original_message(content="**Success**!", view=View())  # Defer the response to avoid timeout
+
+        if 'white' in label.lower():
+            db_query.apply_white_candy(_i.user.id, selected_option)
+        elif 'gold' in label.lower():
+            db_query.apply_gold_candy(_i.user.id, selected_option)
+        else:
+            db_query.increase_lvl(_i.user.id, selected_option)
+
+    select_menu.callback = handle_select_menu
+
+
+async def on_button_click(interaction: nextcord.Interaction, label, amount):
+    user_id = interaction.user.id
+    await interaction.response.defer(ephemeral=True)
+    match label:
+        case "Buy Battle Zones":
+            select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
+            for i in config.GYMS:
+                select_menu.add_option(label=i + f' {config.TYPE_MAPPING[i]}', value=i)
+            view = View()
+            view.add_item(select_menu)
+            await interaction.edit_original_message(content="Choose one **battle zone**:", embeds=[], view=view)
+
+            async def handle_select_menu(_i: nextcord.Interaction):
+                print(_i.data)
+                selected_option = _i.data["values"][0]  # Get the selected option
+                await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
+                addr, purchased = await zrp_purchase_callback(_i, amount, label.replace('Buy ', ''))
+                if purchased:
+                    db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
+                    db_query.update_user_bg(user_id, selected_option)
+
+            # Register the event handler for the select menu
+            select_menu.callback = handle_select_menu
+        case "Buy Gym Refill":
+            addr, purchased = await zrp_purchase_callback(interaction, amount, label.replace('Buy ', ''))
+            if purchased:
+                db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
+                db_query.add_gym_refill_potion(addr, 1, True, )
+        case "Buy Power Candy (White)" | "Buy Power Candy (Gold)" | "Buy Golden Liquorice":
+            select_menu = nextcord.ui.StringSelect(placeholder="Select amount")
+            for i in range(1, 11):
+                select_menu.add_option(label=str(i), value=str(i))
+            view = View()
+            view.add_item(select_menu)
+            await interaction.edit_original_message(content="Choose:", embeds=[], view=view)
+
+            async def handle_select_menu(_i: nextcord.Interaction):
+                print(_i.data)
+                selected_option = int(_i.data["values"][0])  # Get the selected option
+                await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
+                amt = amount * selected_option
+                addr, purchased = await zrp_purchase_callback(_i, amt, label.replace('Buy ', ''))
+                if purchased:
+                    db_query.update_zrp_stats(burn_amount=amt, distributed_amount=0)
+                    if 'white' in label.lower():
+                        db_query.add_white_candy(addr, selected_option, purchased=True, amount=amt)
+                    elif 'gold' in label.lower():
+                        db_query.add_gold_candy(addr, selected_option, purchased=True, amount=amt)
+                    else:
+                        db_query.add_lvl_candy(addr, selected_option, purchased=True, amount=amt)
+            select_menu.callback = handle_select_menu
+
+        case "Buy Safari Trip":
+            addr, purchased = await zrp_purchase_callback(interaction, amount, label.replace('Buy ', ''), safari=True)
+            if purchased:
+                j_amount = round(amount * 0.33, 2)
+                await send_zrp(config.JACKPOT_ADDR, j_amount, 'safari')
+                # Run 3 raffles
+                rewards = [
+
+                ]
+                for i in range(3):
+                    reward = random.choices(list(config.SAFARI_REWARD_CHANCES.keys()),
+                                            list(config.SAFARI_REWARD_CHANCES.values()))[0]
+                    embed = CustomEmbed(title=f"Safari roll {i + 1}", colour=0xff5722)
+                    match reward:
+                        case "no_luck":
+                            msg = random.choice(config.NOTHING_MSG)
+                            rewards.append("Gained Nothing")
+                        case "zrp":
+                            res, z_p = await xrpl_functions.get_zrp_price()
+                            amount = random.randint(1, 11)
+                            status = await send_zrp(addr, round(amount/z_p, 2), 'safari')
+                            msg = f'Congrats, Won {round(amount/z_p, 2)} $ZRP!\n{"Transaction Successful" if status else ""}!'
+                            rewards.append(f"Gained {round(amount/z_p, 2)} $ZRP!")
+                        case "equipment":
+                            db_query.add_equipment(addr, 1)
+                            msg = random.choice(config.EQUIPMENT_MSG)
+                            rewards.append("Gained 1 Equipment!")
+                        case "battle_zone" | "name_flair":
+                            if reward == "battle_zone":
+                                db_query.update_user_bg(interaction.user.id, random.choice(config.GYMS))
+                            elif reward == "name_flair":
+                                db_query.update_user_flair(interaction.user.id, random.choice(config.name_flair_list))
+                            reward = reward.replace('_', ' ').title()
+
+                            msg = config.COSMETIC_MSG(reward)
+                            rewards.append(f"Gained 1 {reward}!")
+                        case "candy_white" | "candy_gold" | "candy_level_up":
+                            if 'white' in reward:
+                                db_query.add_white_candy(addr, 1)
+                            elif 'gold' in reward:
+                                db_query.add_gold_candy(addr, 1)
+                            else:
+                                db_query.add_lvl_candy(addr, 1)
+                            reward = reward.split('_')[-1].title()
+                            msg = config.CANDY_MSG(interaction.user.name,
+                                                   'Golden Liquorice' if 'level' in reward else reward)
+                            rewards.append(
+                                f"Gained 1 {'Golden Liquorice' if 'level' in reward else reward + 'Power Candy'}!")
+                        case "jackpot":
+                            bal = await get_zrp_balance(config.JACKPOT_ADDR)
+                            amount = bal * 0.8
+                            status = await send_zrp(addr, amount, 'jackpot')
+                            msg = config.JACKPOT_MSG(interaction.user.name,
+                                                     amount) + f'\n{"Transaction Successful" if status else ""}!'
+                            rewards.append(f"Won Jackpot {amount} $ZRP!")
+                        case "gym_refill":
+                            db_query.add_gym_refill_potion(addr, 1, True, )
+                            msg = random.choice(config.GYM_REFILL_MSG)
+                            rewards.append(f"Gained 1 Gym Refill!")
+                        case "revive_potion":
+                            db_query.add_revive_potion(addr, 1, False, )
+                            msg = random.choice(config.REVIVE_MSG)
+                            rewards.append(f"Gained 1 Revive Potion!")
+                        case "mission_refill":
+                            db_query.add_mission_potion(addr, 1, False, )
+                            msg = random.choice(config.MISSION_REFILL_MSG)
+                            rewards.append(f"Gained 1 Mission Refill!")
+                        case "zerpmon":
+                            res, token_id = await send_random_zerpmon(addr)
+                            msg = config.ZERP_MSG(token_id[0])
+                            rewards.append(f"Won {token_id[0]}!")
+                        case _:
+                            msg = random.choice(config.NOTHING_MSG)
+                            rewards.append("Gained Nothing")
+                    embed.description = msg
+                    await interaction.send(embed=embed, ephemeral=True)
+                embed = CustomEmbed(title="Summary", colour=0xff5722)
+                for reward in rewards:
+                    embed.add_field(name=reward, value='\u200B', inline=False)
+                await interaction.send(embed=embed, ephemeral=True)
+        case "Buy Name Flair":
+            # Create a select menu with the dropdown options
+            select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
+            select_menu2 = nextcord.ui.StringSelect(placeholder="more options")
+            for i in config.name_flair_list:
+                if len(select_menu.options) >= 25:
+                    select_menu2.add_option(label=i, value=i)
+                else:
+                    select_menu.add_option(label=i, value=i)
+            view = View()
+            view.add_item(select_menu)
+            view.add_item(select_menu2)
+
+            # Send a new message with the select menu
+            await interaction.edit_original_message(content="Choose one **Name Flair**:", view=view, embeds=[])
+
+            async def handle_select_menu(_i: nextcord.Interaction):
+                print(_i.data)
+                selected_option = _i.data["values"][0]  # Get the selected option
+                await _i.response.defer(ephemeral=True)
+                await _i.edit_original_message(content='Selected ✅', view=View(), embeds=[])
+                if user_id == 1017889758313197658:
+                    db_query.update_user_flair(user_id, selected_option)
+                else:
+                    addr, purchased = await zrp_purchase_callback(_i, amount, label.replace('Buy ', ''))
+                    if purchased:
+                        db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
+                        db_query.update_user_flair(user_id, selected_option)
+
+            # Register the event handler for the select menu
+            select_menu.callback = handle_select_menu
+            select_menu2.callback = handle_select_menu

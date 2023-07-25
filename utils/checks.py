@@ -65,6 +65,55 @@ async def check_wager_entry(interaction: nextcord.Interaction, users):
     return True
 
 
+def get_deck_embed(deck_type, owned_nfts, embed2):
+    embed2.add_field(name='\u200b', value='\u200B', inline=False)
+    for k, v in owned_nfts[f'{deck_type}_deck'].items():
+        print(v)
+        found = True
+        nfts = {}
+        _i = 0
+        embed2.add_field(name=f"{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}:\n", value='\u200B',
+                         inline=False)
+        embed2.add_field(name='\u200b', value='\u200B', inline=False)
+        if 'trainer' in v and v['trainer'] != "":
+            nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']]
+        while len(nfts) != len(v):
+            try:
+                nfts[str(_i)] = owned_nfts['zerpmons'][v[str(_i)]]
+            except:
+
+                pass
+            _i += 1
+        if len(nfts) == 0:
+            embed2.add_field(name=f"Sorry looks like you haven't selected any Zerpmon for {deck_type.title()} deck #{int(k) + 1}",
+                             value='\u200B',
+                             inline=False)
+
+        else:
+            msg_str = '> Battle Zerpmons:\n' \
+                      f'> \n'
+            for serial, nft in nfts.items():
+                if serial == 'trainer':
+                    trainer = nft
+                    my_button = f"https://xrp.cafe/nft/{trainer['token_id']}"
+                    emj = '🧙'
+                    for attr in trainer['attributes']:
+                        if 'Trainer Number' in attr['trait_type']:
+                            emj = '⭐'
+                            break
+                        if attr['value'] == 'Legendary':
+                            emj = '🌟'
+                            break
+                    msg_str = f"> Main Trainer:\n" \
+                              f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
+                              f"> \n" + msg_str
+                else:
+                    msg_str += f'> ⭐ {nft["name"]} ⭐\n'
+            embed2.add_field(name='\u200B', value=msg_str, inline=False)
+            embed2.add_field(name='\u200b', value='\u200B', inline=False)
+    return embed2
+
+
 async def check_trainer_cards(interaction, user, trainer_name):
     user_owned_nfts = {'data': get_owned(user.id), 'user': user.name}
 
@@ -92,7 +141,7 @@ async def check_trainer_cards(interaction, user, trainer_name):
     return True
 
 
-async def check_battle(user_id, opponent, interaction, battle_nickname):
+async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction, battle_nickname):
     if user_id in config.ongoing_battles or opponent.id in config.ongoing_battles:
         await interaction.send(f"Please wait, one battle is already taking place for either you or your Opponent.",
                                ephemeral=True)
@@ -102,9 +151,6 @@ async def check_battle(user_id, opponent, interaction, battle_nickname):
         await interaction.send(f"Please wait, one battle is already taking place in this channel.",
                                ephemeral=True)
         return False
-
-    user_owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
-    opponent_owned_nfts = {'data': db_query.get_owned(opponent.id), 'user': opponent.name}
 
     print(opponent)
     # print([(k, v) for k, v in owned_nfts['zerpmons'].items()])
@@ -177,16 +223,16 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
         await interaction.send(
             f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing Gym battles", ephemeral=True)
         return False
-    if 'battle_deck' in user_d and len(user_d['battle_deck']) > 0 and len(user_d['battle_deck']['0']) < 2:
-        def_deck = user_d['battle_deck']['0']
+    if 'gym_deck' in user_d and len(user_d['gym_deck']) > 0 and len(user_d['gym_deck']['0']) < 2:
+        def_deck = user_d['gym_deck']['0']
         if 'trainer' not in def_deck:
             await interaction.send(
-                f"**{owned_nfts['user']}** you haven't set your Trainer in default deck, "
+                f"**{owned_nfts['user']}** you haven't set your Trainer in default gym deck, "
                 f"please set it and try again", ephemeral=True)
             return False
         else:
             await interaction.send(
-                f"**{owned_nfts['user']}** your default deck contains 0 Zerpmon, "
+                f"**{owned_nfts['user']}** your default gym deck contains 0 Zerpmon, "
                 f"need 1 to do Gym battles.", ephemeral=True)
             return False
     if 'gym' in user_d:

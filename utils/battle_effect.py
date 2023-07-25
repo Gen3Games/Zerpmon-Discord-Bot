@@ -4,10 +4,30 @@ import re
 import config
 
 
+def update_dmg(dmg1, dmg2, status_affect_solo):
+    changed_1, changed_2 = False, False
+    for effect in status_affect_solo.copy():
+        if not changed_2 and dmg2 is not '' and dmg2 != 0 and 'next attack' in effect and 'damage' in effect and ('oppo' in effect or 'enemy' in effect):
+            match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
+            val = int(float(match.group()))
+            dmg2 = (1 - (val/100)) * dmg2
+            changed_2 = True
+            status_affect_solo.remove(effect)
+        elif not changed_1 and dmg1 is not '' and dmg1 != 0 and 'next attack' in effect and 'damage' in effect and not ('oppo' in effect or 'enemy' in effect):
+            match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
+            val = int(float(match.group()))
+            dmg1 = (1 + (val / 100)) * dmg1
+            changed_1 = True
+            status_affect_solo.remove(effect)
+    return dmg1, dmg2, status_affect_solo
+
+
 def update_next_atk(p1, p2, index1, index2, status_affect_solo):
     p1 = p1[:]
     p2 = p2[:]
     for effect in status_affect_solo.copy():
+        if 'damage' in effect:
+            continue
         if 'next attack' in effect and index2 < 4 and ('oppo' in effect or 'enemy' in effect):
             match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
             val = int(float(match.group()))
@@ -143,52 +163,52 @@ def apply_status_effects(p1, p2, status_e):
         if "increase" in effect:
             val = + val
             if "opposing" in effect:
-                (index, m1) = (7, f'op⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (None, '0')
+                (index, m1) = (7, f'@op⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (None, '0')
                 if index is None:
                     continue
                 p2 = update_array(p2, index, val)
 
             else:
-                (index, m1) = (7, f'me⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
-                    (6, f'me⬆️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
+                (index, m1) = (7, f'@me⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
+                    (6, f'@me⬆️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
                     ((low_index1,
-                      f'me⬆️{config.COLOR_MAPPING[l_color1]}') if "lowest" in effect and "attack" in effect else
+                      f'@me⬆️{config.COLOR_MAPPING[l_color1]}') if "lowest" in effect and "attack" in effect else
                      ((max_index1,
-                       f'me⬆️{config.COLOR_MAPPING[m_color1]}') if "highest" in effect and "attack" in effect else
+                       f'@me⬆️{config.COLOR_MAPPING[m_color1]}') if "highest" in effect and "attack" in effect else
                       ((mg_index1,
-                        f'me⬆️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
-                       (lg_index1, f'me⬆️{config.COLOR_MAPPING["gold"]}')))))
+                        f'@me⬆️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
+                       (lg_index1, f'@me⬆️{config.COLOR_MAPPING["gold"]}')))))
                 # print(index, mg_index1, lg_index1)
                 p1 = update_array(p1, index, val)
 
         elif "decrease" in effect:
             val = -val
             if "opposing" in effect:
-                (index, m1) = (7, f'op⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
-                    (6, f'op⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
+                (index, m1) = (7, f'@op⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
+                    (6, f'@op⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
                     ((mg_index2,
-                      f'op⬇️{config.COLOR_MAPPING["gold"]}') if ("highest" in effect and "gold" in effect) or (
+                      f'@op⬇️{config.COLOR_MAPPING["gold"]}') if ("highest" in effect and "gold" in effect) or (
                             "second lowest" in effect and "gold" in effect) else
                      ((low2_index2,
-                       f'op⬇️{config.COLOR_MAPPING[l2_color2]}') if "second lowest" in effect and "attack" in effect else
+                       f'@op⬇️{config.COLOR_MAPPING[l2_color2]}') if "second lowest" in effect and "attack" in effect else
                       ((low_index2,
-                        f'op⬇️{config.COLOR_MAPPING[l_color2]}') if "lowest" in effect and "attack" in effect else
+                        f'@op⬇️{config.COLOR_MAPPING[l_color2]}') if "lowest" in effect and "attack" in effect else
                        ((max_index2,
-                         f'op⬇️{config.COLOR_MAPPING[m_color2]}') if "highest" in effect and "attack" in effect else
-                        ((5 if p2[5] is not None else 6,
-                          f'op⬇️{config.COLOR_MAPPING["purple"]}') if "purple" in effect else
-                         (lg_index2, f'op⬇️{config.COLOR_MAPPING["gold"]}')))))))
+                         f'@op⬇️{config.COLOR_MAPPING[m_color2]}') if "highest" in effect and "attack" in effect else
+                        ((4 if (p2[4] is not None and p2[4] != 0) else (5 if p2[5] is not None else p2[4]),
+                          f'@op⬇️{config.COLOR_MAPPING["purple"]}') if "purple" in effect else
+                         (lg_index2, f'@op⬇️{config.COLOR_MAPPING["gold"]}')))))))
                 p2 = update_array(p2, index, val)
             else:
-                (index, m1) = (7, f'me⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
-                    (6, f'me⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
+                (index, m1) = (7, f'@me⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
+                    (6, f'@me⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
                     ((low_index1,
-                      f'me⬇️{config.COLOR_MAPPING[l_color1]}') if "lowest" in effect and "attack" in effect else
+                      f'@me⬇️{config.COLOR_MAPPING[l_color1]}') if "lowest" in effect and "attack" in effect else
                      ((max_index1,
-                       f'me⬇️{config.COLOR_MAPPING[m_color1]}') if "highest" in effect and "attack" in effect else
+                       f'@me⬇️{config.COLOR_MAPPING[m_color1]}') if "highest" in effect and "attack" in effect else
                       ((mg_index1,
-                        f'me⬇️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
-                       (lg_index1, f'me⬇️{config.COLOR_MAPPING["gold"]}')))))
+                        f'@me⬇️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
+                       (lg_index1, f'@me⬇️{config.COLOR_MAPPING["gold"]}')))))
                 p1 = update_array(p1, index, val, own=True)
         print(m1)
         m1 += f" **{abs(val)}**%{index if index is not None else ''}"
@@ -237,50 +257,50 @@ def apply_status_effects(p1, p2, status_e):
         if "increase" in effect:
             val = + val
             if "opposing" in effect:
-                (index, m2) = (7, f'op⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (None, '0')
+                (index, m2) = (7, f'@op⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (None, '0')
                 if index is None:
                     continue
                 p1 = update_array(p1, index, val)
             else:
-                (index, m2) = (7, f'me⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
-                    (6, f'me⬆️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
+                (index, m2) = (7, f'@me⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
+                    (6, f'@me⬆️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
                     ((low_index2,
-                      f'me⬆️{config.COLOR_MAPPING[l_color2]}') if "lowest" in effect and "attack" in effect else
+                      f'@me⬆️{config.COLOR_MAPPING[l_color2]}') if "lowest" in effect and "attack" in effect else
                      ((max_index2,
-                       f'me⬆️{config.COLOR_MAPPING[m_color2]}') if "highest" in effect and "attack" in effect else
+                       f'@me⬆️{config.COLOR_MAPPING[m_color2]}') if "highest" in effect and "attack" in effect else
                       ((mg_index2,
-                        f'me⬆️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
-                       (lg_index2, f'me⬆️{config.COLOR_MAPPING["gold"]}')))))
+                        f'@me⬆️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
+                       (lg_index2, f'@me⬆️{config.COLOR_MAPPING["gold"]}')))))
                 p2 = update_array(p2, index, val)
 
         elif "decrease" in effect:
             val = -val
             if "opposing" in effect:
-                (index, m2) = (7, f'op⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
-                    (6, f'op⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
+                (index, m2) = (7, f'@op⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
+                    (6, f'@op⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
                     ((mg_index1,
-                      f'op⬇️{config.COLOR_MAPPING["gold"]}') if ("highest" in effect and "gold" in effect) or (
+                      f'@op⬇️{config.COLOR_MAPPING["gold"]}') if ("highest" in effect and "gold" in effect) or (
                             "second lowest" in effect and "gold" in effect) else
                      ((low2_index1,
-                       f'op⬇️{config.COLOR_MAPPING[l2_color1]}') if "second lowest" in effect and "attack" in effect else
+                       f'@op⬇️{config.COLOR_MAPPING[l2_color1]}') if "second lowest" in effect and "attack" in effect else
                       ((low_index1,
-                        f'op⬇️{config.COLOR_MAPPING[l_color1]}') if "lowest" in effect and "attack" in effect else
+                        f'@op⬇️{config.COLOR_MAPPING[l_color1]}') if "lowest" in effect and "attack" in effect else
                        ((max_index1,
-                         f'op⬇️{config.COLOR_MAPPING[m_color1]}') if "highest" in effect and "attack" in effect else
-                        ((5 if p1[5] is not None else 6,
-                          f'op⬇️{config.COLOR_MAPPING["purple"]}') if "purple" in effect else
-                         (lg_index1, f'op⬇️{config.COLOR_MAPPING["gold"]}')))))))
+                         f'@op⬇️{config.COLOR_MAPPING[m_color1]}') if "highest" in effect and "attack" in effect else
+                        ((4 if (p1[4] is not None and p1[4] != 0) else (5 if p1[5] is not None else p1[4]),
+                          f'@op⬇️{config.COLOR_MAPPING["purple"]}') if "purple" in effect else
+                         (lg_index1, f'@op⬇️{config.COLOR_MAPPING["gold"]}')))))))
                 p1 = update_array(p1, index, val)
             else:
-                (index, m2) = (7, f'me⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
-                    (6, f'me⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
+                (index, m2) = (7, f'@me⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect else (
+                    (6, f'@me⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
                     ((low_index2,
-                      f'me⬇️{config.COLOR_MAPPING[l_color2]}') if "lowest" in effect and "attack" in effect else
+                      f'@me⬇️{config.COLOR_MAPPING[l_color2]}') if "lowest" in effect and "attack" in effect else
                      ((max_index2,
-                       f'me⬇️{config.COLOR_MAPPING[m_color2]}') if "highest" in effect and "attack" in effect else
+                       f'@me⬇️{config.COLOR_MAPPING[m_color2]}') if "highest" in effect and "attack" in effect else
                       ((mg_index2,
-                        f'me⬇️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
-                       (lg_index2, f'me⬇️{config.COLOR_MAPPING["gold"]}')))))
+                        f'@me⬇️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
+                       (lg_index2, f'@me⬇️{config.COLOR_MAPPING["gold"]}')))))
                 p2 = update_array(p2, index, val, own=True)
         print(m2)
         m2 += f" **{abs(val)}**%{index if index is not None else ''}"

@@ -55,7 +55,6 @@ async def send_reset_message(client: nextcord.Client):
                         db_query.update_rank(user['discord_id'], win=False, decay=True)
         print('here')
         if next_run < time.time():
-            next_run = time.time() + 300
             guilds = client.guilds
             print('here')
             for guild in guilds:
@@ -174,3 +173,4 @@ async def send_reset_message(client: nextcord.Client):
                         # await asyncio.sleep(5)
                 except Exception as e:
                     logging.error(f'ERROR: {traceback.format_exc()}')
+            next_run = time.time() + 300
