@@ -3,7 +3,7 @@ import logging
 import random
 
 import requests
-from xrpl.models.requests import AccountInfo
+from xrpl.models.requests import AccountInfo, AccountLines
 from xrpl.asyncio.transaction import safe_sign_and_submit_transaction
 import config
 from xrpl.asyncio.clients import AsyncWebsocketClient, AsyncJsonRpcClient
@@ -21,8 +21,11 @@ Reward_address = config.REWARDS_ADDR
 hashes = []
 tokens_sent = []
 
+active_zrp_addr = config.B1_ADDR
+active_zrp_seed = config.B1_SEED
 wager_seq = None
 reward_seq = None
+zrp_reward_seq = None
 
 
 async def send_txn(to: str, amount: float, sender):
@@ -104,53 +107,66 @@ async def listener(client, store_address, wager_address):
                 # if 'NFT' in message['TransactionType']:
                 # print(message)
                 if 'TransactionType' in message and message['TransactionType'] == "Payment" and \
-                        'Destination' in message and message['Destination'] in [store_address, wager_address]:
+                        'Destination' in message and message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR, config.ISSUER['ZRP']]:
 
                     if len(hashes) > 1000:
                         hashes = hashes[900:]
                     if message['hash'] not in hashes:
                         hashes.append(message['hash'])
                         print(message)
-                        try:
-                            amount = float(int(message['Amount']) / 10 ** 6)
-                            print(
-                                f"XRP: {amount}\nrevive_potion_buyers: {config.revive_potion_buyers}\nmission_potion_buyers: {config.mission_potion_buyers}")
-                            user = db_query.get_user(message['Account'])
-                            if user is None:
-                                print(f"User not found: {message['Account']}")
-                            else:
-                                if message['Destination'] == store_address:
-                                    user_id = user['discord_id']
-                                    if user_id in config.revive_potion_buyers:
-                                        qty = config.revive_potion_buyers[user_id]
-                                        if amount == round(config.POTION[0] * qty, 6) or (
-                                                amount == round((config.POTION[0] * (qty - 1 / 2)),
-                                                                6) and user_id not in config.store_24_hr_buyers):
-                                            # If it's a Revive potion transaction
-                                            db_query.add_revive_potion(message['Account'], qty, purchased=True, amount=amount)
-                                            config.store_24_hr_buyers.append(user_id)
-                                            config.latest_purchases.append(user_id)
-                                            del config.revive_potion_buyers[user_id]
-                                            await send_txn(Reward_address, amount, 'store')
-                                    if user_id in config.mission_potion_buyers:
-                                        qty = config.mission_potion_buyers[user_id]
-                                        if amount == round(config.MISSION_REFILL[0] * qty, 6) or (
-                                                amount == round((config.MISSION_REFILL[0] * (qty - 1 / 2)),
-                                                                6) and user_id not in config.store_24_hr_buyers):
-                                            # If it's a Mission refill potion transaction
-                                            db_query.add_mission_potion(message['Account'], qty, purchased=True, amount=amount)
-                                            config.store_24_hr_buyers.append(user_id)
-                                            config.latest_purchases.append(user_id)
-                                            del config.mission_potion_buyers[user_id]
+                        if message['Destination'] == config.SAFARI_ADDR or message['Destination'] == config.ISSUER['ZRP']:
+                            if type(message['Amount']) == dict and message['Amount']['currency'] == 'ZRP':
+                                #  ZRP TXN
+                                amount = float(message['Amount']['value'])
+                                user = db_query.get_user(message['Account'])
+                                user_id = user['discord_id']
+                                config.zrp_purchases[user_id] = amount
+                        else:
+                            try:
+                                amount = float(int(message['Amount']) / 10 ** 6)
+                                print(
+                                    f"XRP: {amount}\nrevive_potion_buyers: {config.revive_potion_buyers}\nmission_potion_buyers: {config.mission_potion_buyers}")
+                                user = db_query.get_user(message['Account'])
+                                if user is None:
+                                    print(f"User not found: {message['Account']}")
+                                else:
+                                    if message['Destination'] == store_address:
+                                        user_id = user['discord_id']
+                                        if user_id in config.revive_potion_buyers:
+                                            qty = config.revive_potion_buyers[user_id]
+                                            if amount == round(config.POTION[0] * qty, 6) or (
+                                                    amount == round((config.POTION[0] * (qty - 1 / 2)),
+                                                                    6) and user_id not in config.store_24_hr_buyers):
+                                                # If it's a Revive potion transaction
+                                                db_query.add_revive_potion(message['Account'], qty, purchased=True,
+                                                                           amount=amount)
+                                                config.store_24_hr_buyers.append(user_id)
+                                                config.latest_purchases[user_id] = amount
+                                                del config.revive_potion_buyers[user_id]
+                                                await send_txn(Reward_address, amount, 'store')
+                                        if user_id in config.mission_potion_buyers:
+                                            qty = config.mission_potion_buyers[user_id]
+                                            if amount == round(config.MISSION_REFILL[0] * qty, 6) or (
+                                                    amount == round((config.MISSION_REFILL[0] * (qty - 1 / 2)),
+                                                                    6) and user_id not in config.store_24_hr_buyers):
+                                                # If it's a Mission refill potion transaction
+                                                db_query.add_mission_potion(message['Account'], qty, purchased=True,
+                                                                            amount=amount)
+                                                config.store_24_hr_buyers.append(user_id)
+                                                config.latest_purchases[user_id] = amount
+                                                del config.mission_potion_buyers[user_id]
+                                                await send_txn(Reward_address, amount, 'store')
+                                        else:
+                                            config.latest_purchases[user_id] = amount
                                             await send_txn(Reward_address, amount, 'store')
 
-                                elif message['Destination'] == wager_address:
-                                    # Check wager addresses and add them to global var wager_senders
-                                    user_id = user['discord_id']
-                                    config.wager_senders[message['Account']] = amount
+                                    elif message['Destination'] == wager_address:
+                                        # Check wager addresses and add them to global var wager_senders
+                                        user_id = user['discord_id']
+                                        config.wager_senders[message['Account']] = amount
 
-                        except:
-                            print("Not XRP")
+                            except:
+                                print("Not XRP")
                 elif 'TransactionType' in message and message['TransactionType'] == "NFTokenCreateOffer" and \
                         'Destination' in message and message['Destination'] in [wager_address]:
                     if len(hashes) > 1000:
@@ -171,6 +187,12 @@ async def listener(client, store_address, wager_address):
 
                         except Exception as e:
                             logging.error(f"Error detecting NFT txn {e} \nDATA: {message}")
+                elif 'TransactionType' in message and message['TransactionType'] == "OfferCreate" and type(message.get('TakerPays', '')) is dict:
+                    if message.get('TakerPays')['currency'] == 'ZRP' and type(message.get('TakerGets', {})) is str:
+                        print('OfferCreate: ', message)
+                        amount = float(message['TakerPays']['value'])
+                        xrp = float(int(message['TakerGets']) / 10 ** 6)
+                        config.zrp_price = xrp/amount
         except Exception as e:
             logging.error(f"ERROR in listener: {e}")
 
@@ -226,10 +248,25 @@ async def get_balance(address):
     return bal
 
 
-async def reward_user(user_id, zerpmon_name):
+async def get_zrp_balance(address):
+    client = AsyncJsonRpcClient("https://s2.ripple.com:51234/")
+
+    acc_info = AccountLines(
+        account=address
+    )
+    bal = None
+    account_info = await client.request(acc_info)
+    for cur in account_info.result['lines']:
+        if cur['currency'] == 'ZRP':
+            bal = round(float(cur['balance']))
+
+    return bal
+
+
+async def reward_user(user_id, zerpmon_name, double_xp=False):
     reward = random.choices(list(config.MISSION_REWARD_CHANCES.keys()), list(config.MISSION_REWARD_CHANCES.values()))[0]
     user_address = db_query.get_owned(user_id)['address']
-    db_query.add_xp(zerpmon_name, user_address)
+    db_query.add_xp(zerpmon_name, user_address, double_xp=double_xp)
 
     bal = await get_balance(Reward_address)
     amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
@@ -261,7 +298,7 @@ async def send_random_zerpmon(to_address):
                 continue
             res = await send_nft('reward', to_address, token_id)
             tokens_sent.append(token_id)
-            nft_data = await xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
+            nft_data = xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
             img = ('https://ipfs.io/ipfs/' + nft_data['image'].replace("ipfs://", "")) if 'image' in nft_data else ''
             return res, [(nft_data['name'] if 'name' in nft_data else token_id), img]
 
@@ -411,6 +448,103 @@ async def send_nft_tx(to_address, nft_ids):
         return status
 
 
+async def send_zrp(to: str, amount: float, sender):
+    async with AsyncWebsocketClient(URL) as client:
+        global wager_seq, zrp_reward_seq, active_zrp_seed, active_zrp_addr
+        for i in range(5):
+            if sender == "store":
+                acc_info = AccountInfo(
+                    account=Address
+                )
+                account_info = await client.request(acc_info)
+                sequence = account_info.result["account_data"]["Sequence"]
+                # Load the sending account's secret and address from a wallet
+                sending_wallet = Wallet(seed=config.STORE_SEED, sequence=sequence)
+                sending_address = Address
+            elif sender == "block":
+                bal = await get_zrp_balance(active_zrp_addr)
+                db_query.update_zrp_stats(burn_amount=0, distributed_amount=amount, left_amount=((bal-amount) if bal is not None else None))
+                if bal is not None and bal < 5:
+                    if active_zrp_addr == config.B1_ADDR:
+                        active_zrp_addr, active_zrp_seed = config.B2_ADDR, config.B2_SEED
+                    else:
+                        active_zrp_addr, active_zrp_seed = config.B3_ADDR, config.B3_SEED
+                acc_info = AccountInfo(
+                    account=active_zrp_addr
+                )
+                account_info = await client.request(acc_info)
+                sequence = account_info.result["account_data"]["Sequence"] if zrp_reward_seq is None else zrp_reward_seq
+                # Load the sending account's secret and address from a wallet
+                sending_wallet = Wallet(seed=active_zrp_seed, sequence=sequence)
+                sending_address = active_zrp_addr
+            elif sender == "safari":
+                acc_info = AccountInfo(
+                    account=config.SAFARI_ADDR
+                )
+                account_info = await client.request(acc_info)
+                sequence = account_info.result["account_data"]["Sequence"]
+                # Load the sending account's secret and address from a wallet
+                sending_wallet = Wallet(seed=config.SAFARI_SEED, sequence=sequence)
+                sending_address = config.SAFARI_ADDR
+            elif sender == "jackpot":
+                db_query.update_zrp_stats(burn_amount=0, distributed_amount=0, jackpot_amount=amount)
+                acc_info = AccountInfo(
+                    account=config.JACKPOT_ADDR
+                )
+                account_info = await client.request(acc_info)
+                sequence = account_info.result["account_data"]["Sequence"]
+                # Load the sending account's secret and address from a wallet
+                sending_wallet = Wallet(seed=config.JACKPOT_SEED, sequence=sequence)
+                sending_address = config.JACKPOT_ADDR
+            # Set the receiving address
+            receiving_address = to
+
+            # Set the amount to be sent, in drops of XRP
+            send_amt = float(amount)
+            req_json = {
+                "account": sending_address,
+                "destination": receiving_address,
+                "amount": {
+                    "currency": "ZRP",
+                    "value": str(send_amt),
+                    "issuer": config.ISSUER['ZRP']
+                },
+                "sequence": sequence,
+            }
+            # Construct the transaction dictionary
+            transaction = Payment.from_dict(req_json)
+
+            # Sign and send the transaction
+            response = await safe_sign_and_submit_transaction(transaction, sending_wallet, client)
+
+            # Print the response
+            print(response.result)
+            if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
+                if sender == 'block':
+                    zrp_reward_seq = response.result['account_sequence_next']
+                return True
+            elif response.result['engine_result'] in ["tefPAST_SEQ"]:
+                if sender == 'block':
+                    zrp_reward_seq = response.result['account_sequence_next']
+                await asyncio.sleep(random.randint(1, 4))
+            else:
+                await asyncio.sleep(random.randint(1, 4))
+        return False
+
+
+async def reward_gym(user_id, stage):
+    user_address = db_query.get_owned(user_id)['address']
+    amount = config.GYM_REWARDS[stage]
+    if active_zrp_addr == config.B2_ADDR:
+        amount = amount/2
+    elif active_zrp_addr == config.B3_ADDR:
+        amount = amount/4
+
+    # add xrp and xp
+    res = (await send_zrp(user_address, amount, 'block')), amount, "ZRP"
+    return res
+
+
 async def get_nft_data_wager(id):
     try:
         rr2 = requests.get(
@@ -431,4 +565,6 @@ async def get_nft_data_wager(id):
 # asyncio.run(send_nft('reward', to_address='rMjN4c2p9yvuTvVozYYUwoF2U859M9tQcC', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E073C9DBE00000123'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.ISSUER['Zerpmon']))
+# asyncio.run(send_txn('rPRof1FAbAMsceVVWmpv2i8yh9MrrBkVAh', 1, 'wager'))
+# asyncio.run(send_zrp('rUpucKVa5Rvjmn8nL5aTKpEaBQUbXrZAcV', 66, 'safari'))
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))

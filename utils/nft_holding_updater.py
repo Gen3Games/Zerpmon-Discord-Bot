@@ -28,7 +28,7 @@ async def update_nft_holdings(client: nextcord.Client):
         for old_user in all_users:
             user_obj = old_user
             try:
-                if 'address' not in user_obj:
+                if 'address' not in user_obj or len(user_obj['address']) < 5:
                     continue
                 good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
                 if not good_status:
@@ -111,7 +111,7 @@ async def update_nft_holdings(client: nextcord.Client):
 
                 db_query.update_user_decks(user_obj['discord_id'], serials, t_serial)
             except Exception as e:
-                logging.error(f"ERROR while updating NFTs: {e}")
+                logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
 
             await asyncio.sleep(2)
         await asyncio.sleep(900)
