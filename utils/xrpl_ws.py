@@ -260,7 +260,8 @@ async def send_random_zerpmon(to_address):
             if token_id in tokens_sent:
                 continue
             res = await send_nft('reward', to_address, token_id)
-            nft_data = await xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
+            tokens_sent.append(token_id)
+            nft_data = xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
             img = ('https://ipfs.io/ipfs/' + nft_data['image'].replace("ipfs://", "")) if 'image' in nft_data else ''
             return res, [(nft_data['name'] if 'name' in nft_data else token_id), img]
 
@@ -425,8 +426,8 @@ async def get_nft_data_wager(id):
         logging.error(f"ERROR while getting nft url: {id} \n{e}")
         return '', 'Missing Name in metadata'
 
-# asyncio.run(accept_nft('reward', offer='E53A05F1C2C714C41D6707E561E6060812D56B1F3548153E0799D7DDEEB952AF', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
-#                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E994AF9290000018E'))
+# asyncio.run(accept_nft('reward', offer='22FC29F159F14A9672D5E231EFEB6DB9E0FE5483A7CCE1E1C122BEC2FF79E1FD', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
+#                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E549986260000018B'))
 # asyncio.run(send_nft('reward', to_address='rMjN4c2p9yvuTvVozYYUwoF2U859M9tQcC', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E073C9DBE00000123'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.ISSUER['Zerpmon']))

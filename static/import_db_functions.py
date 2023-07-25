@@ -29,7 +29,7 @@ def update_type(name, attrs):
 
 
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List_2.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -140,22 +140,25 @@ def import_level():
                 'mission_potion_reward': 0 if row[5].strip() == "" else int(row[5]),
             })
 
-def check_nft_cached(id,data):
+
+def check_nft_cached(id, data):
     for i in data:
         if i['nftid'] == id:
             return True
     return False
 
+
 def get_cached():
-    with open("./site/metadata.json","r") as f:
+    with open("./site/metadata.json", "r") as f:
         return json.load(f)
+
 
 def import_attrs_img():
     data = get_all_z()
-    tba = get_cached() #[{nftid, metadata, uri},...]
+    tba = get_cached()  # [{nftid, metadata, uri},...]
     for i in data:
         id = i['nft_id']
-        if 'image' in i and 'attributes' in i and check_nft_cached(id,tba):
+        if 'image' in i and 'attributes' in i and check_nft_cached(id, tba):
             continue
         path = f"./static/images/{i['name']}.png"
         rr2 = requests.get(
@@ -171,8 +174,8 @@ def import_attrs_img():
             "metadata": meta,
             "uri": res['uri'],
         })
-    with open("./site/metadata.json","w") as f:
-        json.dump(tba,f)
+    with open("./site/metadata.json", "w") as f:
+        json.dump(tba, f)
 
 
 def clean_attrs():
@@ -231,6 +234,7 @@ def update_all_zerp_moves():
             del document['_id']
             save_new_zerpmon(document)
 
+
 def get_trainer_nfts_data():
     try:
         print("get_collection_5kk")
@@ -265,28 +269,29 @@ def get_trainer_nfts_data():
     except Exception as e:
         print(str(e), ' error')
 
+
 def cache_trainer_data():
     try:
         nfts = get_trainer_nfts_data()
         tba = get_cached()
         for nft in nfts:
-            if not check_nft_cached(nft['nftokenID'],tba):
+            if not check_nft_cached(nft['nftokenID'], tba):
                 tba.append({
                     'nftid': nft['nftokenID'],
                     'metadata': nft['metadata'],
                     'uri': nft['uri']
                 })
-        with open("./site/metadata.json","w") as f:
-            json.dump(tba,f)
+        with open("./site/metadata.json", "w") as f:
+            json.dump(tba, f)
 
     except Exception as e:
         print(str(e), ' error')
 
 
-# import_moves()
-import_movesets()
+import_moves()
+# import_movesets()
 # import_level()
-import_attrs_img()
-clean_attrs()
-update_all_zerp_moves()
-cache_trainer_data()
+# import_attrs_img()
+# clean_attrs()
+# update_all_zerp_moves()
+# cache_trainer_data()
