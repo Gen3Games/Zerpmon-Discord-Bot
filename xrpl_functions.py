@@ -116,3 +116,37 @@ async def get_xrp_balance(address):
     except Exception as e:
         print(e)
         return 0
+    
+async def get_zrp_balance(address):
+    try:
+        async with AsyncWebsocketClient(config.NODE_URL) as client:
+            if not client.is_open():
+                print("Reconnecting to websocket")
+                await asyncio.sleep(20)
+                await client.open()
+            marker = True
+            markerVal = None
+            balance = 0
+            while marker:
+                acct_info = AccountLines(
+                    account=address,
+                    ledger_index="validated",
+                    limit=400,
+                    marker=markerVal
+                )
+                response = await client.request(acct_info)
+                result = response.result
+
+                for line in result["lines"]:
+                    if line["currency"] == "ZRP" or line["account"] == "rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe":
+                        balance = line["balance"]
+                        print("Hit")
+                        break
+                if "marker" in result:
+                    markerVal = result["marker"]
+                else:
+                    marker = False
+            return balance
+    except Exception as e:
+        print(e)
+        return 0
