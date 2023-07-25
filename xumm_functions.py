@@ -148,12 +148,12 @@ async def gen_zrp_txn_url(to_address, from_address, amount):
         }
     }
 
+async def construct_xumm_payload(payload):
     response = requests.post(url, json=payload, headers=headers)
     res_json = response.json()
     r_remain = response.headers['x-ratelimit-remaining']
     # print(json.dumps(res_json, indent=2), )
-
-    print(r_remain, amount)
+    print(r_remain)
     if float(r_remain) < 2:
         sleep_timer = float(response.headers['x-ratelimit-reset']) - time.time()
         await asyncio.sleep(sleep_timer)
