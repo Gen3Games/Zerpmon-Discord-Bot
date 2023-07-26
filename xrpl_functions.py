@@ -5,7 +5,7 @@ from statistics import mean
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models import IssuedCurrency, AccountLines
 from xrpl.models.requests.account_nfts import AccountNFTs
-from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo
+from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, AccountTx
 
 from xrpl.models.requests import Subscribe
 import config
@@ -13,7 +13,7 @@ import json
 import requests
 from xrpl.utils import drops_to_xrp
 
-# look up account nfts
+
 async def get_nfts(address):
     try:
         async with AsyncWebsocketClient(config.NODE_URL) as client:
@@ -48,6 +48,7 @@ async def get_nfts(address):
         print(e)
         return False, []
 
+
 # look up account offers
 async def get_offers(address):
     try:
@@ -80,8 +81,11 @@ async def get_offers(address):
             # print(all_nfts)
             return True, all_offers
     except Exception as e:
-        print(e)
+        print(traceback.format_exc())
         return False, []
+
+
+asyncio.run(get_offers(config.SAFARI_ADDR))
 
 
 async def get_zrp_price():
@@ -145,18 +149,11 @@ async def get_zrp_price():
 async def get_zrp_price_api():
     # req = requests.post('https://api.xrpl.to/api/search', json={'search': 'zrp'})
     try:
-        url = "https://api.coingecko.com/api/v3/simple/price"
-        params = {
-            "ids": "ripple",
-            "vs_currencies": "usd"
-        }
-        response = requests.get(url, params=params)
-        data = response.json()
-        xrp_price = float(data["ripple"]["usd"])
-        req = requests.get('https://api.xrpl.to/api/graph/4b53d132672efcbee4386ab35d64fd14?range=1D')
+        req = requests.get('https://s1.xrplmeta.org/token/ZRP:rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe')
         result = req.json()
-        token_price = float(result['history'][-1][-1])
-        return token_price/xrp_price
+        token_price = float(result['metrics']['price'])
+        print(token_price)
+        return token_price
     except Exception as e:
         print("Error occurred while fetching XRP price:", e)
         return None
@@ -190,6 +187,7 @@ def get_nft_metadata_by_id(nftid):
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
 
+
 async def get_xrp_balance(address):
     try:
         async with AsyncWebsocketClient(config.NODE_URL) as client:
@@ -204,8 +202,9 @@ async def get_xrp_balance(address):
     except Exception as e:
         print(e)
         return 0
-    
-async def get_zrp_balance(address):
+
+
+async def get_zrp_balance(address, issuer=False):
     try:
         async with AsyncWebsocketClient(config.NODE_URL) as client:
             if not client.is_open():
@@ -215,6 +214,7 @@ async def get_zrp_balance(address):
             marker = True
             markerVal = None
             balance = 0
+            total = 0
             while marker:
                 acct_info = AccountLines(
                     account=address,
@@ -224,17 +224,18 @@ async def get_zrp_balance(address):
                 )
                 response = await client.request(acct_info)
                 result = response.result
-
                 for line in result["lines"]:
                     if line["currency"] == "ZRP" or line["account"] == "rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe":
                         balance = line["balance"]
-                        print("Hit")
-                        break
+                        total += float(balance)
+                        if not issuer:
+                            print("Hit")
+                            break
                 if "marker" in result:
                     markerVal = result["marker"]
                 else:
                     marker = False
-            return balance
+            return balance if not issuer else abs(total)
     except Exception as e:
         print(e)
         return 0

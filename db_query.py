@@ -473,6 +473,20 @@ def reset_respawn_time(user_id):
                                              return_document=ReturnDocument.AFTER)
 
 
+def reset_all_gyms():
+    users_collection = db['users']
+    old = users_collection.find()
+    for user in old:
+        gym_obj = user.get('gym', {})
+        gym_obj['won'] = {}
+        gym_obj['active_t'] = 0
+        gym_obj['gp'] = 0
+        query = {'$set': {'gym': gym_obj}}
+        r = users_collection.find_one_and_update({'discord_id': user['discord_id']},
+                                                 query,
+                                                 return_document=ReturnDocument.AFTER)
+
+
 def update_trainer_deck(trainer_serial, user_id, deck_no, gym=False):
     users_collection = db['users']
     if gym:
@@ -1154,7 +1168,8 @@ def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_
     if left_amount is not None:
         query['$set'] = {'left_amount': left_amount}
     else:
-        query['$inc'] = {'left_amount': 0}
+        query['$inc']['left_amount'] = 0
+    print(query)
     stats_col.update_one({
         'name': 'zrp_stats'
     },

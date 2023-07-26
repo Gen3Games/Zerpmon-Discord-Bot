@@ -4,6 +4,7 @@ import pymongo
 import csv
 import requests
 
+import db_query
 
 client = pymongo.MongoClient('mongodb://localhost:27017/')
 db = client['Zerpmon']
@@ -244,17 +245,20 @@ def update_all_zerp_moves():
             for i in range(w_candy):
                 for i, move in enumerate(document['moves']):
                     if move['color'].lower() == 'white':
-                        document['moves'][i]['dmg'] = round(document['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * 0.02),
-                                                        1)
+                        document['moves'][i]['dmg'] = round(
+                            document['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * 0.02),
+                            1)
             save_new_zerpmon(document)
         if g_candy > 0:
             original_zerp = db['MoveSets2'].find_one({'name': document['name']})
             for i in range(g_candy):
                 for i, move in enumerate(document['moves']):
                     if move['color'].lower() == 'gold':
-                        document['moves'][i]['dmg'] = round(document['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * 0.02,
-                                                        1)
+                        document['moves'][i]['dmg'] = round(
+                            document['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * 0.02,
+                            1)
             save_new_zerpmon(document)
+
 
 def get_issuer_nfts_data(issuer):
     try:
@@ -318,3 +322,4 @@ import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
 cache_data()
+db_query.reset_all_gyms()
