@@ -13,7 +13,7 @@ import db_query
 import xrpl_functions
 import xumm_functions
 from utils import checks, battle_function
-from utils.xrpl_ws import send_random_zerpmon, send_zrp, get_zrp_balance
+from utils.xrpl_ws import send_random_zerpmon, send_zrp
 
 
 class CustomEmbed(nextcord.Embed):
@@ -26,24 +26,25 @@ class CustomEmbed(nextcord.Embed):
 button_cache = {'revive': [], 'mission': []}
 
 
-async def purchase_callback(_i: nextcord.Interaction, amount, qty=1):
+async def purchase_callback(_i: nextcord.Interaction, amount, qty=1, double_xp=False):
     user_owned_nfts = db_query.get_owned(_i.user.id)
-
+    await _i.response.defer(ephemeral=True)
     # Sanity checks
 
     if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
-        await _i.send("Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", ephemeral=True)
+        await _i.edit_original_message(content="Sorry you can't make store purchases, as you don't hold a Zerpmon NFT", embeds=[], view=View())
         return
-    try:
-        await _i.edit(content="Generating transaction QR code...", embeds=[], view=None)
-    except:
-        await _i.send(content="Generating transaction QR code...", ephemeral=True)
+    await _i.edit_original_message(content="Generating transaction QR code...", embeds=[], view=View())
     user_id = str(_i.user.id)
     if amount == config.POTION[0]:
         config.revive_potion_buyers[user_id] = qty
-    else:
+    elif amount == config.MISSION_REFILL[0]:
         config.mission_potion_buyers[user_id] = qty
-    send_amt = (amount * qty) if str(user_id) in config.store_24_hr_buyers else (amount * (qty - 1 / 2))
+
+    if double_xp:
+        send_amt = (amount * qty)
+    else:
+        send_amt = (amount * qty) if str(user_id) in config.store_24_hr_buyers else (amount * (qty - 1 / 2))
     user_address = db_query.get_owned(_i.user.id)['address']
     uuid, url, href = await xumm_functions.gen_txn_url(config.STORE_ADDR, user_address, send_amt * 10 ** 6)
     embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here.",
@@ -51,14 +52,14 @@ async def purchase_callback(_i: nextcord.Interaction, amount, qty=1):
 
     embed.set_image(url=url)
 
-    await _i.send(embed=embed, ephemeral=True, delete_after=120)
+    await _i.edit_original_message(content='', embed=embed)
 
     for i in range(18):
         if user_id in config.latest_purchases and config.latest_purchases[user_id] == send_amt:
             del config.latest_purchases[user_id]
-            await _i.send(embed=CustomEmbed(title="**Success**",
+            await _i.edit_original_message(embed=CustomEmbed(title="**Success**",
                                             description=f"Bought **{qty}** {'Revive All Potion' if amount in [8.99, 4.495] else ('Double XP Potion' if amount == config.DOUBLE_XP_POTION else 'Mission Refill Potion')}",
-                                            ), ephemeral=True)
+                                            ), content='')
             return True
         await asyncio.sleep(10)
     return False
@@ -116,17 +117,17 @@ async def store_callback(interaction: nextcord.Interaction):
                          value=f"Cost: `{config.DOUBLE_XP_POTION} XRP`",
                          inline=False)
 
-    main_embed.add_field(name=f"\u200B",
-                         value="**Purchase Guide**",
-                         inline=False)
-    main_embed.add_field(name=f"\u200B",
-                         value=f"For getting access to one of these potions send the **exact** amount in **XRP** to "
-                         ,
-                         inline=False)
-    main_embed.add_field(name=f"**`{config.STORE_ADDR}`** ",
-                         value=f"or use `/buy revive_potion`, `/buy mission_refill` to buy "
-                               f"using earned XRP",
-                         inline=False)
+    # main_embed.add_field(name=f"\u200B",
+    #                      value="**Purchase Guide**",
+    #                      inline=False)
+    # main_embed.add_field(name=f"\u200B",
+    #                      value=f"For getting access to one of these potions send the **exact** amount in **XRP** to "
+    #                      ,
+    #                      inline=False)
+    # main_embed.add_field(name=f"**`{config.STORE_ADDR}`** ",
+    #                      value=f"or use `/buy revive_potion`, `/buy mission_refill` to buy "
+    #                            f"using earned XRP",
+    #                      inline=False)
     main_embed.add_field(name=f"\u200B",
                          value=f"Items will be available within a few minutes after transaction is successful",
                          inline=False)
@@ -154,7 +155,7 @@ async def store_callback(interaction: nextcord.Interaction):
 
 
 async def double_xp_callback(i: nextcord.Interaction):
-    purchased = await purchase_callback(i, config.DOUBLE_XP_POTION)
+    purchased = await purchase_callback(i, config.DOUBLE_XP_POTION, double_xp=True)
     if purchased:
         # double xp
         db_query.double_xp_24hr(i.user.id)
@@ -458,7 +459,7 @@ async def show_zrp_holdings(interaction: nextcord.Interaction):
 
     main_embed.add_field(name="Gym Refill: ",
                          value=f"**{0 if ('gym' not in user_owned_nfts or 'refill_potion' not in user_owned_nfts['gym']) else user_owned_nfts['gym']['refill_potion']}**"
-                               + '\t🍯',
+                               + '\t🍵',
                          inline=False)
     main_embed.add_field(name="Power Candy (White): ",
                          value=f"**{0 if 'white_candy' not in user_owned_nfts else user_owned_nfts['white_candy']}**"
@@ -468,24 +469,33 @@ async def show_zrp_holdings(interaction: nextcord.Interaction):
                          value=f"**{0 if 'gold_candy' not in user_owned_nfts else user_owned_nfts['gold_candy']}**"
                                + '\t🍭',
                          inline=False)
+    main_embed.add_field(name="Golden Liquorice: ",
+                         value=f"**{0 if 'lvl_candy' not in user_owned_nfts else user_owned_nfts['lvl_candy']}**"
+                               + '\t🍯',
+                         inline=False)
     main_embed.add_field(name="Battle Zones: ",
                          value=f"**{len(user_owned_nfts.get('bg', []))}**"
                                + '\t🏟️',
                          inline=False)
     main_embed.add_field(name="Name Flair:",
-                         value=f"**{len(user_owned_nfts.get('name_flair', []))}**"
+                         value=f"**{len(user_owned_nfts.get('flair', []))}**"
                                + '\t💠',
                          inline=False)
-    main_embed.set_footer(text=f"Usage guide: \n"
-                               f"/use revive_potion zerpmon_id\n"
-                               f"/use mission_refill\n")
+    j_bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
+    main_embed.add_field(name="Jackpot ZRP value:",
+                         value=f"**{j_bal:.2f}**",
+                         inline=False)
+    # main_embed.set_footer(text=f"Usage guide: \n"
+    #                            f"/use revive_potion zerpmon_id\n"
+    #                            f"/use mission_refill\n")
     return main_embed
 
 
 async def zrp_store_callback(interaction: nextcord.Interaction):
     user_id = interaction.user.id
+    await interaction.response.defer(ephemeral=True)
     main_embed = CustomEmbed(title="ZRP Store", color=0xfcff82)
-    res, zrp_price = await xrpl_functions.get_zrp_price()
+    zrp_price = await xrpl_functions.get_zrp_price_api()
     refill_p = config.ZRP_STORE['refill'] / zrp_price
     candy_white_p = config.ZRP_STORE['candy_white'] / zrp_price
     candy_gold_p = config.ZRP_STORE['candy_gold'] / zrp_price
@@ -494,7 +504,7 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     name_flair_p = config.ZRP_STORE['name_flair'] / zrp_price
     safari_p = config.ZRP_STORE['safari'] / zrp_price
 
-    main_embed.add_field(name="**Gym Refill**" + '\t🍯',
+    main_embed.add_field(name="**Gym Refill**" + '\t🍵',
                          value=f"Cost: `{refill_p:.2f} ZRP`",
                          inline=False)
     # main_embed.add_field(name='🍬 **CANDY 🍬', value='\u200B', inline=False)
@@ -506,7 +516,7 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
                          value=f"Cost: `{candy_gold_p:.2f} ZRP`",
                          inline=False)
 
-    main_embed.add_field(name="**Golden Liquorice**" + '\t🍵',
+    main_embed.add_field(name="**Golden Liquorice**" + '\t🍯',
                          value=f"Cost: `{liquor_p:.2f} ZRP`",
                          inline=False)
 
@@ -534,10 +544,10 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
 
     sec_embed = await show_zrp_holdings(interaction)
 
-    b1 = Button(label="Buy Gym Refill", style=ButtonStyle.blurple, emoji='🍯', row=0)
+    b1 = Button(label="Buy Gym Refill", style=ButtonStyle.blurple, emoji='🍵', row=0)
     b2 = Button(label="Buy Power Candy (White)", style=ButtonStyle.blurple, emoji='🍬', row=0)
     b3 = Button(label="Buy Power Candy (Gold)", style=ButtonStyle.blurple, emoji='🍭', row=0)
-    b4 = Button(label="Buy Golden Liquorice", style=ButtonStyle.green, emoji='🍵', row=1)
+    b4 = Button(label="Buy Golden Liquorice", style=ButtonStyle.green, emoji='🍯', row=1)
     b5 = Button(label="Buy Battle Zones", style=ButtonStyle.green, emoji='🏟️', row=1)
     b6 = Button(label="Buy Name Flair", style=ButtonStyle.green, emoji='💠', row=1)
     b7 = Button(label="Buy Safari Trip", style=ButtonStyle.green, emoji='🎰', row=1)
@@ -556,7 +566,7 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     b6.callback = lambda i: on_button_click(i, label=b6.label, amount=name_flair_p)
     b7.callback = lambda i: on_button_click(i, label=b7.label, amount=safari_p)
 
-    await interaction.send(embeds=[main_embed, sec_embed], ephemeral=True, view=view)
+    await interaction.edit_original_message(embeds=[main_embed, sec_embed], view=view)
 
 
 async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=False):
@@ -582,8 +592,10 @@ async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=F
             try:
                 del config.zrp_purchases[user_id]
                 await _i.edit_original_message(embed=CustomEmbed(title="**Success**",
-                                                description=f"Bought {item}.", view=View()
+                                                description=f"Bought {item}."
                                                 ))
+            except Exception as e:
+                print(traceback.format_exc())
             finally:
                 return user_address, True
         await asyncio.sleep(10)
@@ -667,6 +679,7 @@ async def use_candy_callback(interaction: nextcord.Interaction, label):
 
 async def on_button_click(interaction: nextcord.Interaction, label, amount):
     user_id = interaction.user.id
+    amount = round(amount, 2)
     await interaction.response.defer(ephemeral=True)
     match label:
         case "Buy Battle Zones":
@@ -731,19 +744,19 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                                             list(config.SAFARI_REWARD_CHANCES.values()))[0]
                     embed = CustomEmbed(title=f"Safari roll {i + 1}", colour=0xff5722)
                     match reward:
-                        case "no_luck":
-                            msg = random.choice(config.NOTHING_MSG)
-                            rewards.append("Gained Nothing")
+                        # case "no_luck":
+                        #     msg = random.choice(config.NOTHING_MSG)
+                        #     rewards.append("Gained Nothing")
                         case "zrp":
-                            res, z_p = await xrpl_functions.get_zrp_price()
-                            amount = random.randint(1, 11)
-                            status = await send_zrp(addr, round(amount/z_p, 2), 'safari')
-                            msg = f'Congrats, Won {round(amount/z_p, 2)} $ZRP!\n{"Transaction Successful" if status else ""}!'
-                            rewards.append(f"Gained {round(amount/z_p, 2)} $ZRP!")
-                        case "equipment":
-                            db_query.add_equipment(addr, 1)
-                            msg = random.choice(config.EQUIPMENT_MSG)
-                            rewards.append("Gained 1 Equipment!")
+                            r_int = random.randint(1, 50)
+                            s_amount = round(amount * r_int/100, 2)
+                            status = await send_zrp(addr, s_amount, 'safari')
+                            msg = random.choice(config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction Successful`" if status else ""}!'
+                            rewards.append(f"Gained {s_amount} $ZRP!")
+                        # case "equipment":
+                        #     db_query.add_equipment(addr, 1)
+                        #     msg = random.choice(config.EQUIPMENT_MSG)
+                        #     rewards.append("Gained 1 Equipment!")
                         case "battle_zone" | "name_flair":
                             if reward == "battle_zone":
                                 db_query.update_user_bg(interaction.user.id, random.choice(config.GYMS))
@@ -766,24 +779,24 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                             rewards.append(
                                 f"Gained 1 {'Golden Liquorice' if 'level' in reward else reward + 'Power Candy'}!")
                         case "jackpot":
-                            bal = await get_zrp_balance(config.JACKPOT_ADDR)
+                            bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
                             amount = bal * 0.8
                             status = await send_zrp(addr, amount, 'jackpot')
                             msg = config.JACKPOT_MSG(interaction.user.name,
                                                      amount) + f'\n{"Transaction Successful" if status else ""}!'
                             rewards.append(f"Won Jackpot {amount} $ZRP!")
                         case "gym_refill":
-                            db_query.add_gym_refill_potion(addr, 1, True, )
+                            db_query.add_gym_refill_potion(addr, 5, True, )
                             msg = random.choice(config.GYM_REFILL_MSG)
-                            rewards.append(f"Gained 1 Gym Refill!")
+                            rewards.append(f"Gained 5 Gym Refill!")
                         case "revive_potion":
-                            db_query.add_revive_potion(addr, 1, False, )
+                            db_query.add_revive_potion(addr, 5, False, )
                             msg = random.choice(config.REVIVE_MSG)
-                            rewards.append(f"Gained 1 Revive Potion!")
+                            rewards.append(f"Gained 5 Revive Potion!")
                         case "mission_refill":
-                            db_query.add_mission_potion(addr, 1, False, )
+                            db_query.add_mission_potion(addr, 5, False, )
                             msg = random.choice(config.MISSION_REFILL_MSG)
-                            rewards.append(f"Gained 1 Mission Refill!")
+                            rewards.append(f"Gained 5 Mission Refill!")
                         case "zerpmon":
                             res, token_id = await send_random_zerpmon(addr)
                             msg = config.ZERP_MSG(token_id[0])
@@ -794,9 +807,12 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                     embed.description = msg
                     await interaction.send(embed=embed, ephemeral=True)
                 embed = CustomEmbed(title="Summary", colour=0xff5722)
+                path = f'./static/safari/Success {random.randint(1,14)}.png'
+                file = nextcord.File(path, filename="image.png")
+                embed.set_image(url=f'attachment://image.png')
                 for reward in rewards:
                     embed.add_field(name=reward, value='\u200B', inline=False)
-                await interaction.send(embed=embed, ephemeral=True)
+                await interaction.send(embed=embed, file=file, ephemeral=True)
         case "Buy Name Flair":
             # Create a select menu with the dropdown options
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
