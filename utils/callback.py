@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import random
 import time
 import traceback
@@ -646,20 +647,10 @@ async def use_candy_callback(interaction: nextcord.Interaction, label):
         if 'gold_candy' not in owned_nfts or int(owned_nfts['gold_candy']) <= 0:
             return (await zrp_store_callback(interaction))
     else:
-        if 'lvl_candy' not in owned_nfts or int(owned_nfts['white_candy']) <= 0:
+        if 'lvl_candy' not in owned_nfts or int(owned_nfts['lvl_candy']) <= 0:
             return (await zrp_store_callback(interaction))
 
     await interaction.response.defer(ephemeral=True)
-
-    select_menu = nextcord.ui.StringSelect(placeholder="Which Zerpmon to use it on")
-    user_owned = db_query.get_owned(interaction.user.id)
-
-    cards = {k: v for k, v in user_owned['zerpmons'].items()} if user_owned is not None else {}
-    for i in cards:
-        select_menu.add_option(label=cards[i]['name'], value=cards[i]['name'])
-    view = View()
-    view.add_item(select_menu)
-    await interaction.edit_original_message(content="Choose one **zerpmon**:", view=view)
 
     async def handle_select_menu(_i: nextcord.Interaction):
         print(_i.data)
@@ -674,7 +665,26 @@ async def use_candy_callback(interaction: nextcord.Interaction, label):
         else:
             db_query.increase_lvl(_i.user.id, selected_option)
 
-    select_menu.callback = handle_select_menu
+    user_owned = owned_nfts
+    view = View()
+    cards = {k: v for k, v in user_owned['zerpmons'].items()} if user_owned is not None else {}
+    key_list = [k for k, v in user_owned['zerpmons'].items()]
+    for num in range(math.ceil(len(cards)/25)):
+        select_menu = nextcord.ui.StringSelect(placeholder="Which Zerpmon to use it on")
+        card_obj = key_list[num*25:(num+1)*25] if num != math.ceil(len(cards)/25) - 1 else key_list[num*25:len(cards)]
+        for i in card_obj:
+            select_menu.add_option(label=cards[i]['name'], value=cards[i]['name'])
+        view.add_item(select_menu)
+        select_menu.callback = handle_select_menu
+    await interaction.edit_original_message(content="Choose one **zerpmon**:", view=view)
+
+
+async def send_general_message(guild, text, image):
+    try:
+        channel = nextcord.utils.get(guild.channels, name='🌐│zerpmon-center')
+        await channel.send(content=text + '\n' + image)
+    except Exception as e:
+        logging.error(f'ERROR: {traceback.format_exc()}')
 
 
 async def on_button_click(interaction: nextcord.Interaction, label, amount):
@@ -724,16 +734,16 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                     db_query.update_zrp_stats(burn_amount=amt, distributed_amount=0)
                     if 'white' in label.lower():
                         db_query.add_white_candy(addr, selected_option, purchased=True, amount=amt)
-                    elif 'gold' in label.lower():
-                        db_query.add_gold_candy(addr, selected_option, purchased=True, amount=amt)
-                    else:
+                    elif 'liquorice' in label.lower():
                         db_query.add_lvl_candy(addr, selected_option, purchased=True, amount=amt)
+                    else:
+                        db_query.add_gold_candy(addr, selected_option, purchased=True, amount=amt)
             select_menu.callback = handle_select_menu
 
         case "Buy Safari Trip":
             addr, purchased = await zrp_purchase_callback(interaction, amount, label.replace('Buy ', ''), safari=True)
             if purchased:
-                j_amount = round(amount * 0.33, 2)
+                j_amount = round(amount * 0.2, 2)
                 await send_zrp(config.JACKPOT_ADDR, j_amount, 'safari')
                 # Run 3 raffles
                 rewards = [
@@ -748,7 +758,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                         #     msg = random.choice(config.NOTHING_MSG)
                         #     rewards.append("Gained Nothing")
                         case "zrp":
-                            r_int = random.randint(1, 50)
+                            r_int = random.randint(1, 40)
                             s_amount = round(amount * r_int/100, 2)
                             status = await send_zrp(addr, s_amount, 'safari')
                             msg = random.choice(config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction Successful`" if status else ""}!'
@@ -775,9 +785,9 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                                 db_query.add_lvl_candy(addr, 1)
                             reward = reward.split('_')[-1].title()
                             msg = config.CANDY_MSG(interaction.user.name,
-                                                   'Golden Liquorice' if 'level' in reward else reward)
+                                                   'Golden Liquorice' if 'Up' in reward else reward)
                             rewards.append(
-                                f"Gained 1 {'Golden Liquorice' if 'level' in reward else reward + 'Power Candy'}!")
+                                f"Gained 1 {'Golden Liquorice' if 'Up' in reward else reward + ' Power Candy'}!")
                         case "jackpot":
                             bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
                             amount = bal * 0.8
@@ -786,21 +796,24 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                                                      amount) + f'\n{"Transaction Successful" if status else ""}!'
                             rewards.append(f"Won Jackpot {amount} $ZRP!")
                         case "gym_refill":
-                            db_query.add_gym_refill_potion(addr, 5, True, )
+                            db_query.add_gym_refill_potion(addr, 1, True, )
                             msg = random.choice(config.GYM_REFILL_MSG)
-                            rewards.append(f"Gained 5 Gym Refill!")
+                            rewards.append(f"Gained 1 Gym Refill!")
                         case "revive_potion":
                             db_query.add_revive_potion(addr, 5, False, )
                             msg = random.choice(config.REVIVE_MSG)
-                            rewards.append(f"Gained 5 Revive Potion!")
+                            rewards.append(f"Gained 5 Revive Potions!")
                         case "mission_refill":
                             db_query.add_mission_potion(addr, 5, False, )
                             msg = random.choice(config.MISSION_REFILL_MSG)
-                            rewards.append(f"Gained 5 Mission Refill!")
+                            rewards.append(f"Gained 5 Mission Refills!")
                         case "zerpmon":
-                            res, token_id = await send_random_zerpmon(addr)
+                            res, token_id = await send_random_zerpmon(addr, safari=True)
                             msg = config.ZERP_MSG(token_id[0])
                             rewards.append(f"Won {token_id[0]}!")
+                            description = f'🔥 🔥 Congratulations {interaction.user.mention} just caught **{token_id[0]}**!! 🔥 🔥\n@everyone'
+                            await send_general_message(guild=interaction.guild, text=description,
+                                                      image=token_id[1])
                         case _:
                             msg = random.choice(config.NOTHING_MSG)
                             rewards.append("Gained Nothing")
@@ -812,7 +825,14 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                 embed.set_image(url=f'attachment://image.png')
                 for reward in rewards:
                     embed.add_field(name=reward, value='\u200B', inline=False)
+                view = View()
+                view.timeout = 120
+                b_s = Button(label="Buy another Safari Trip", style=ButtonStyle.green, emoji='🎰', row=0)
+                b_s.callback = lambda i: on_button_click(i, label='Buy Safari Trip', amount=amount)
+                view.add_item(b_s)
+
                 await interaction.send(embed=embed, file=file, ephemeral=True)
+                await interaction.send(view=view, ephemeral=True)
         case "Buy Name Flair":
             # Create a select menu with the dropdown options
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")

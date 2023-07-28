@@ -213,16 +213,16 @@ async def show(interaction: nextcord.Interaction):
 
     async def show_callback(interaction: nextcord.Interaction, items, start=0, return_embed=False):
         embed2 = CustomEmbed(
-            title=f"YOUR **ZERPMON** HOLDINGS {'(Page #' + str(start // 25 + 1) + ')' if start >= 25 else ''}:\n",
+            title=f"YOUR **ZERPMON** HOLDINGS {'(Page #' + str(start // 15 + 1) + ')' if start >= 15 else ''}:\n",
             color=0xff5252,
         )
         view = View()
         for serial, nft in items:
-            if len(embed2.fields) >= 25 and len(items) > 25:
+            if len(embed2.fields) >= 15 and len(items) > 15:
                 button = Button(label="Show more", style=ButtonStyle.blurple)
                 view.add_item(button)
                 view.timeout = 300
-                button.callback = lambda i: show_callback(i, sorted_dict[start + 25:], start=start + 25)
+                button.callback = lambda i: show_callback(i, sorted_dict[start + 15:], start=start + 15)
                 break
             lvl, xp, w_candy, g_candy, l_candy = db_query.get_lvl_xp(nft['name'], get_candies=True)
 
@@ -1517,12 +1517,12 @@ async def battle_royale_wager(interaction: nextcord.Interaction, amount: int):
             u_flair = f' | {user_owned_nfts["data"].get("flair", [])[0]}' if len(
                 user_owned_nfts["data"].get("flair", [])) > 0 else ''
             user_owned_nfts['user'] += u_flair
-            user_mention = interaction.user.mention + u_flair
+            user_mention = _i.user.mention + u_flair
             proceed = await checks.check_wager_entry(interaction, [user_owned_nfts])
             if not proceed:
                 return
             await _i.send(content="Generating transaction QR code...", ephemeral=True)
-            user_address = db_query.get_owned(_i.user.id)['address']
+            user_address = user_owned_nfts["data"]['address']
             uuid, url, href = await xumm_functions.gen_txn_url(config.WAGER_ADDR, user_address, amount * 10 ** 6)
             embed = CustomEmbed(color=0x01f39d,
                                 title=f"Please sign the transaction using this QR code or click here.",
@@ -1602,7 +1602,7 @@ async def battle_royale_wager(interaction: nextcord.Interaction, amount: int):
             except Exception as e:
                 logging.error(f"ERROR during friendly battle: {e}\n{traceback.format_exc()}")
                 await interaction.send('Something went wrong during this match, returning both participants `XRP`')
-                for user in [random_ids[0], random_ids[0]]:
+                for user in [random_ids[0], random_ids[1]]:
                     await xrpl_ws.send_txn(user["address"],
                                            amount, 'wager')
                     total_amount -= amount
@@ -1819,13 +1819,13 @@ async def trade_nft(interaction: nextcord.Interaction, your_nft_id: str, opponen
                                "Planet yet.")
     #
     user_owned_nfts = db_query.get_owned(user_id)
-    u_flair = f' | {user_owned_nfts["data"].get("flair", [])[0]}' if len(
-        user_owned_nfts["data"].get("flair", [])) > 0 else ''
+    u_flair = f' | {user_owned_nfts.get("flair", [])[0]}' if len(
+        user_owned_nfts.get("flair", [])) > 0 else ''
     user_mention = interaction.user.mention + u_flair
 
     opponent_owned_nfts = db_query.get_owned(opponent.id)
-    o_flair = f' | {opponent_owned_nfts["data"].get("flair", [])[0]}' if len(
-        opponent_owned_nfts["data"].get("flair", [])) > 0 else ''
+    o_flair = f' | {opponent_owned_nfts.get("flair", [])[0]}' if len(
+        opponent_owned_nfts.get("flair", [])) > 0 else ''
     oppo_mention = opponent.mention + o_flair
 
     url1, name1 = await xrpl_ws.get_nft_data_wager(your_nft_id)
@@ -2412,9 +2412,9 @@ async def bid(
         return
     # balance = await xrpl_functions.get_xrp_balance(uAddress)
     if auc["currency"] == "XRP":
-        balance = await xrpl_functions.get_xrp_balance(uAddress)
+        balance = float(await xrpl_functions.get_xrp_balance(uAddress))
     else:
-        balance = await xrpl_functions.get_zrp_balance(uAddress)
+        balance = float(await xrpl_functions.get_zrp_balance(uAddress))
     print(balance)
     if uAddress == "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L":
         balance = 500

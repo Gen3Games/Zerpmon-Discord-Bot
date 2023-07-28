@@ -285,7 +285,7 @@ async def send_random_zerpmon(to_address, safari=False):
             token_id = random_zerpmon['NFTokenID']
             if token_id in tokens_sent:
                 continue
-            res = await send_nft('safari', to_address, token_id)
+            res = await send_nft('safari' if safari else 'reward', to_address, token_id)
             tokens_sent.append(token_id)
             nft_data = xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
             img = ('https://ipfs.io/ipfs/' + nft_data['image'].replace("ipfs://", "")) if 'image' in nft_data else ''
@@ -469,7 +469,7 @@ async def send_zrp(to: str, amount: float, sender):
                 sending_wallet = Wallet(seed=config.STORE_SEED, sequence=sequence)
                 sending_address = Address
             elif sender == "block":
-                bal = await xrpl_functions.get_zrp_balance(active_zrp_addr)
+                bal = float(await xrpl_functions.get_zrp_balance(active_zrp_addr))
                 db_query.update_zrp_stats(burn_amount=0, distributed_amount=amount, left_amount=((bal-amount) if bal is not None else None))
                 if bal is not None and bal < 5:
                     if active_zrp_addr == config.B1_ADDR:

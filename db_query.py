@@ -701,6 +701,7 @@ def gym_refill(user_id):
     users_collection = db['users']
     old = users_collection.find_one({'discord_id': str(user_id)})
     addr = old['address']
+    del old['_id']
     if 'gym' in old:
         for i in old['gym']['won']:
             if old['gym']['won'][i]['lose_streak'] > 0:
@@ -1022,8 +1023,9 @@ def increase_lvl(user_id, zerpmon_name):
                                            '$inc': {'licorice': 1}})
             add_revive_potion(user_address, next_lvl['revive_potion_reward'])
             add_mission_potion(user_address, next_lvl['mission_potion_reward'])
+
+            add_lvl_candy(user_address, -1)
             return True
-    add_lvl_candy(user_address, -1)
     return False
 
 
