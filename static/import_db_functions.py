@@ -3,8 +3,8 @@ import json
 import pymongo
 import csv
 import requests
+from pymongo import ReturnDocument
 
-import db_query
 
 client = pymongo.MongoClient('mongodb://localhost:27017/')
 db = client['Zerpmon']
@@ -315,6 +315,20 @@ def cache_data():
         print(str(e), ' error')
 
 
+def reset_all_gyms():
+    users_collection = db['users']
+    old = users_collection.find()
+    for user in old:
+        gym_obj = user.get('gym', {})
+        gym_obj['won'] = {}
+        gym_obj['active_t'] = 0
+        gym_obj['gp'] = 0
+        query = {'$set': {'gym': gym_obj}}
+        r = users_collection.find_one_and_update({'discord_id': user['discord_id']},
+                                                 query,
+                                                 return_document=ReturnDocument.AFTER)
+
+
 import_moves()
 import_movesets()
 # # import_level()
@@ -322,4 +336,4 @@ import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
 cache_data()
-db_query.reset_all_gyms()
+reset_all_gyms()

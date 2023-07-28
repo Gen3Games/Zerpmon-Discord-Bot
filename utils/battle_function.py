@@ -1245,11 +1245,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
     z1_type = [i['value'] for i in z1['attributes'] if i['trait_type'] == 'Type']
     buffed_type1 = []
     if len(_data1['trainer_cards']) > 0:
-        tc1 = list(_data1['trainer_cards'].values())[0] if ('mission_trainer' not in _data1) or (
-                _data1['mission_trainer'] == "") else \
-            _data1['trainer_cards'][_data1['mission_trainer']]
-        buffed_type1 = [i['value'] for i in tc1['attributes'] if
-                        i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
+        for key, tc1 in _data1['trainer_cards'].items():
+            buffed_type1.extend([i['value'] for i in tc1['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type'])
 
     buffed_zerp = ''
     for i in z1_type:

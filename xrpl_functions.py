@@ -85,9 +85,6 @@ async def get_offers(address):
         return False, []
 
 
-asyncio.run(get_offers(config.SAFARI_ADDR))
-
-
 async def get_zrp_price():
     try:
         if config.zrp_price is None:
