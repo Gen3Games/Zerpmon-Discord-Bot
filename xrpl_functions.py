@@ -190,8 +190,7 @@ async def get_xrp_balance(address):
         async with AsyncWebsocketClient(config.NODE_URL) as client:
             acct_info = AccountInfo(
                 account=address,
-                ledger_index="validated",
-                queue=True,
+                ledger_index="validated"
             )
             response = await client.request(acct_info)
             result = response.result
