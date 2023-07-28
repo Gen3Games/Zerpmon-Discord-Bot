@@ -71,19 +71,16 @@ def get_deck_embed(deck_type, owned_nfts, embed2):
         print(v)
         found = True
         nfts = {}
-        _i = 0
         embed2.add_field(name=f"{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}:\n", value='\u200B',
                          inline=False)
         embed2.add_field(name='\u200b', value='\u200B', inline=False)
+        new_v = v
         if 'trainer' in v and v['trainer'] != "":
             nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']]
-        while len(nfts) != len(v):
-            try:
-                nfts[str(_i)] = owned_nfts['zerpmons'][v[str(_i)]]
-            except:
+            del new_v['trainer']
+        for pos, sr in new_v.items():
+            nfts[str(pos)] = owned_nfts['zerpmons'][v[sr]]
 
-                pass
-            _i += 1
         if len(nfts) == 0:
             embed2.add_field(name=f"Sorry looks like you haven't selected any Zerpmon for {deck_type.title()} deck #{int(k) + 1}",
                              value='\u200B',
@@ -92,7 +89,9 @@ def get_deck_embed(deck_type, owned_nfts, embed2):
         else:
             msg_str = '> Battle Zerpmons:\n' \
                       f'> \n'
-            for serial, nft in nfts.items():
+            sorted_keys = sorted(nfts.keys(), key=lambda k: (k != "trainer", int(k) if k.isdigit() else float('inf')))
+            sorted_data = {k: nfts[k] for k in sorted_keys}
+            for serial, nft in sorted_data.items():
                 if serial == 'trainer':
                     trainer = nft
                     my_button = f"https://xrp.cafe/nft/{trainer['token_id']}"
@@ -108,7 +107,7 @@ def get_deck_embed(deck_type, owned_nfts, embed2):
                               f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
                               f"> \n" + msg_str
                 else:
-                    msg_str += f'> ⭐ {nft["name"]} ⭐\n'
+                    msg_str += f'> {int(serial) + 1}. ⭐ {nft["name"]} ⭐\n'
             embed2.add_field(name='\u200B', value=msg_str, inline=False)
             embed2.add_field(name='\u200b', value='\u200B', inline=False)
     return embed2
