@@ -729,14 +729,14 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         if eliminate[0] == 1:
             z1['rounds'].append(0)
             z2['rounds'].append(1)
-            battle_log['teamA']['zerpmons'].append({'name': z1['name'], 'ko_move': result['move2']['name'], 'rounds': z1['rounds'].copy()})
+            battle_log['teamA']['zerpmons'].append({'name': z1['name'], 'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
             z1['rounds'].append(1)
             z2['rounds'].append(0)
-            battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'ko_move': result['move1']['name'], 'rounds': z2['rounds'].copy()})
+            battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'ko_move': result['move1']['name'] + ' ' + config.TYPE_MAPPING[result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
             p2 = None
             p2_temp = None
@@ -1225,14 +1225,14 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         if eliminate[0] == 1:
             z1['rounds'].append(0)
             z2['rounds'].append(1)
-            battle_log['teamA']['zerpmons'].append({'name': z1['name'], 'ko_move': result['move2']['name'], 'rounds': z1['rounds'].copy()})
+            battle_log['teamA']['zerpmons'].append({'name': z1['name'], 'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
             z1['rounds'].append(1)
             z2['rounds'].append(0)
-            battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'ko_move': result['move1']['name'], 'rounds': z2['rounds'].copy()})
+            battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'ko_move': result['move1']['name'] + ' ' + config.TYPE_MAPPING[result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
             p2 = None
             p2_temp = None
@@ -1563,7 +1563,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             battle_log['teamA']['zerpmons'].append(
                 {'name': z1['name'], 'rounds': [1]})
             battle_log['teamB']['zerpmons'].append(
-                {'name': z2['name'], 'ko_move': result['move1']['name'], 'rounds': [0]})
+                {'name': z2['name'], 'ko_move': result['move1']['name'] + ' ' + config.TYPE_MAPPING[result['move1']['type']], 'rounds': [0]})
             db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
                                        battle_log['teamA'],
                                        battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
@@ -1615,7 +1615,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                 f"Sorry you **LOST** 💀",
                 ephemeral=True)
             battle_log['teamA']['zerpmons'].append(
-                {'name': z1['name'], 'ko_move': result['move2']['name'], 'rounds': [0]})
+                {'name': z1['name'], 'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[result['move2']['type']], 'rounds': [0]})
             battle_log['teamB']['zerpmons'].append(
                 {'name': z2['name'], 'rounds': [1]})
             db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
