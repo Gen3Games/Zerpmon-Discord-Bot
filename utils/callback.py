@@ -14,7 +14,7 @@ import db_query
 import xrpl_functions
 import xumm_functions
 from utils import checks, battle_function
-from utils.xrpl_ws import send_random_zerpmon, send_zrp
+from utils.xrpl_ws import send_random_zerpmon, send_zrp, get_balance
 
 
 class CustomEmbed(nextcord.Embed):
@@ -25,6 +25,31 @@ class CustomEmbed(nextcord.Embed):
 
 
 button_cache = {'revive': [], 'mission': []}
+
+
+async def wager_battle_r_callback(_i: nextcord.Interaction, amount, user_address, reward):
+    await _i.response.defer(ephemeral=True)
+    user_id = _i.user.id
+    if user_id in config.ongoing_battles:
+        await _i.edit_original_message(
+            content=f"Please wait, one battle is already taking place for you.", view=View(), embeds=[]
+        )
+        return
+    if user_id:
+        await _i.edit_original_message(content="Generating transaction QR code...", view=View(), embeds=[])
+        if reward == 'XRP':
+            uuid, url, href = await xumm_functions.gen_txn_url(config.WAGER_ADDR, user_address,
+                                                               amount * 10 ** 6)
+        else:
+            uuid, url, href = await xumm_functions.gen_zrp_txn_url(config.WAGER_ADDR, user_address,
+                                                                   amount)
+        embed = CustomEmbed(color=0x01f39d,
+                            title=f"Please sign the transaction using this QR code or click here.",
+                            url=href)
+
+        embed.set_image(url=url)
+
+        await _i.edit_original_message(content='', embed=embed)
 
 
 async def purchase_callback(_i: nextcord.Interaction, amount, qty=1, double_xp=False):
@@ -96,6 +121,14 @@ async def show_store(interaction: nextcord.Interaction):
                          value=f"**{'Inactive' if not active else '🔥 Active 🔥'}**{'' if not active else ' <t:' + str(int(user_owned_nfts['double_xp'])) + ':R>'}"
                          ,
                          inline=False)
+
+    try:
+        user_bal = await get_balance(user_owned_nfts['address'])
+        main_embed.add_field(name="Your XRP balance:",
+                             value=f"**{user_bal:.2f}**",
+                             inline=False)
+    except:
+        pass
     main_embed.set_footer(text=f"Usage guide: \n"
                                f"/use revive_potion zerpmon_id\n"
                                f"/use mission_refill\n")
@@ -486,6 +519,14 @@ async def show_zrp_holdings(interaction: nextcord.Interaction):
     main_embed.add_field(name="Jackpot ZRP value:",
                          value=f"**{j_bal:.2f}**",
                          inline=False)
+
+    try:
+        user_bal = float(await xrpl_functions.get_zrp_balance(user_owned_nfts['address']))
+        main_embed.add_field(name="Your ZRP balance:",
+                             value=f"**{user_bal:.2f}**",
+                             inline=False)
+    except:
+        pass
     # main_embed.set_footer(text=f"Usage guide: \n"
     #                            f"/use revive_potion zerpmon_id\n"
     #                            f"/use mission_refill\n")
@@ -580,7 +621,7 @@ async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=F
         return
     await _i.edit_original_message(content="Generating transaction QR code...", embeds=[], view=View())
     user_id = str(_i.user.id)
-    user_address = db_query.get_owned(_i.user.id)['address']
+    user_address = user_owned_nfts['address']
     uuid, url, href = await xumm_functions.gen_zrp_txn_url(config.ISSUER['ZRP'] if not safari else config.SAFARI_ADDR, user_address, amount)
     embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here.",
                         url=href)
@@ -790,7 +831,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                                 f"Gained 1 {'Golden Liquorice' if 'Up' in reward else reward + ' Power Candy'}!")
                         case "jackpot":
                             bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
-                            amount = bal * 0.8
+                            amount = round(bal * 0.8, 2)
                             status = await send_zrp(addr, amount, 'jackpot')
                             msg = config.JACKPOT_MSG(interaction.user.name,
                                                      amount) + f'\n{"Transaction Successful" if status else ""}!'
@@ -865,3 +906,45 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
             # Register the event handler for the select menu
             select_menu.callback = handle_select_menu
             select_menu2.callback = handle_select_menu
+
+
+async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextcord.Member, potion_key, potion, fn):
+    user_id = user.id
+
+    user_owned_nfts = {'data': db_query.get_owned(user_id), 'user': user.name}
+
+    # Sanity checks
+    if user.id == interaction.user.id:
+        await interaction.send(
+            f"Sorry you can't gift Potions/Candies to yourself.")
+        return False
+
+    if interaction.user.id not in config.ADMINS:
+        sender = db_query.get_owned(interaction.user.id)
+        user_qty = sender[potion_key] if potion_key != 'gym_refill' else (sender.get('gym', {})).get('refill_potion', 0)
+        if sender is None or user_qty < qty:
+            await interaction.send(
+                f"Sorry you don't have **{qty}** {potion}.")
+            return False
+        elif user_owned_nfts['data'] is None:
+            await interaction.send(
+                f"Sorry **{user.name}** haven't verified their wallet yet.")
+            return False
+        else:
+            # Put potions on hold os user doesn't spam
+            fn(sender['address'], -qty)
+            fn(user_owned_nfts['data']['address'], qty)
+            await interaction.send(f"Successfully gifted **{qty}** {potion} to **{user.name}**!",
+                                   ephemeral=False)
+            return
+
+    for owned_nfts in [user_owned_nfts]:
+        if owned_nfts['data'] is None:
+            await interaction.send(
+                f"Sorry no User found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
+            return
+
+    fn(user_owned_nfts['data']['address'], qty)
+    await interaction.send(
+        f"**Success!**",
+        ephemeral=True)

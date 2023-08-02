@@ -429,6 +429,11 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
     p2 = None
     p1_temp = None
     p2_temp = None
+    battle_log = {'teamA': {'trainer': tc1, 'zerpmons': []}, 'teamB': {'trainer': {'name': leader_name}, 'zerpmons': []}, 'battle_type': 'Gym Battle'}
+    for zerp in user1_zerpmons:
+        zerp['rounds'] = []
+    for zerp in user2_zerpmons:
+        zerp['rounds'] = []
     while len(user1_zerpmons) != 0 and len(user2_zerpmons) != 0:
         z1 = user1_zerpmons[-1]
         z1_moves = db_query.get_zerpmon(z1['name'])['moves']
@@ -443,6 +448,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         z2_moves = z2['moves']
         zimg2 = z2['image']
         z2_type = [i['value'] for i in z2['attributes'] if i['trait_type'] == 'Type']
+
         if p2 is None:
             p2 = [(float(p['percent']) if p['percent'] not in ["0.00", "0", ""] else None) for p in
                   z2['moves']]
@@ -554,14 +560,16 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                       "Calculating Battle results..."
 
             await msg_hook.send(content=atk_msg, ephemeral=True)
-            for i, effect in enumerate(status_stack[0].copy()):
-                if '0 damage' in effect:
-                    status_stack[0].remove(effect)
-                    break
-            for i, effect in enumerate(status_stack[1].copy()):
-                if '0 damage' in effect:
-                    status_stack[1].remove(effect)
-                    break
+            if result['winner'] != '1' or '0 damage' not in result.get('status_effect', ''):
+                for i, effect in enumerate(status_stack[0].copy()):
+                    if '0 damage' in effect:
+                        status_stack[0].remove(effect)
+                        break
+            if result['winner'] != '2' or '0 damage' not in result.get('status_effect', ''):
+                for i, effect in enumerate(status_stack[1].copy()):
+                    if '0 damage' in effect:
+                        status_stack[1].remove(effect)
+                        break
 
             print(result)
 
@@ -719,10 +727,16 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                 move_counter += 1
 
         if eliminate[0] == 1:
+            z1['rounds'].append(0)
+            z2['rounds'].append(1)
+            battle_log['teamA']['zerpmons'].append({'name': z1['name'], 'ko_move': result['move2']['name'], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
+            z1['rounds'].append(1)
+            z2['rounds'].append(0)
+            battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'ko_move': result['move1']['name'], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
             p2 = None
             p2_temp = None
@@ -747,11 +761,18 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         await interaction.send(
             f"Sorry you **LOST** 💀 \nYou can try battling **{leader_name}** again tomorrow",
             ephemeral=True)
+        battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'rounds': z2['rounds']})
+        db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name, battle_log['teamA'], battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
         # Save user's match
         db_query.reset_gym(_data1['discord_id'], _data1['gym'] if 'gym' in _data1 else {}, gym_type, lost=True)
         return 2
     elif len(user2_zerpmons) == 0:
         # Add GP to user
+        battle_log['teamA']['zerpmons'].append(
+            {'name': z1['name'], 'rounds': z1['rounds']})
+        db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name, battle_log['teamA'],
+                                   battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
+
         db_query.add_gp(_data1['discord_id'], _data1['gym'] if 'gym' in _data1 else {}, gym_type, stage)
         embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
                             description=f"{user_mention} vs {leader_name} {config.TYPE_MAPPING[gym_type]}")
@@ -783,7 +804,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         return 1
 
 
-async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5):
+async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, battle_name='Friendly Battle'):
     _data1 = db_query.get_owned(battle_instance["challenger"])
     _data2 = db_query.get_owned(battle_instance["challenged"])
     user1_zerpmons = _data1['zerpmons']
@@ -889,15 +910,22 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5):
                 i += 1
             user2_z.reverse()
             user2_zerpmons = user2_z if len(user2_z) <= low_z else user2_z[-low_z:]
+        battle_log = {'teamA': {'trainer': tc1, 'zerpmons': []},
+                      'teamB': {'trainer': tc2, 'zerpmons': []}, 'battle_type': battle_name}
 
     else:
         user1_zerpmons = [user1_zerpmons[battle_instance['z1']]] if type(battle_instance['z1']) is str else [battle_instance['z1']]
         user2_zerpmons = [user2_zerpmons[battle_instance['z2']]] if type(battle_instance['z2']) is str else [battle_instance['z2']]
+        battle_log = {'teamA': {'trainer': None, 'zerpmons': []},
+                      'teamB': {'trainer': None, 'zerpmons': []}, 'battle_type': battle_name}
         buffed_type1 = []
         buffed_type2 = []
         bg_img = None
     # print(user1_zerpmons[-1], '\n', user2_zerpmons[-1], '\n', user1_zerpmons, '\n', user2_zerpmons, )
-
+    for zerp in user1_zerpmons:
+        zerp['rounds'] = []
+    for zerp in user2_zerpmons:
+        zerp['rounds'] = []
     msg_hook = message
 
     status_stack = [[], []]
@@ -925,7 +953,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5):
                 buffed_zerp2 = i
 
         main_embed = CustomEmbed(title="Zerpmon rolling attacks...", color=0x35bcbf)
-
+        if battle_instance['type'] == 'free_br':
+            main_embed.description = f'{battle_instance["username1"]} vs {battle_instance["username2"]}'
         path1 = f"./static/images/{z1['name']}.png"
         path2 = f"./static/images/vs.png"
         path3 = f"./static/images/{z2['name']}.png"
@@ -1028,14 +1057,16 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5):
                       "Calculating Battle results..."
 
             await msg_hook.reply(content=atk_msg)
-            for i, effect in enumerate(status_stack[0].copy()):
-                if '0 damage' in effect:
-                    status_stack[0].remove(effect)
-                    break
-            for i, effect in enumerate(status_stack[1].copy()):
-                if '0 damage' in effect:
-                    status_stack[1].remove(effect)
-                    break
+            if result['winner'] != '1' or '0 damage' not in result.get('status_effect', ''):
+                for i, effect in enumerate(status_stack[0].copy()):
+                    if '0 damage' in effect:
+                        status_stack[0].remove(effect)
+                        break
+            if result['winner'] != '2' or '0 damage' not in result.get('status_effect', ''):
+                for i, effect in enumerate(status_stack[1].copy()):
+                    if '0 damage' in effect:
+                        status_stack[1].remove(effect)
+                        break
 
             print(result)
 
@@ -1192,10 +1223,16 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5):
                 move_counter += 1
 
         if eliminate[0] == 1:
+            z1['rounds'].append(0)
+            z2['rounds'].append(1)
+            battle_log['teamA']['zerpmons'].append({'name': z1['name'], 'ko_move': result['move2']['name'], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
+            z1['rounds'].append(1)
+            z2['rounds'].append(0)
+            battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'ko_move': result['move1']['name'], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
             p2 = None
             p2_temp = None
@@ -1219,12 +1256,20 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5):
     if len(user1_zerpmons) == 0:
         await msg_hook.channel.send(
             f"**WINNER**   👑**{battle_instance['username2']}**👑")
+        battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'rounds': z2['rounds']})
+        db_query.update_battle_log(_data1['discord_id'], _data2['discord_id'], _data1['username'], _data2['username'], battle_log['teamA'],
+                                   battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
+
         db_query.update_pvp_user_wr(_data1['discord_id'], 0)
         db_query.update_pvp_user_wr(_data2['discord_id'], 1)
         return 2
     elif len(user2_zerpmons) == 0:
         await msg_hook.channel.send(
             f"**WINNER**   👑**{battle_instance['username1']}**👑")
+        battle_log['teamA']['zerpmons'].append({'name': z1['name'], 'rounds': z1['rounds']})
+        db_query.update_battle_log(_data1['discord_id'], _data2['discord_id'], _data1['username'], _data2['username'],
+                                   battle_log['teamA'],
+                                   battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
         db_query.update_pvp_user_wr(_data1['discord_id'], 1)
         db_query.update_pvp_user_wr(_data2['discord_id'], 0)
         return 1
@@ -1323,6 +1368,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
     p2_temp = None
     move_counter = 0
     lost = 0
+    battle_log = {'teamA': {'trainer': None, 'zerpmons': []},
+                  'teamB': {'trainer': None, 'zerpmons': []}, 'battle_type': 'Mission Battle'}
     while eliminate == "":
         await asyncio.sleep(4)
         result, p1, p2, status_stack, p1_temp, p2_temp = battle_zerpmons(z1['name'], z2['name'], [z1_type, z2_type],
@@ -1349,14 +1396,16 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                   "Calculating Battle results..."
 
         await interaction.send(content=atk_msg, ephemeral=True)
-        for i, effect in enumerate(status_stack[0].copy()):
-            if '0 damage' in effect:
-                status_stack[0].remove(effect)
-                break
-        for i, effect in enumerate(status_stack[1].copy()):
-            if '0 damage' in effect:
-                status_stack[1].remove(effect)
-                break
+        if result['winner'] != '1' or '0 damage' not in result.get('status_effect', ''):
+            for i, effect in enumerate(status_stack[0].copy()):
+                if '0 damage' in effect:
+                    status_stack[0].remove(effect)
+                    break
+        if result['winner'] != '2' or '0 damage' not in result.get('status_effect', ''):
+            for i, effect in enumerate(status_stack[1].copy()):
+                if '0 damage' in effect:
+                    status_stack[1].remove(effect)
+                    break
 
         print(result)
 
@@ -1511,6 +1560,14 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                 ephemeral=True)
             db_query.save_zerpmon_winrate(z1['name'], z2['name'])
             db_query.update_user_wr(user_id, 1)
+            battle_log['teamA']['zerpmons'].append(
+                {'name': z1['name'], 'rounds': [1]})
+            battle_log['teamB']['zerpmons'].append(
+                {'name': z2['name'], 'ko_move': result['move1']['name'], 'rounds': [0]})
+            db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
+                                       battle_log['teamA'],
+                                       battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
+            db_query.update_battle_count(user_id, old_num)
             # Reward user on a Win
             double_xp = 'double_xp' in _data1 and _data1['double_xp'] > time.time()
             responses = await xrpl_ws.reward_user(user_id, z1['name'], double_xp=double_xp)
@@ -1546,8 +1603,6 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                     await interaction.send(
                         f"**Successfully** sent `{responses[0][2]}` {responses[0][1]}",
                         ephemeral=True)
-
-            db_query.update_battle_count(user_id, old_num)
             move_counter += 1
 
         elif (result['winner'] == '2' and lost == 0) or lost == 1:
@@ -1559,7 +1614,13 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             await interaction.send(
                 f"Sorry you **LOST** 💀",
                 ephemeral=True)
-
+            battle_log['teamA']['zerpmons'].append(
+                {'name': z1['name'], 'ko_move': result['move2']['name'], 'rounds': [0]})
+            battle_log['teamB']['zerpmons'].append(
+                {'name': z2['name'], 'rounds': [1]})
+            db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
+                                       battle_log['teamA'],
+                                       battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
             z1['active_t'] = checks.get_next_ts()
 
             db_query.update_zerpmon_alive(z1, serial, user_id)

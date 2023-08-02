@@ -1,4 +1,5 @@
 import asyncio
+import time
 import traceback
 from statistics import mean
 
@@ -183,6 +184,19 @@ def get_nft_metadata_by_id(nftid):
         return None
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
+
+
+def get_nft_id_by_name(name):
+    try:
+        with open("./static/metadata.json", "r") as f:
+            data = json.load(f)
+            for item in data:
+                if item["metadata"]['name'] == name:
+                    return item["nftid"]
+        return None
+    except Exception as e:
+        print(f"ERROR in getting metadata: {e}")
+        return None
 
 
 async def get_xrp_balance(address):

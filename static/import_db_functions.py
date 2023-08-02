@@ -329,7 +329,7 @@ def reset_all_gyms():
                                                  return_document=ReturnDocument.AFTER)
 
 
-import_moves()
+# import_moves()
 import_movesets()
 # # import_level()
 import_attrs_img()

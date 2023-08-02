@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import traceback
 
 import requests
 from xrpl.models.requests import AccountInfo, AccountLines
@@ -108,20 +109,29 @@ async def listener(client, store_address, wager_address):
                 # if 'NFT' in message['TransactionType']:
                 # print(message)
                 if 'TransactionType' in message and message['TransactionType'] == "Payment" and \
-                        'Destination' in message and message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR, config.ISSUER['ZRP']]:
+                        'Destination' in message and (message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR, config.ISSUER['ZRP']] or message['Destination'] in [i['to'] for i in config.track_zrp_txn.values()]):
 
                     if len(hashes) > 1000:
                         hashes = hashes[900:]
                     if message['hash'] not in hashes:
                         hashes.append(message['hash'])
                         print(message)
-                        if message['Destination'] == config.SAFARI_ADDR or message['Destination'] == config.ISSUER['ZRP']:
-                            if type(message['Amount']) == dict and message['Amount']['currency'] == 'ZRP':
+
+                        if type(message['Amount']) == dict and message['Amount']['currency'] == 'ZRP':
+                            amount = float(message['Amount']['value'])
+                            if message['Destination'] in [i['to'] for i in config.track_zrp_txn.values()]:
+                                if message['Account'] in config.track_zrp_txn:
+                                    config.track_zrp_txn[message['Account']]['amount'] = amount
+
+                            if message['Destination'] == config.SAFARI_ADDR or message['Destination'] == config.ISSUER['ZRP']:
+
                                 #  ZRP TXN
-                                amount = float(message['Amount']['value'])
                                 user = db_query.get_user(message['Account'])
                                 user_id = user['discord_id']
                                 config.zrp_purchases[user_id] = amount
+                            elif message['Destination'] == wager_address:
+                                config.wager_zrp_senders[message['Account']] = amount
+
                         else:
                             try:
                                 amount = float(int(message['Amount']) / 10 ** 6)
@@ -195,7 +205,7 @@ async def listener(client, store_address, wager_address):
                         xrp = float(int(message['TakerGets']) / 10 ** 6)
                         config.zrp_price = xrp/amount
         except Exception as e:
-            logging.error(f"ERROR in listener: {e}")
+            logging.error(f"ERROR in listener: {traceback.format_exc()}")
 
 
 async def main():
@@ -253,7 +263,8 @@ async def reward_user(user_id, zerpmon_name, double_xp=False):
     reward = random.choices(list(config.MISSION_REWARD_CHANCES.keys()), list(config.MISSION_REWARD_CHANCES.values()))[0]
     user_address = db_query.get_owned(user_id)['address']
     db_query.add_xp(zerpmon_name, user_address, double_xp=double_xp)
-
+    if len(user_address) < 5:
+        return
     bal = await get_balance(Reward_address)
     amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
     print(bal, amount_to_send)
@@ -424,13 +435,15 @@ async def accept_nft(wallet, offer, sender='0', token='0'):
                 break
 
 
-async def check_amount_sent(amount, user1, user2):
+async def check_amount_sent(amount, user1, user2, reward='XRP'):
     user_sent = False
     opponent_sent = False
-    if user1 in config.wager_senders and user2 in config.wager_senders:
-        if config.wager_senders[user1] == amount:
+    wager_obj = config.wager_senders if reward == 'XRP' else config.wager_zrp_senders
+    if user1 in wager_obj:
+        if wager_obj[user1] == amount:
             user_sent = True
-        if config.wager_senders[user2] == amount:
+    if user2 in wager_obj:
+        if wager_obj[user2] == amount:
             opponent_sent = True
 
     return user_sent, opponent_sent
@@ -500,9 +513,16 @@ async def send_zrp(to: str, amount: float, sender):
                 )
                 account_info = await client.request(acc_info)
                 sequence = account_info.result["account_data"]["Sequence"]
-                # Load the sending account's secret and address from a wallet
                 sending_wallet = Wallet(seed=config.JACKPOT_SEED, sequence=sequence)
                 sending_address = config.JACKPOT_ADDR
+            elif sender == "wager":
+                acc_info = AccountInfo(
+                    account=config.WAGER_ADDR
+                )
+                account_info = await client.request(acc_info)
+                sequence = account_info.result["account_data"]["Sequence"] if wager_seq is None else wager_seq
+                sending_wallet = Wallet(seed=config.WAGER_SEED, sequence=sequence)
+                sending_address = config.WAGER_ADDR
             # Set the receiving address
             receiving_address = to
 
@@ -529,10 +549,14 @@ async def send_zrp(to: str, amount: float, sender):
             if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
                 if sender == 'block':
                     zrp_reward_seq = response.result['account_sequence_next']
+                if sender == 'wager':
+                    wager_seq = response.result['account_sequence_next']
                 return True
             elif response.result['engine_result'] in ["tefPAST_SEQ"]:
                 if sender == 'block':
                     zrp_reward_seq = response.result['account_sequence_next']
+                if sender == 'wager':
+                    wager_seq = response.result['account_sequence_next']
                 await asyncio.sleep(random.randint(1, 4))
             else:
                 await asyncio.sleep(random.randint(1, 4))
@@ -672,7 +696,7 @@ async def get_latest_nft_offers(address):
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.ISSUER['Zerpmon']))
 
-# asyncio.run(send_txn('rPRof1FAbAMsceVVWmpv2i8yh9MrrBkVAh', 1, 'wager'))
+# asyncio.run(send_txn('raUXAEo9dT6NWWDrpPs6muPQbmrAyxj7Xm', 1, 'wager'))
 # asyncio.run(send_zrp('rUpucKVa5Rvjmn8nL5aTKpEaBQUbXrZAcV', 66, 'safari'))
 
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))

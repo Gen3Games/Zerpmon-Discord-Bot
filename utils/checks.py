@@ -3,11 +3,19 @@ import time
 import nextcord
 import datetime
 import pytz
+from nextcord.ui import View
 
 import config
 import db_query
 from db_query import get_owned
 from utils import battle_function
+
+
+class CustomEmbed(nextcord.Embed):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.set_footer(text='Zerpmon',
+                        icon_url=config.ICON_URL)
 
 
 def convert_timestamp_to_hours_minutes(timestamp):
@@ -49,23 +57,26 @@ def get_next_ts():
 async def check_wager_entry(interaction: nextcord.Interaction, users):
     for owned_nfts in users:
         if owned_nfts['data'] is None:
-            await interaction.send(
-                f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet")
+            await interaction.edit_original_message(
+                content="Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", view=View())
             return False
 
         if len(owned_nfts['data']['zerpmons']) == 0:
-            await interaction.send(
-                f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing wager battles")
+            await interaction.edit_original_message(
+                content=f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing wager battles", view=View())
             return False
 
         if len(owned_nfts['data']['trainer_cards']) == 0:
-            await interaction.send(
-                f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing wager battles")
+            await interaction.edit_original_message(
+                content=f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing wager battles", view=View())
             return False
     return True
 
 
-def get_deck_embed(deck_type, owned_nfts, embed2):
+def get_deck_embed(deck_type, owned_nfts):
+    embed2 = CustomEmbed(title=f"**{deck_type.upper()}** Decks",
+                         color=0xff5252,
+                         )
     embed2.add_field(name='\u200b', value='\u200B', inline=False)
     for k, v in owned_nfts[f'{deck_type}_deck'].items():
         print(v)
@@ -79,7 +90,7 @@ def get_deck_embed(deck_type, owned_nfts, embed2):
             nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']]
             del new_v['trainer']
         for pos, sr in new_v.items():
-            nfts[str(pos)] = owned_nfts['zerpmons'][v[sr]]
+            nfts[str(pos)] = owned_nfts['zerpmons'][sr]
 
         if len(nfts) == 0:
             embed2.add_field(name=f"Sorry looks like you haven't selected any Zerpmon for {deck_type.title()} deck #{int(k) + 1}",
@@ -89,9 +100,12 @@ def get_deck_embed(deck_type, owned_nfts, embed2):
         else:
             msg_str = '> Battle Zerpmons:\n' \
                       f'> \n'
-            sorted_keys = sorted(nfts.keys(), key=lambda k: (k != "trainer", int(k) if k.isdigit() else float('inf')))
-            sorted_data = {k: nfts[k] for k in sorted_keys}
+            sorted_keys = sorted(nfts.keys(), key=lambda _k: (_k != "trainer", int(_k) if _k.isdigit() else float('inf')))
+            print(sorted_keys)
+            sorted_data = {_k: nfts[_k] for _k in sorted_keys}
+            print(sorted_data)
             for serial, nft in sorted_data.items():
+                print(serial)
                 if serial == 'trainer':
                     trainer = nft
                     my_button = f"https://xrp.cafe/nft/{trainer['token_id']}"
@@ -107,9 +121,10 @@ def get_deck_embed(deck_type, owned_nfts, embed2):
                               f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
                               f"> \n" + msg_str
                 else:
-                    msg_str += f'> {int(serial) + 1}. ⭐ {nft["name"]} ⭐\n'
+                    msg_str += f'> #{int(serial) + 1} ⭐ {nft["name"]} ⭐\n'
             embed2.add_field(name='\u200B', value=msg_str, inline=False)
             embed2.add_field(name='\u200b', value='\u200B', inline=False)
+    print(embed2.fields)
     return embed2
 
 

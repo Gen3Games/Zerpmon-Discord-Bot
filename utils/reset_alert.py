@@ -32,12 +32,15 @@ async def send_reset_message(client: nextcord.Client):
         if reset_time < 60:
             await asyncio.sleep(60)
             db_query.choose_gym_zerp()
-
+            gym_str = '\nLost Gyms and Gym Zerpmon refreshed for each Leader!\n'
+            if db_query.get_gym_reset() - time.time() < 60:
+                gym_str += '**Cleared Gyms** have been refreshed and progressed to next Stage as well!'
+                db_query.set_gym_reset()
             guilds = client.guilds
             for guild in guilds:
                 try:
                     channel = nextcord.utils.get(guild.channels, name="🌐│zerpmon-center")
-                    await channel.send('@everyone, Global Missions, Zerpmon, Store prices restored.')
+                    await channel.send('@everyone, Global Missions, Zerpmon, Store prices restored.' + gym_str)
                 except Exception as e:
                     logging.error(f'ERROR: {traceback.format_exc()}')
                 await asyncio.sleep(5)
@@ -46,12 +49,14 @@ async def send_reset_message(client: nextcord.Client):
                 if 'gym' in user:
                     won_gyms = user['gym']['won']
                     for gym, obj in won_gyms.items():
-                        if obj['next_battle_t'] < time.time() - 84600 and obj['stage'] > 1:
+                        if obj['next_battle_t'] < time.time() - 86400:
+                            db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True)
+                        else:
                             db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False)
                 if 'rank' in user:
                     rnk = user['rank']['tier']
                     decay_tiers = config.TIERS[-2:]
-                    if user['rank']['last_battle_t'] < time.time() - 84600 and rnk in decay_tiers:
+                    if user['rank']['last_battle_t'] < time.time() - 86400 and rnk in decay_tiers:
                         db_query.update_rank(user['discord_id'], win=False, decay=True)
         print('here')
         if next_run < time.time():

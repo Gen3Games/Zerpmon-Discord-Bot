@@ -4,8 +4,9 @@ import logging
 import random
 import time
 
+import pymongo
 import pytz
-from pymongo import MongoClient, ReturnDocument, DESCENDING
+from pymongo import MongoClient, ReturnDocument, DESCENDING, UpdateOne
 import config
 
 client = MongoClient(config.MONGO_URL)
@@ -701,19 +702,20 @@ def gym_refill(user_id):
     users_collection = db['users']
     old = users_collection.find_one({'discord_id': str(user_id)})
     addr = old['address']
-    del old['_id']
     if 'gym' in old:
         for i in old['gym']['won']:
             if old['gym']['won'][i]['lose_streak'] > 0:
                 old['gym']['won'][i]['next_battle_t'] = -1
-    r = users_collection.update_one({'discord_id': str(user_id)},
-                                    {'$set': old}, )
-    add_gym_refill_potion(addr, -1)
+                old['gym']['won'][i]['lose_streak'] -= 1
+        r = users_collection.update_one({'discord_id': str(user_id)},
+                                        {'$set': {'gym': old['gym']}}, )
+        add_gym_refill_potion(addr, -1)
 
-    if r.acknowledged:
-        return True
-    else:
-        return False
+        if r.acknowledged:
+            return True
+        else:
+            return False
+    return False
 
 
 def add_xrp(user_id, amount):
@@ -772,11 +774,13 @@ def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False) -> tuple:
     next_lvl = level_collection.find_one({'level': level})
     if 'level' in old and 'xp' in old:
 
-        vals = old['level'], old['xp'], next_lvl['xp_required'] if not get_candies else (next_lvl['xp_required'], old.get('white_candy', 0)),\
+        vals = old['level'], old['xp'], next_lvl['xp_required'] if not get_candies else (
+            next_lvl['xp_required'], old.get('white_candy', 0)), \
                last_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
                last_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
     else:
-        vals = 0, 0, next_lvl['xp_required'] if not get_candies else (next_lvl['xp_required'], old.get('white_candy', 0)),\
+        vals = 0, 0, next_lvl['xp_required'] if not get_candies else (
+            next_lvl['xp_required'], old.get('white_candy', 0)), \
                last_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
                last_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
 
@@ -855,7 +859,7 @@ def get_gym_leader(gym_type):
     return res
 
 
-def reset_gym(discord_id, gym_obj, gym_type, lost=True):
+def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
     users_collection = db['users']
     if gym_obj == {}:
         gym_obj = {
@@ -870,11 +874,11 @@ def reset_gym(discord_id, gym_obj, gym_type, lost=True):
             'gp': 0
         }
     else:
-        l_streak = 1 if gym_type not in gym_obj['won'] else gym_obj['won'][gym_type]['lose_streak'] + 1
+        l_streak = 1 if gym_type not in gym_obj['won'] else (gym_obj['won'][gym_type]['lose_streak'] + 1)
         gym_obj['won'][gym_type] = {
-            'stage': 1 if l_streak == 3 else (gym_obj['won'][gym_type]['stage'] if gym_type in gym_obj['won'] else 1),
+            'stage': 1 if l_streak == 4 else (gym_obj['won'][gym_type]['stage'] if gym_type in gym_obj['won'] else 1),
             'next_battle_t': get_next_ts(1) if lost else 0,
-            'lose_streak': 0 if l_streak == 3 else l_streak
+            'lose_streak': 0 if l_streak == 4 else (l_streak if skipped else l_streak - 1)
         }
     users_collection.update_one(
         {'discord_id': str(discord_id)},
@@ -889,7 +893,7 @@ def add_gp(discord_id, gym_obj, gym_type, stage):
             'won': {
                 gym_type: {
                     'stage': 2,
-                    'next_battle_t': get_next_ts(3),
+                    'next_battle_t': config.gym_main_reset,
                     'lose_streak': 0
                 }
             },
@@ -899,7 +903,7 @@ def add_gp(discord_id, gym_obj, gym_type, stage):
     else:
         gym_obj['won'][gym_type] = {
             'stage': stage + 1 if stage < 10 else 1,
-            'next_battle_t': get_next_ts(3),
+            'next_battle_t': config.gym_main_reset,
             'lose_streak': 0
         }
         gym_obj['gp'] += stage
@@ -1018,9 +1022,12 @@ def increase_lvl(user_id, zerpmon_name):
         next_lvl = level_collection.find_one({'level': level + 1}) if level < 30 else None
 
         if next_lvl:
-            zerpmon_collection.update_one({'name': zerpmon_name},
-                                          {'$set': {'level': next_lvl['level'], 'xp': xp},
-                                           '$inc': {'licorice': 1}})
+            new_doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name},
+                                                             {'$set': {'level': next_lvl['level'], 'xp': xp},
+                                                              '$inc': {'licorice': 1}},
+                                                             return_document=ReturnDocument.AFTER)
+            if next_lvl['level'] >= 10 and next_lvl['level'] % 10 == 0:
+                update_moves(new_doc)
             add_revive_potion(user_address, next_lvl['revive_potion_reward'])
             add_mission_potion(user_address, next_lvl['mission_potion_reward'])
 
@@ -1164,6 +1171,33 @@ def get_zrp_stats():
     return obj
 
 
+def get_gym_reset():
+    stats_col = db['stats_log']
+    reset_t = stats_col.find_one({'name': 'zrp_stats'}).get('gym_reset_t', 0)
+    if reset_t < time.time() - 3600:
+        stats_col.update_one({
+            'name': 'zrp_stats'
+        },
+            {'$set': {'gym_reset_t': get_next_ts(2)}}, upsert=True
+        )
+        return get_next_ts(2)
+    else:
+        return reset_t
+
+
+def set_gym_reset():
+    stats_col = db['stats_log']
+    reset_t = stats_col.find_one({'name': 'zrp_stats'}).get('gym_reset_t', 0)
+    if reset_t < time.time() - 3600:
+        reset_t = get_next_ts(4) if reset_t > time.time() else get_next_ts(3)
+        stats_col.update_one({
+            'name': 'zrp_stats'
+        },
+            {'$set': {'gym_reset_t': reset_t}}, upsert=True
+        )
+        config.gym_main_reset = reset_t
+
+
 def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_amount=0):
     stats_col = db['stats_log']
     query = {'$inc': {'burnt': burn_amount, 'distributed': distributed_amount, 'jackpot_amount': jackpot_amount}}
@@ -1177,3 +1211,41 @@ def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_
     },
         query, upsert=True
     )
+
+
+"""BATTLE LOGS"""
+
+
+def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, user2_team, winner, battle_type):
+    battle_log = db['battle_logs']
+    bulk_operations = []
+    if user1_id is not None:
+        user1_update = UpdateOne(
+            {'discord_id': str(user1_id)},
+            {'$push': {'matches': {'ts': int(time.time()), 'won': winner == 1, 'opponent': user2_name, 'battle_type': battle_type,
+                                   'data': {'teamA': user1_team, 'teamB': user2_team}}}},
+            upsert=True
+        )
+        bulk_operations.append(user1_update)
+
+    if user2_id is not None:
+        user2_update = UpdateOne(
+            {'discord_id': str(user2_id)},
+            {'$push': {'matches': {'ts': int(time.time()), 'won': winner == 2, 'opponent': user1_name, 'battle_type': battle_type,
+                                   'data': {'teamA': user2_team, 'teamB': user1_team}}}},
+            upsert=True
+        )
+        bulk_operations.append(user2_update)
+
+    battle_log.bulk_write(bulk_operations)
+
+    if user1_id is not None:
+        battle_log.update_one({'discord_id': str(user1_id)}, {'$push': {'matches': {'$each': [], '$slice': -10}}})
+
+    if user2_id is not None:
+        battle_log.update_one({'discord_id': str(user2_id)}, {'$push': {'matches': {'$each': [], '$slice': -10}}})
+
+
+def get_battle_log(user1_id):
+    battle_log = db['battle_logs']
+    return battle_log.find_one({'discord_id': str(user1_id)})
