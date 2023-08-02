@@ -3,7 +3,7 @@ import time
 
 JSON_FILE = "static/auction.json"
 
-def register_auction(nft_id, price, duration, duration_type,name,endtime,currency,msgid):
+def register_auction(nft_id, price, duration, duration_type,name,endtime,currency,msgid,channelid):
     with open(JSON_FILE, "r") as f:
         data = json.load(f) 
         data["auctions"].append({ 
@@ -16,7 +16,9 @@ def register_auction(nft_id, price, duration, duration_type,name,endtime,currenc
             "name": name,
             "bids_track": [], #list of dicts, each dict has bidder and bid amount
             "currency": currency,
-            "msgid": msgid
+            "msgid": msgid,
+            "channelid": channelid,
+            "announces": [False,False,False]
         })
     with open(JSON_FILE, "w") as f:
         json.dump(data, f, indent=4, sort_keys=True)
@@ -56,6 +58,16 @@ def update_auction_endtime(name, endtime):
         for auction in data["auctions"]:
             if auction["name"] == name:
                 auction["end_time"] = endtime
+                break
+    with open(JSON_FILE, "w") as f:
+        json.dump(data, f, indent=4, sort_keys=True)
+
+def update_auction_announces(name, announces):
+    with open(JSON_FILE, "r") as f:
+        data = json.load(f)
+        for auction in data["auctions"]:
+            if auction["name"] == name:
+                auction["announces"] = announces
                 break
     with open(JSON_FILE, "w") as f:
         json.dump(data, f, indent=4, sort_keys=True)
