@@ -11,7 +11,7 @@ import nextcord
 from nextcord import SlashOption, ButtonStyle
 from nextcord.ui import Button, View
 import config
-from nextcord.ext import commands
+from nextcord.ext import commands,tasks
 import xumm_functions
 import xrpl_functions
 import db_query
@@ -30,6 +30,51 @@ def start_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
 
+@tasks.loop(seconds=10) 
+async def check_auction():
+    print("checking auctions")
+    aucs = auction_functions.get_auctions()
+    if len(aucs) == 0:
+        return
+    for auc in aucs:
+        auc_channel = await client.fetch_channel(auc["channelid"])
+        print(f"checking {auc['name']}")
+        time_left = auc["end_time"] - int(time.time())
+        if time_left <= 0:
+            auc_msg = await auc_channel.fetch_message(auc["msgid"])
+            await auc_msg.edit(content="Auction has ended!\n\n**Winner:** " + f"<@{auc['bids_track'][-1]['bidder']}>" + "\n**Bid:** " + str(auc["bids_track"][-1]["bid"]) + " " + auc["currency"])
+            # await auc_channel.send("Congratulations, " + f"<@{auc['bids_track'][-1]['bidder']}>" + "!")
+            embed = nextcord.Embed(title=f"{auc['name']} Auction Ended", description=f"Congratulations, <@{auc['bids_track'][-1]['bidder']}>! You won the auction for {auc['name']} at {auc['bids_track'][-1]['bid']} {auc['currency']}!", color=0x00ff00)
+            nftData = xrpl_functions.get_nft_metadata_by_id(auc["nft_id"])["metadata"]
+            image = nftData["image"]
+            image = image.replace("ipfs://", "https://cloudflare-ipfs.com/ipfs/")
+            embed.set_image(url=image)
+            await auc_channel.send(embed=embed, content=f"<@{auc['bids_track'][-1]['bidder']}> congratulations!\n<@&{1135412428163788921}>")
+            uAddress = db_query.get_owned(auc['bids_track'][-1]['bidder'])["address"]
+            auction_functions.update_to_be_claimed(auc['name'], auc['bids_track'][-1]['bidder'], uAddress,auction_functions.get_auction_by_name(auc['name'])["nft_id"], auc["currency"],auc["bids_track"][-1]["bid"])
+            auction_functions.delete_auction(auc["name"])
+        pv_ann = auc["announces"] #type
+        if time_left <= 600 and time_left > 180 and pv_ann[0] == False:
+            await auc_channel.send(f"Only 10 minutes left in the auction!\n<@&{1135412428163788921}>")
+            pv_ann[0] = True
+        elif time_left <= 180 and time_left > 60 and pv_ann[1] == False:
+            await auc_channel.send(f"Only 3 minutes left in the auction!\n<@&{1135412428163788921}>")
+            pv_ann[1] = True
+        elif time_left <= 60 and time_left > 10 and pv_ann[2] == False:
+            await auc_channel.send(f"Only 1 minute left in the auction!\n<@&{1135412428163788921}>")
+            pv_ann[2] = True
+        elif time_left <= 10 and time_left > 0:
+            await auc_channel.send(f"Final countdown! Auction ends in 10 seconds!\n<@&{1135412428163788921}>")
+            while True:
+                await asyncio.sleep(2)
+                #get the latest time left
+                auc = auction_functions.get_auction_by_name(auc["name"])
+                time_left = auc["end_time"] - int(time.time())
+                if time_left <= 10 and time_left > 0:
+                    await auc_channel.send("Auction ends in " + str(time_left) + " seconds!")
+                else:
+                    break
+        auction_functions.update_auction_announces(auc["name"], pv_ann)
 
 # create a new event loop
 new_loop = asyncio.new_event_loop()
@@ -70,6 +115,8 @@ async def on_ready():
     print('Bot connected to Discord!')
     for guild in client.guilds:
         print(guild.name)
+    if not check_auction.is_running():
+        check_auction.start()
 
 
 @client.event
@@ -80,7 +127,8 @@ async def on_disconnect():
 @client.event
 async def on_resumed():
     print('Bot resumed connection with Discord.')
-
+    if not check_auction.is_running():
+        check_auction.start()
 
 @client.slash_command(name="ping", description="Ping the bot to check if it's online")
 async def ping(interaction: nextcord.Interaction):
@@ -882,19 +930,13 @@ async def show_deck(interaction: nextcord.Interaction):
     if 'battle_deck' not in owned_nfts:
         pass
     else:
-        embed2 = CustomEmbed(title=f"**Battle** Decks",
-                             color=0xff5252,
-                             )
-        embed2 = checks.get_deck_embed('battle', owned_nfts, embed2)
+        embed2 = checks.get_deck_embed('battle', owned_nfts)
         embeds.append(embed2)
     if 'gym_deck' not in owned_nfts:
         pass
     else:
-        embed2 = CustomEmbed(title=f"**Gym** Decks",
-                             color=0xff5252,
-                             )
-        embed2 = checks.get_deck_embed('gym', owned_nfts, embed2)
-        embeds.append(embed2)
+        embed3 = checks.get_deck_embed('gym', owned_nfts)
+        embeds.append(embed3)
     await msg.edit(
         content="FOUND" if found else "No deck found try to use `/add battle` or `/add mission` to create now"
         , embeds=embeds, )
@@ -1022,8 +1064,6 @@ async def revive_potion(interaction: nextcord.Interaction, quantity: int):
     execute_before_command(interaction)
 
     # Sanity checks
-
-    await interaction.send("Please wait...", ephemeral=True)
     if quantity <= 0:
         await interaction.send(
             f"Sorry, the quantity can't be less than 1",
@@ -1038,7 +1078,6 @@ async def mission_refill(interaction: nextcord.Interaction, quantity: int):
     execute_before_command(interaction)
 
     # Sanity checks
-    await interaction.send("Please wait...", ephemeral=True)
     if quantity <= 0:
         await interaction.send(
             f"Sorry, the quantity can't be less than 1",
@@ -1164,6 +1203,10 @@ async def wager_battle(interaction: nextcord.Interaction):
 
 @wager_battle.subcommand(description="Battle by waging equal amounts of XRP (Winner takes all)")
 async def xrp(interaction: nextcord.Interaction, amount: int,
+              reward: str = SlashOption(
+                  name="reward",
+                  choices={"XRP": 'XRP', "ZRP": 'ZRP'},
+              ),
               opponent: Optional[nextcord.Member] = SlashOption(required=True),
               type: int = SlashOption(
                   name="picker",
@@ -1173,11 +1216,11 @@ async def xrp(interaction: nextcord.Interaction, amount: int,
     execute_before_command(interaction)
     user_id = interaction.user.id
     # Sanity checks
-
+    await interaction.response.defer(ephemeral=True)
     channel_clean = battle_function.check_battle_happening(interaction.channel_id)
     if not channel_clean:
-        await interaction.send(f"Please wait, one battle is already taking place in this channel.",
-                               ephemeral=True)
+        await interaction.edit_original_message(
+            content=f"Please wait, one battle is already taking place in this channel.")
         return
 
     user_owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
@@ -1199,10 +1242,9 @@ async def xrp(interaction: nextcord.Interaction, amount: int,
     # Sanity checks
 
     if user_id == opponent.id:
-        await interaction.send(f"You want to battle yourself 🥲, sorry that's not allowed.")
+        await interaction.edit_original_message(content="You want to battle yourself 🥲, sorry that's not allowed.")
         return
 
-    await interaction.send('Checking ...', ephemeral=True)
     proceed = await checks.check_wager_entry(interaction, [user_owned_nfts, opponent_owned_nfts])
     if not proceed:
         return
@@ -1210,17 +1252,20 @@ async def xrp(interaction: nextcord.Interaction, amount: int,
     #  Proceed with the challenge if check success
 
     embed = CustomEmbed(title=f"Battle conditions met **{type}v{type}**", color=0x01f39d,
-                        description=f'Please send over the required `{amount} XRP` to Bot Wallet\n'
+                        description=f'Please send over the required `{amount} {reward}` to Bot Wallet\n'
                                     f'{user_mention}\n'
                                     f'{oppo_mention}\n')
     embed.set_footer(text='Note: Amount will get distributed to the Winner.\n'
-                          'If battle timed out XRP will be automatically returned within a few minutes')
+                          f'If battle timed out {reward} will be automatically returned within a few minutes')
 
     async def button_callback(_i: nextcord.Interaction, amount):
         if _i.user.id in [user_id, opponent.id]:
             await _i.send(content="Generating transaction QR code...", ephemeral=True)
             user_address = db_query.get_owned(_i.user.id)['address']
-            uuid, url, href = await xumm_functions.gen_txn_url(config.WAGER_ADDR, user_address, amount * 10 ** 6)
+            if reward == 'XRP':
+                uuid, url, href = await xumm_functions.gen_txn_url(config.WAGER_ADDR, user_address, amount * 10 ** 6)
+            else:
+                uuid, url, href = await xumm_functions.gen_zrp_txn_url(config.WAGER_ADDR, user_address, amount)
             embed = CustomEmbed(color=0x01f39d,
                                 title=f"Please sign the transaction using this QR code or click here.",
                                 url=href)
@@ -1229,17 +1274,19 @@ async def xrp(interaction: nextcord.Interaction, amount: int,
 
             await _i.send(embed=embed, ephemeral=True, )
 
-    button = Button(label="SEND XRP", style=ButtonStyle.green)
+    button = Button(label=f"SEND {reward}", style=ButtonStyle.green)
     view = View()
     view.add_item(button)
     view.timeout = 120
     button.callback = lambda _i: button_callback(_i, amount)
 
     if user_id in config.ongoing_battles or opponent.id in config.ongoing_battles:
-        await interaction.send(f"Please wait, one battle is already taking place for either you or your Opponent.",
-                               ephemeral=True)
+        await interaction.edit_original_message(
+            content="Please wait, one battle is already taking place for either you or your Opponent.",
+            )
         return
     msg = await interaction.channel.send(embed=embed, view=view)
+
     config.ongoing_battles.append(user_id)
     config.ongoing_battles.append(opponent.id)
 
@@ -1256,13 +1303,14 @@ async def xrp(interaction: nextcord.Interaction, amount: int,
 
     await asyncio.sleep(20)
     # Sleep for a while and notify timeout
-
+    send_amount = xrpl_ws.send_txn if reward == 'XRP' else xrpl_ws.send_zrp
     try:
         user_sent, u_msg_sent = False, False
         opponent_sent, o_msg_sent = False, False
         for i in range(12):
             user_sent, opponent_sent = await xrpl_ws.check_amount_sent(amount, user_owned_nfts['data']['address'],
-                                                                       opponent_owned_nfts['data']['address'])
+                                                                       opponent_owned_nfts['data']['address'],
+                                                                       reward=reward)
             if user_sent and not u_msg_sent:
                 embed.add_field(name=f'{user_mention} ✅', value='\u200B')
                 await msg.edit(embed=embed)
@@ -1275,12 +1323,12 @@ async def xrp(interaction: nextcord.Interaction, amount: int,
                 winner = await battle_function.proceed_battle(msg, config.wager_battles[msg.id], type)
                 user_sent, opponent_sent = False, False
                 if winner == 1:
-                    await msg.reply(f'Sending transaction for **`{amount * 2} XRP`** to {user_mention}')
-                    saved = await xrpl_ws.send_txn(user_owned_nfts['data']['address'],
+                    await msg.reply(f'Sending transaction for **`{amount * 2} {reward}`** to {user_mention}')
+                    saved = await send_amount(user_owned_nfts['data']['address'],
                                                    amount * 2, 'wager')
                 else:
-                    await msg.reply(f'Sending transaction for **`{amount * 2} XRP`** to {oppo_mention}')
-                    saved = await xrpl_ws.send_txn(opponent_owned_nfts['data']['address'],
+                    await msg.reply(f'Sending transaction for **`{amount * 2} {reward}`** to {oppo_mention}')
+                    saved = await send_amount(opponent_owned_nfts['data']['address'],
                                                    amount * 2, 'wager')
                 if not saved:
                     await msg.reply(
@@ -1288,23 +1336,29 @@ async def xrp(interaction: nextcord.Interaction, amount: int,
 
                 else:
                     await msg.reply(
-                        f"**Successfully** sent `{amount * 2}` XRP")
-                    del config.wager_senders[user_owned_nfts['data']['address']]
-                    del config.wager_senders[opponent_owned_nfts['data']['address']]
+                        f"**Successfully** sent `{amount * 2}` {reward}")
+                    wager_obj = config.wager_senders if reward == 'XRP' else config.wager_zrp_senders
+
+                    del wager_obj[user_owned_nfts['data']['address']]
+                    del wager_obj[opponent_owned_nfts['data']['address']]
                 break
             await asyncio.sleep(10)
 
         if user_sent or opponent_sent:
             await msg.reply(
-                f"Preparing to return XRP to {oppo_mention if opponent_sent else user_mention}.")
+                f"Preparing to return {reward} to {oppo_mention if opponent_sent else user_mention}.")
         # If users didn't send the wager
         for addr in config.wager_senders.copy():
             if addr in [user_owned_nfts['data']['address'], opponent_owned_nfts['data']['address']]:
-                await xrpl_ws.send_txn(addr, config.wager_senders[addr], 'wager')
-                del config.wager_senders[addr]
+                await send_amount(addr, config.wager_senders[addr],
+                                       'wager')
+                if reward == 'XRP':
+                    del config.wager_senders[addr]
+                else:
+                    del config.wager_zrp_senders[addr]
 
     except Exception as e:
-        logging.error(f"ERROR during wager XRP battle: {e}\n{traceback.format_exc()}")
+        logging.error(f"ERROR during wager {reward} battle: {e}\n{traceback.format_exc()}")
     finally:
 
         del config.wager_battles[msg.id]
@@ -1325,15 +1379,18 @@ async def nft(interaction: nextcord.Interaction, your_nft_id: str, opponent_nft_
     user_id = interaction.user.id
     # Sanity checks
 
+    await interaction.response.defer(ephemeral=True)
     if user_id in config.ongoing_battles or opponent.id in config.ongoing_battles:
-        await interaction.send(f"Please wait, one battle is already taking place for either you or your Opponent.",
-                               ephemeral=True)
+        await interaction.edit_original_message(
+            content="Please wait, one battle is already taking place for either you or your Opponent.",
+            )
         return
 
     channel_clean = battle_function.check_battle_happening(interaction.channel_id)
     if not channel_clean:
-        await interaction.send(f"Please wait, one battle is already taking place in this channel.",
-                               ephemeral=True)
+        await interaction.edit_original_message(
+            content=f"Please wait, one battle is already taking place in this channel.",
+            )
         return
 
     user_owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
@@ -1354,10 +1411,9 @@ async def nft(interaction: nextcord.Interaction, your_nft_id: str, opponent_nft_
     # Sanity checks
 
     if user_id == opponent.id:
-        await interaction.send(f"You want to battle yourself 🥲, sorry that's not allowed.")
+        await interaction.edit_original_message(content=f"You want to battle yourself 🥲, sorry that's not allowed.")
         return
 
-    await interaction.send('Checking ...', ephemeral=True)
     proceed = await checks.check_wager_entry(interaction, [user_owned_nfts, opponent_owned_nfts])
     if not proceed:
         return
@@ -1483,33 +1539,41 @@ async def nft(interaction: nextcord.Interaction, your_nft_id: str, opponent_nft_
 
 @wager_battle.subcommand(name='battle_royale',
                          description="Battle Royale by waging equal amounts of XRP (Winner takes all)")
-async def battle_royale_wager(interaction: nextcord.Interaction, amount: int):
+async def battle_royale_wager(interaction: nextcord.Interaction, amount: int,
+                              reward: str = SlashOption(
+                                  name="reward",
+                                  choices={"XRP": 'XRP', "ZRP": 'ZRP'},
+                              ),
+                              ):
     execute_before_command(interaction)
-    await interaction.send("Checking conditions...", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
     if config.battle_royale_started or len(config.battle_royale_participants) > 0:
-        await interaction.send("Please wait another Battle Royale is already in progress.")
+        await interaction.edit_original_message(content="Please wait another Battle Royale is already in progress.")
         return
     channel_clean = battle_function.check_battle_happening(interaction.channel_id)
     if not channel_clean:
-        await interaction.send("Please wait another Battle is already taking place in this channel.")
+        await interaction.edit_original_message(
+            content="Please wait another Battle is already taking place in this channel.")
         return
 
     config.battle_royale_started = True
 
-    button = Button(label="SEND XRP", style=ButtonStyle.green)
+    button = Button(label=f"SEND {reward}", style=ButtonStyle.green)
     view = View()
     view.add_item(button)
     view.timeout = 300
     msg = await interaction.channel.send(
         embed=CustomEmbed(description="**Wager Battle Royale** started\n"
-                                      f'Please send over the required `{amount} XRP` to Bot Wallet to participate\n'
+                                      f'Please send over the required `{amount} {reward}` to Bot Wallet to participate\n'
                                       f"Time left: `{5 * 60}s`", colour=0xf70776), view=view)
 
     async def wager_battle_r_callback(_i: nextcord.Interaction, amount):
         user_id = _i.user.id
+        await _i.response.defer(ephemeral=True)
         if user_id in config.ongoing_battles:
-            await interaction.send(f"Please wait, one battle is already taking place for either you or your Opponent.",
-                                   ephemeral=True)
+            await _i.edit_original_message(
+                content=f"Please wait, one battle is already taking place for either you or your Opponent.", view=View()
+                )
             return
         if user_id:
             user = db_query.get_owned(user_id)
@@ -1518,30 +1582,34 @@ async def battle_royale_wager(interaction: nextcord.Interaction, amount: int):
                 user_owned_nfts["data"].get("flair", [])) > 0 else ''
             user_owned_nfts['user'] += u_flair
             user_mention = _i.user.mention + u_flair
-            proceed = await checks.check_wager_entry(interaction, [user_owned_nfts])
+            proceed = await checks.check_wager_entry(_i, [user_owned_nfts])
             if not proceed:
                 return
-            await _i.send(content="Generating transaction QR code...", ephemeral=True)
+            await _i.edit_original_message(content="Generating transaction QR code...", view=View())
             user_address = user_owned_nfts["data"]['address']
-            uuid, url, href = await xumm_functions.gen_txn_url(config.WAGER_ADDR, user_address, amount * 10 ** 6)
+            if reward == 'XRP':
+                uuid, url, href = await xumm_functions.gen_txn_url(config.WAGER_ADDR, user_address, amount * 10 ** 6)
+            else:
+                uuid, url, href = await xumm_functions.gen_zrp_txn_url(config.WAGER_ADDR, user_address, amount)
             embed = CustomEmbed(color=0x01f39d,
                                 title=f"Please sign the transaction using this QR code or click here.",
                                 url=href)
 
             embed.set_image(url=url)
 
-            await _i.send(embed=embed, ephemeral=True, )
+            await _i.edit_original_message(content='', embed=embed)
             addr = user['address']
             for i in range(15):
-                if addr in config.wager_senders:
-                    if config.wager_senders[addr] == amount and user_id not in [i['id'] for i in
+                wager_obj = config.wager_senders if reward == 'XRP' else config.wager_zrp_senders
+                if addr in wager_obj:
+                    if wager_obj[addr] == amount and user_id not in [i['id'] for i in
                                                                                 config.battle_royale_participants]:
                         config.battle_royale_participants.append(
                             {'id': user_id, 'username': user_mention, 'address': addr})
-                        del config.wager_senders[addr]
-                        await _i.send(embed=CustomEmbed(title="**Success**",
+                        del wager_obj[addr]
+                        await _i.edit_original_message(content='', embed=CustomEmbed(title="**Success**",
                                                         description=f"Entered in Wager Battle Royale",
-                                                        ), ephemeral=True)
+                                                        ))
                         break
                 await asyncio.sleep(20)
 
@@ -1554,15 +1622,16 @@ async def battle_royale_wager(interaction: nextcord.Interaction, amount: int):
                 break
             await msg.edit(
                 embed=CustomEmbed(description=f"**Wager Battle Royale** started\n"
-                                              f'Please send over the required `{amount} XRP` to Bot Wallet to participate\n'
+                                              f'Please send over the required `{amount} {reward}` to Bot Wallet to participate\n'
                                               f"Time left: `{5 * 60 - ((i + 1) * 10)}s`\n"
                                               f"Participants: `{len(config.battle_royale_participants)}`\n"
-                                              f"Winner gets: `{len(config.battle_royale_participants) * amount} XRP`",
+                                              f"Winner gets: `{len(config.battle_royale_participants) * amount} {reward}`",
                                   colour=0xf70776))
+        send_amount = xrpl_ws.send_txn if reward == 'XRP' else xrpl_ws.send_zrp
         if len(config.battle_royale_participants) <= 1:
             await msg.edit(embed=CustomEmbed(description=f"Battle **timed out** <t:{int(time.time())}:R>"), view=None)
             for user in config.battle_royale_participants:
-                await xrpl_ws.send_txn(user["address"],
+                await send_amount(user["address"],
                                        amount, 'wager')
             config.battle_royale_participants = []
             config.battle_royale_started = False
@@ -1600,10 +1669,10 @@ async def battle_royale_wager(interaction: nextcord.Interaction, amount: int):
                 elif winner == 2:
                     config.battle_royale_participants.append(random_ids[1])
             except Exception as e:
-                logging.error(f"ERROR during friendly battle: {e}\n{traceback.format_exc()}")
-                await interaction.send('Something went wrong during this match, returning both participants `XRP`')
+                logging.error(f"ERROR during wager battle Royale: {e}\n{traceback.format_exc()}")
+                await interaction.send(f'Something went wrong during this match, returning both participants `{reward}`')
                 for user in [random_ids[0], random_ids[1]]:
-                    await xrpl_ws.send_txn(user["address"],
+                    await send_amount(user["address"],
                                            amount, 'wager')
                     total_amount -= amount
             finally:
@@ -1615,8 +1684,8 @@ async def battle_royale_wager(interaction: nextcord.Interaction, amount: int):
             f"**CONGRATULATIONS** **{config.battle_royale_participants[0]['username']}** on winning the Wager Battle Royale!")
 
         await msg.reply(
-            f'Sending transaction for **`{total_amount} XRP`** to {config.battle_royale_participants[0]["username"]}')
-        saved = await xrpl_ws.send_txn(config.battle_royale_participants[0]["address"],
+            f'Sending transaction for **`{total_amount} {reward}`** to {config.battle_royale_participants[0]["username"]}')
+        saved = await send_amount(config.battle_royale_participants[0]["address"],
                                        total_amount, 'wager')
         if not saved:
             await msg.reply(
@@ -1624,7 +1693,7 @@ async def battle_royale_wager(interaction: nextcord.Interaction, amount: int):
 
         else:
             await msg.reply(
-                f"**Successfully** sent `{total_amount}` XRP")
+                f"**Successfully** sent `{total_amount}` {reward}")
     finally:
         config.battle_royale_participants = []
         config.battle_royale_started = False
@@ -2309,8 +2378,7 @@ async def view_rank(interaction: nextcord.Interaction):
 @client.slash_command(name="auction", description="Create an auction")
 @commands.has_permissions(administrator=True)
 async def auction(interaction: nextcord.Interaction, nftid: str, price: int, duration: int,
-                  duration_type: Literal["hours", "days"], currency: Literal["XRP", "ZRP"]):
-    # check if user is admin
+                  duration_type: Literal["hours", "days"], currency: Literal["XRP", "ZRP"],quick:bool=False):
     await interaction.response.defer(ephemeral=True)
     nftid = nftid.strip()
     nftData = xrpl_functions.get_nft_metadata_by_id(nftid)
@@ -2324,6 +2392,8 @@ async def auction(interaction: nextcord.Interaction, nftid: str, price: int, dur
     else:
         await interaction.edit_original_message(content=f"Invalid duration type. Must be hours or days")
         return
+    if quick: #15 min auction
+        duration = 900
     nftData = nftData["metadata"]
     name = nftData["name"]
     allAuctionNames = auction_functions.get_auctions_names()
@@ -2335,6 +2405,7 @@ async def auction(interaction: nextcord.Interaction, nftid: str, price: int, dur
     # endTime = curTime + duration - 3000
     endTime = curTime + duration
     image = image.replace("ipfs://", "https://cloudflare-ipfs.com/ipfs/")
+    print("Image: ", image)
     embed = nextcord.Embed(title=f"{name} is up for auction!",
                            description=f"{name} is up for auction, use /bid to bid on it!",
                            color=random.randint(0, 0xffffff))
@@ -2342,36 +2413,36 @@ async def auction(interaction: nextcord.Interaction, nftid: str, price: int, dur
     embed.add_field(name="End Time", value=f"<t:{endTime}:R>")
     embed.add_field(name="Floor Price", value=f"{price} {currency}")
     await interaction.edit_original_message(content="created a new auction!")
-    msg = await interaction.channel.send(embed=embed)
-    auction_functions.register_auction(nftid, price, duration, duration_type, name, endTime, currency, msg.id)
+    msg = await interaction.channel.send(embed=embed,content=f"<@&{1135412428163788921}> Gather up! It's time for an auction!")
+    auction_functions.register_auction(nftid, price, duration, duration_type, name, endTime, currency, msg.id,msg.channel.id)
     # start a timer to end the auction
-    while True:
-        # check if auction still exists
-        if name not in auction_functions.get_auctions_names():
-            break
-        curTime = int(time.time())
-        endTime = auction_functions.get_auction_by_name(name)["end_time"]
-        if curTime >= endTime:
-            break
-        await asyncio.sleep(30)
-    # end the auction
-    highestBidder = auction_functions.get_highest_bidder(name)
-    if highestBidder is None:
-        await interaction.channel.send(content=f"The auction for {name} has ended, but no one bid on it!")
-        return
-    highestBid = auction_functions.get_highest_bid(name)
-    embed = nextcord.Embed(title=f"{name} auction has ended!",
-                           description=f"{name} auction has ended, <@{highestBidder}> won it with a bid of {highestBid} {currency}!",
-                           color=random.randint(0, 0xffffff))
-    embed.set_image(url=image)
-    embed.add_field(name="Floor Price", value=f"{price} {currency}")
-    embed.add_field(name="Winner", value=f"<@{highestBidder}>")
-    embed.add_field(name="Winning Bid", value=f"{highestBid} {currency}")
-    await interaction.channel.send(embed=embed)
-    uAddress = db_query.get_owned(highestBidder)["address"]
-    auction_functions.update_to_be_claimed(name, highestBidder, uAddress,
-                                           auction_functions.get_auction_by_name(name)["nft_id"], currency, highestBid)
-    auction_functions.delete_auction(name)
+    # while True:
+    #     # check if auction still exists
+    #     if name not in auction_functions.get_auctions_names():
+    #         break
+    #     curTime = int(time.time())
+    #     endTime = auction_functions.get_auction_by_name(name)["end_time"]
+    #     if curTime >= endTime:
+    #         break
+    #     await asyncio.sleep(30)
+    # # end the auction
+    # highestBidder = auction_functions.get_highest_bidder(name)
+    # if highestBidder is None:
+    #     await interaction.channel.send(content=f"The auction for {name} has ended, but no one bid on it!")
+    #     return
+    # highestBid = auction_functions.get_highest_bid(name)
+    # embed = nextcord.Embed(title=f"{name} auction has ended!",
+    #                        description=f"{name} auction has ended, <@{highestBidder}> won it with a bid of {highestBid} {currency}!",
+    #                        color=random.randint(0, 0xffffff))
+    # embed.set_image(url=image)
+    # embed.add_field(name="Floor Price", value=f"{price} {currency}")
+    # embed.add_field(name="Winner", value=f"<@{highestBidder}>")
+    # embed.add_field(name="Winning Bid", value=f"{highestBid} {currency}")
+    # await interaction.channel.send(embed=embed)
+    # uAddress = db_query.get_owned(highestBidder)["address"]
+    # auction_functions.update_to_be_claimed(name, highestBidder, uAddress,
+    #                                        auction_functions.get_auction_by_name(name)["nft_id"], currency, highestBid)
+    # auction_functions.delete_auction(name)
 
 
 @client.slash_command(name="bid", description="Bid on an auction")
@@ -2388,6 +2459,13 @@ async def bid(
         return
     curTime = int(time.time())
     auc = auction_functions.get_auction_by_name(name)
+    chan = interaction.guild.get_channel(auc["channelid"])
+    if chan is None:
+        await interaction.edit_original_message(content=f"Could not find auction with name {name}")
+        return
+    if interaction.channel.id != chan.id:
+        await interaction.edit_original_message(content=f"You must bid in the same channel as the auction!<#{chan.id}>")
+        return
     endTime = auc["end_time"]
     floor = auc["floor"]
     msgid = auc["msgid"]
@@ -2477,7 +2555,6 @@ async def auctions(interaction: nextcord.Interaction):
         embed.add_field(name=name, value=f"Highest Bid: {highestBid} {currency}\nEnd Time: <t:{endTime}:R>")
     await interaction.edit_original_message(content=f"Here are all the current auctions!", embed=embed)
 
-
 @client.slash_command(name="highestbid", description="Get the highest bid on an auction")
 async def highestbid(interaction: nextcord.Interaction, *, name: str):
     await interaction.response.defer(ephemeral=True)
@@ -2493,14 +2570,18 @@ async def highestbid(interaction: nextcord.Interaction, *, name: str):
     await interaction.edit_original_message(
         content=f"The highest bid on {name} is {highestBid} {auctionn['currency']} by <@{auction_functions.get_highest_bidder(name)}>!")
 
-
 @client.slash_command(name="forceend", description="Force an auction to end")
 @commands.has_permissions(administrator=True)
-async def forceend(interaction: nextcord.Interaction, *, name: str):
+async def forceend(interaction: nextcord.Interaction, *, name: str,claimable: bool = True):
     await interaction.response.defer(ephemeral=True)
     name = name.strip()
     if name not in auction_functions.get_auctions_names():
         await interaction.edit_original_message(content=f"Could not find auction with name {name}")
+        return
+    if claimable == False:
+        #delete auction without announcing winner
+        auction_functions.delete_auction(name)
+        await interaction.edit_original_message(content=f"The auction for {name} has been ended!")
         return
     highestBidder = auction_functions.get_highest_bidder(name)
     if highestBidder is None:
@@ -2532,7 +2613,6 @@ async def forceend(interaction: nextcord.Interaction, *, name: str):
                                            auction_functions.get_auction_by_name(name)["nft_id"], currency, highestBid)
     auction_functions.delete_auction(name)
 
-
 @client.slash_command(name="check-claims", description="Check if you have any claims")
 async def check_claims(interaction: nextcord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -2556,7 +2636,6 @@ async def check_claims(interaction: nextcord.Interaction):
     await interaction.edit_original_message(
         content=f"Here are all your claims!\nUse `/claim` + name of the nft to claim it!", embed=embed)
 
-
 @client.slash_command(name="claim", description="Claim an auction you won")
 async def claim(interaction: nextcord.Interaction, *, name: str):
     await interaction.response.defer(ephemeral=True)
@@ -2565,21 +2644,22 @@ async def claim(interaction: nextcord.Interaction, *, name: str):
     if tbc is None:
         await interaction.edit_original_message(content=f"Could not find claim with name {name}")
         return
-    if tbc["userid"] != interaction.user.id:
-        await interaction.edit_original_message(content=f"You can't claim this!")
-        return
+    # if tbc["userid"] != interaction.user.id:
+    #     await interaction.edit_original_message(content=f"You can't claim this!")
+    #     return
     if tbc["currency"] == "XRP":
         offer, offerhash = await xrpl_ws.create_nft_offer('reward', tbc["nftid"], xrp_to_drops(int(tbc["price"])),
                                                           tbc["useraddress"])
-        xumm_payload = {
-            "txjson": {
-                "Account": tbc["useraddress"],
-                "TransactionType": "NFTokenAcceptOffer",
-                "NFTokenSellOffer": offerhash
-            }
-        }
-        _, qr, deeplink = await xumm_functions.construct_xumm_payload(xumm_payload)
+        print(offer, offerhash)
         if offer:
+            xumm_payload = {
+                "txjson": {
+                    "Account": tbc["useraddress"],
+                    "TransactionType": "NFTokenAcceptOffer",
+                    "NFTokenSellOffer": offerhash
+                }
+            }
+            _, qr, deeplink = await xumm_functions.construct_xumm_payload(xumm_payload)
             # await interaction.edit_original_message(content=f"offer successfully created!\nCheck (xrp.cafe)[https://xrp.cafe/nft/{tbc['nftid']}] to claim your NFT!")
             embed = nextcord.Embed(title=f"Claim your NFT!",
                                    description=f"Click [here]({deeplink}) or scan the qr code to claim your NFT!",
@@ -2702,6 +2782,51 @@ async def zrp_stats(interaction: nextcord.Interaction):
         embed.add_field(name='$ZRP won in Jackpot 💸', value=f'{stat_obj["jackpot_amount"]:.2f}', inline=False)
     await interaction.edit_original_message(embed=embed)
 
+
+@zrp.subcommand(name="tip", description="Send ZRP tip to someone")
+async def zrp_stats(interaction: nextcord.Interaction, amount: int, send_to: Optional[nextcord.Member] = SlashOption(required=True), ):
+    execute_before_command(interaction)
+    if amount <= 0:
+        await interaction.send("Please provide a positive amount for the tip.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    user_id = interaction.user.id
+    user_owned_nfts = db_query.get_owned(user_id)
+    send_to_nfts = db_query.get_owned(send_to.id)
+
+    # Sanity checks
+
+    if user_owned_nfts is None:
+        await interaction.edit_original_message(content="Sorry you can't use this feature, as you haven't verified your wallet",
+                                       embeds=[], view=View())
+        return
+    if send_to_nfts is None:
+        await interaction.edit_original_message(content=f"Sorry {send_to.mention} haven't verified their wallet yet",
+                                       embeds=[], view=View())
+        return
+    await interaction.edit_original_message(content="Generating transaction QR code...", embeds=[], view=View())
+    user_address = user_owned_nfts['address']
+    uuid, url, href = await xumm_functions.gen_zrp_txn_url(send_to_nfts['address'],
+                                                           user_address, amount)
+    embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here.",
+                        url=href)
+
+    embed.set_image(url=url)
+    await interaction.edit_original_message(embed=embed, view=View())
+    config.track_zrp_txn[user_address] = {'to': send_to_nfts['address'], 'amount': 0}
+    for i in range(18):
+        if config.track_zrp_txn[user_address]['amount'] == amount:
+            try:
+                del config.track_zrp_txn[user_address]
+                await interaction.edit_original_message(content='', embed=CustomEmbed(title="**Success**",
+                                                                 description=f"Tipped {send_to.mention} `{amount} ZRP`!"
+                                                                 ))
+                return True
+            except Exception as e:
+                print(traceback.format_exc())
+        await asyncio.sleep(10)
+    return False
 
 # ZRP COMMANDS
 
