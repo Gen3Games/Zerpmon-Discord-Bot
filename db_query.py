@@ -875,10 +875,13 @@ def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
         }
     else:
         l_streak = 1 if gym_type not in gym_obj['won'] else (gym_obj['won'][gym_type]['lose_streak'] + 1)
+        reset_limit = 4
+        if skipped:
+            reset_limit = 3
         gym_obj['won'][gym_type] = {
-            'stage': 1 if l_streak == 4 else (gym_obj['won'][gym_type]['stage'] if gym_type in gym_obj['won'] else 1),
-            'next_battle_t': get_next_ts(1) if lost else 0,
-            'lose_streak': 0 if l_streak == 4 else (l_streak if skipped else l_streak - 1)
+            'stage': 1 if l_streak == reset_limit else (gym_obj['won'][gym_type]['stage'] if gym_type in gym_obj['won'] else 1),
+            'next_battle_t': get_next_ts(1) if lost else (gym_obj['won'][gym_type]['next_battle_t'] if gym_type in gym_obj['won'] else 0),
+            'lose_streak': 0 if l_streak == reset_limit else (l_streak if skipped or lost else l_streak - 1)
         }
     users_collection.update_one(
         {'discord_id': str(discord_id)},
@@ -1178,9 +1181,9 @@ def get_gym_reset():
         stats_col.update_one({
             'name': 'zrp_stats'
         },
-            {'$set': {'gym_reset_t': get_next_ts(2)}}, upsert=True
+            {'$set': {'gym_reset_t': get_next_ts(3)}}, upsert=True
         )
-        return get_next_ts(2)
+        return get_next_ts(3)
     else:
         return reset_t
 
@@ -1188,7 +1191,7 @@ def get_gym_reset():
 def set_gym_reset():
     stats_col = db['stats_log']
     reset_t = stats_col.find_one({'name': 'zrp_stats'}).get('gym_reset_t', 0)
-    if reset_t < time.time() - 3600:
+    if reset_t < time.time() + 60:
         reset_t = get_next_ts(4) if reset_t > time.time() else get_next_ts(3)
         stats_col.update_one({
             'name': 'zrp_stats'

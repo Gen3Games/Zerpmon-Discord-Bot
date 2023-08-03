@@ -2999,7 +2999,7 @@ async def zrp_stats(interaction: nextcord.Interaction, amount: int,
             try:
                 del config.track_zrp_txn[user_address]
                 await interaction.send(content='', embed=CustomEmbed(title="**Success**",
-                                                                     description=f"Tipped {send_to.mention} `{amount} ZRP`!"
+                                                                     description=f"{interaction.user.mention} tipped {send_to.mention} `{amount} ZRP`!"
                                                                      ))
                 return True
             except Exception as e:
@@ -3213,7 +3213,6 @@ async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
 @battle_deck.on_autocomplete("zerpmon_name")
 @mission_deck.on_autocomplete("zerpmon_name")
 async def mission_autocomplete(interaction: nextcord.Interaction, item: str):
-    # Determine the choices for the trainer_name option based on a condition
     user_owned = db_query.get_owned(interaction.user.id)
     cards = {k: v for k, v in user_owned['zerpmons'].items() if item.lower() in v['name'].lower()}
     choices = {}

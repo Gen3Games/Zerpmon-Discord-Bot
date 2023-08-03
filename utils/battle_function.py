@@ -560,13 +560,11 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                       "Calculating Battle results..."
 
             await msg_hook.send(content=atk_msg, ephemeral=True)
-            if result['winner'] != '1' or '0 damage' not in result.get('status_effect', ''):
-                for i, effect in enumerate(status_stack[0].copy()):
+            for i, effect in enumerate(status_stack[0].copy()):
                     if '0 damage' in effect:
                         status_stack[0].remove(effect)
                         break
-            if result['winner'] != '2' or '0 damage' not in result.get('status_effect', ''):
-                for i, effect in enumerate(status_stack[1].copy()):
+            for i, effect in enumerate(status_stack[1].copy()):
                     if '0 damage' in effect:
                         status_stack[1].remove(effect)
                         break
@@ -1057,13 +1055,11 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                       "Calculating Battle results..."
 
             await msg_hook.reply(content=atk_msg)
-            if result['winner'] != '1' or '0 damage' not in result.get('status_effect', ''):
-                for i, effect in enumerate(status_stack[0].copy()):
+            for i, effect in enumerate(status_stack[0].copy()):
                     if '0 damage' in effect:
                         status_stack[0].remove(effect)
                         break
-            if result['winner'] != '2' or '0 damage' not in result.get('status_effect', ''):
-                for i, effect in enumerate(status_stack[1].copy()):
+            for i, effect in enumerate(status_stack[1].copy()):
                     if '0 damage' in effect:
                         status_stack[1].remove(effect)
                         break
@@ -1396,13 +1392,11 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                   "Calculating Battle results..."
 
         await interaction.send(content=atk_msg, ephemeral=True)
-        if result['winner'] != '1' or '0 damage' not in result.get('status_effect', ''):
-            for i, effect in enumerate(status_stack[0].copy()):
+        for i, effect in enumerate(status_stack[0].copy()):
                 if '0 damage' in effect:
                     status_stack[0].remove(effect)
                     break
-        if result['winner'] != '2' or '0 damage' not in result.get('status_effect', ''):
-            for i, effect in enumerate(status_stack[1].copy()):
+        for i, effect in enumerate(status_stack[1].copy()):
                 if '0 damage' in effect:
                     status_stack[1].remove(effect)
                     break

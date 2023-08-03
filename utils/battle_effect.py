@@ -7,13 +7,13 @@ import config
 def update_dmg(dmg1, dmg2, status_affect_solo):
     changed_1, changed_2 = False, False
     for effect in status_affect_solo.copy():
-        if not changed_2 and dmg2 is not '' and dmg2 != 0 and 'next attack' in effect and 'damage' in effect and ('oppo' in effect or 'enemy' in effect):
+        if not changed_2 and dmg2 != '' and dmg2 != 0 and 'next attack' in effect and 'damage' in effect and ('oppo' in effect or 'enemy' in effect):
             match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
             val = int(float(match.group()))
             dmg2 = (1 - (val/100)) * dmg2
             changed_2 = True
             status_affect_solo.remove(effect)
-        elif not changed_1 and dmg1 is not '' and dmg1 != 0 and 'next attack' in effect and 'damage' in effect and not ('oppo' in effect or 'enemy' in effect):
+        elif not changed_1 and dmg1 != '' and dmg1 != 0 and 'next attack' in effect and 'damage' in effect and not ('oppo' in effect or 'enemy' in effect):
             match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
             val = int(float(match.group()))
             dmg1 = (1 + (val / 100)) * dmg1
@@ -49,7 +49,6 @@ def update_next_atk(p1, p2, index1, index2, status_affect_solo):
 def update_next_dmg(status_affect_solo):
     for effect in status_affect_solo.copy():
         if '0 damage' in effect:
-            status_affect_solo.remove(effect)
             return 0, status_affect_solo
     return 1, status_affect_solo
 

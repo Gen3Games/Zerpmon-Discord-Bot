@@ -234,7 +234,7 @@ async def main():
                         try:
                             await client.send(subscribe_request)
                         except Exception as e:
-                            logging.error(f'EXECPTION inner WS sending req: {e}')
+                            logging.error(f'EXECPTION inner WS sending req: {traceback.format_exc()}')
                             break
         except Exception as e:
             logging.error(f'EXECPTION in WS: {e}')
