@@ -649,7 +649,7 @@ async def set_equipment(interaction: nextcord.Interaction,
             i += 1
         all_types = []
         [all_types.append(k['attributes']) for k in user1_z if k is not None]
-        print(eqs, all_types)
+        # print(eqs, all_types)
         for eq_i, equipment in enumerate(eqs):
             if equipment == '' or equipment is None:
                 eqs[eq_i] = None
@@ -723,7 +723,7 @@ async def equipment_mission(interaction: nextcord.Interaction,
             i += 1
         all_types = []
         [all_types.append(k['attributes']) for k in user1_z if k is not None]
-        print(eqs, all_types)
+        # print(eqs, all_types)
         for eq_i, equipment in enumerate(eqs):
             if equipment == '' or equipment is None:
                 eqs[eq_i] = None
@@ -912,7 +912,7 @@ async def battle_deck(interaction: nextcord.Interaction,
     for i, zerpmon_name in enumerate([zerpmon_name1, zerpmon_name2, zerpmon_name3, zerpmon_name4, zerpmon_name5]):
         if zerpmon_name != '' and zerpmon_name is not None and zerpmon_name not in list(new_deck.values()):
             new_deck[str(i)] = zerpmon_name
-    print(new_deck)
+    # print(new_deck)
     # await interaction.send(
     #     f"**Adding to deck...**",
     #     ephemeral=True)
