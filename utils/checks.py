@@ -78,13 +78,14 @@ def get_deck_embed(deck_type, owned_nfts):
                          color=0xff5252,
                          )
     embed2.add_field(name='\u200b', value='\u200B', inline=False)
+    eqs = owned_nfts['equipment_decks'][f'{deck_type}_deck']
     for k, v in owned_nfts[f'{deck_type}_deck'].items():
         print(v)
         found = True
         nfts = {}
-        embed2.add_field(name=f"{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}:\n", value='\u200B',
+        embed2.add_field(name=f"__{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}__:\n", value='\u200B',
                          inline=False)
-        embed2.add_field(name='\u200b', value='\u200B', inline=False)
+        # embed2.add_field(name='\u200b', value='\u200B', inline=False)
         new_v = v
         if 'trainer' in v and v['trainer'] != "":
             nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']]
@@ -98,7 +99,7 @@ def get_deck_embed(deck_type, owned_nfts):
                              inline=False)
 
         else:
-            msg_str = '> Battle Zerpmons:\n' \
+            msg_str = '> __**Battle Zerpmon**__:\n' \
                       f'> \n'
             sorted_keys = sorted(nfts.keys(), key=lambda _k: (_k != "trainer", int(_k) if _k.isdigit() else float('inf')))
             print(sorted_keys)
@@ -117,11 +118,12 @@ def get_deck_embed(deck_type, owned_nfts):
                         if attr['value'] == 'Legendary':
                             emj = '🌟'
                             break
-                    msg_str = f"> Main Trainer:\n" \
+                    msg_str = f"> **Main Trainer**:\n" \
                               f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
                               f"> \n" + msg_str
                 else:
-                    msg_str += f'> #{int(serial) + 1} ⭐ {nft["name"]} ⭐\n'
+                    eq_name = owned_nfts['equipments'][eqs[k][serial]]['name'] if eqs[k][serial] in owned_nfts['equipments'] else None
+                    msg_str += f'> #{int(serial) + 1} ⭐ {nft["name"]} ⭐ {" - " + eq_name if eq_name is not None else ""}\n'
             embed2.add_field(name='\u200B', value=msg_str, inline=False)
             embed2.add_field(name='\u200b', value='\u200B', inline=False)
     print(embed2.fields)

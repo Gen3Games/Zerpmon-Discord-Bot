@@ -35,6 +35,7 @@ async def update_nft_holdings(client: nextcord.Client):
                     continue
                 serials = []
                 t_serial = []
+                e_serial = []
 
                 for nft in nfts:
 
@@ -78,12 +79,33 @@ async def update_nft_holdings(client: nextcord.Client):
                                      }
                             db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
                         await asyncio.sleep(2)
+                    if nft["Issuer"] == config.ISSUER["Equipment"]:
+                        serial = str(nft["nft_serial"])
+                        if serial in list(old_user['equipments'].keys()):
+                            e_serial.append(serial)
+                            continue
+                        print(serial, list(old_user['equipments'].keys()))
+                        metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+
+                        if "Zerpmon Equipment" in metadata['description']:
+                            e_serial.append(serial)
+                            # Add to MongoDB here
+                            new_z = {"name": metadata['name'],
+                                     "image": metadata['image'],
+                                     "attributes": metadata['attributes'],
+                                     "token_id": nft["NFTokenID"],
+                                     }
+                            db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
+                        await asyncio.sleep(2)
                 for serial in list(old_user['zerpmons'].keys()):
                     if serial not in serials:
                         db_query.remove_user_nft(user_obj['discord_id'], serial, False)
                 for serial in list(old_user['trainer_cards'].keys()):
                     if serial not in t_serial:
                         db_query.remove_user_nft(user_obj['discord_id'], serial, True)
+                for serial in list(old_user['equipments'].keys()):
+                    if serial not in e_serial:
+                        db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
                 if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
                     for guild in guilds:

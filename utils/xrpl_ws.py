@@ -109,7 +109,10 @@ async def listener(client, store_address, wager_address):
                 # if 'NFT' in message['TransactionType']:
                 # print(message)
                 if 'TransactionType' in message and message['TransactionType'] == "Payment" and \
-                        'Destination' in message and (message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR, config.ISSUER['ZRP']] or message['Destination'] in [i['to'] for i in config.track_zrp_txn.values()]):
+                        'Destination' in message and (
+                        message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR,
+                                                   config.ISSUER['ZRP']] or message['Destination'] in [i['to'] for i in
+                                                                                                       config.track_zrp_txn.values()]):
 
                     if len(hashes) > 1000:
                         hashes = hashes[900:]
@@ -123,7 +126,8 @@ async def listener(client, store_address, wager_address):
                                 if message['Account'] in config.track_zrp_txn:
                                     config.track_zrp_txn[message['Account']]['amount'] = amount
 
-                            if message['Destination'] == config.SAFARI_ADDR or message['Destination'] == config.ISSUER['ZRP']:
+                            if message['Destination'] == config.SAFARI_ADDR or message['Destination'] == config.ISSUER[
+                                'ZRP']:
 
                                 #  ZRP TXN
                                 user = db_query.get_user(message['Account'])
@@ -198,12 +202,13 @@ async def listener(client, store_address, wager_address):
 
                         except Exception as e:
                             logging.error(f"Error detecting NFT txn {e} \nDATA: {message}")
-                elif 'TransactionType' in message and message['TransactionType'] == "OfferCreate" and type(message.get('TakerPays', '')) is dict:
+                elif 'TransactionType' in message and message['TransactionType'] == "OfferCreate" and type(
+                        message.get('TakerPays', '')) is dict:
                     if message.get('TakerPays')['currency'] == 'ZRP' and type(message.get('TakerGets', {})) is str:
                         print('OfferCreate: ', message)
                         amount = float(message['TakerPays']['value'])
                         xrp = float(int(message['TakerGets']) / 10 ** 6)
-                        config.zrp_price = xrp/amount
+                        config.zrp_price = xrp / amount
         except Exception as e:
             logging.error(f"ERROR in listener: {traceback.format_exc()}")
 
@@ -483,7 +488,8 @@ async def send_zrp(to: str, amount: float, sender):
                 sending_address = Address
             elif sender == "block":
                 bal = float(await xrpl_functions.get_zrp_balance(active_zrp_addr))
-                db_query.update_zrp_stats(burn_amount=0, distributed_amount=amount, left_amount=((bal-amount) if bal is not None else None))
+                db_query.update_zrp_stats(burn_amount=0, distributed_amount=amount,
+                                          left_amount=((bal - amount) if bal is not None else None))
                 if bal is not None and bal < 5:
                     if active_zrp_addr == config.B1_ADDR:
                         active_zrp_addr, active_zrp_seed = config.B2_ADDR, config.B2_SEED
@@ -567,9 +573,9 @@ async def reward_gym(user_id, stage):
     user_address = db_query.get_owned(user_id)['address']
     amount = config.GYM_REWARDS[stage]
     if active_zrp_addr == config.B2_ADDR:
-        amount = amount/2
+        amount = amount / 2
     elif active_zrp_addr == config.B3_ADDR:
-        amount = amount/4
+        amount = amount / 4
 
     # add xrp and xp
     res = (await send_zrp(user_address, amount, 'block')), amount, "ZRP"
@@ -591,16 +597,17 @@ async def get_nft_data_wager(id):
         logging.error(f"ERROR while getting nft url: {id} \n{e}")
         return '', 'Missing Name in metadata'
 
-async def create_nft_offer(from_, token_id, price,to_address,currency='XRP'):
+
+async def create_nft_offer(from_, token_id, price, to_address, currency='XRP'):
     async with AsyncWebsocketClient(URL) as client:
         try:
             for i in range(3):
-                if from_ == 'reward': #auction
+                if from_ == 'reward':  # auction
                     acc_info = AccountInfo(
                         account=config.AUCTION_ADDR
                     )
                     account_info = await client.request(acc_info)
-                    sequence = account_info.result["account_data"]["Sequence"] 
+                    sequence = account_info.result["account_data"]["Sequence"]
                     # Load the sending account's secret and address from a wallet
                     sending_wallet = Wallet(seed=config.AUCTION_SEED, sequence=sequence)
                     sending_address = config.AUCTION_ADDR
@@ -632,7 +639,7 @@ async def create_nft_offer(from_, token_id, price,to_address,currency='XRP'):
                 print("------------------")
                 print("signed and submitted!")
                 # Print the response
-                print(response.result) 
+                print(response.result)
                 try:
                     if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
                         clientRPC = JsonRpcClient(config.NODE_URL_S)
@@ -691,7 +698,6 @@ async def get_latest_nft_offers(address):
     except Exception as e:
         print(e)
         return 0
-
 
 # asyncio.run(get_latest_nft_offers(config.SAFARI_ADDR))
 # asyncio.run(accept_nft('reward', offer='22FC29F159F14A9672D5E231EFEB6DB9E0FE5483A7CCE1E1C122BEC2FF79E1FD', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',

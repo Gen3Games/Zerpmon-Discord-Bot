@@ -16,6 +16,7 @@ db = client['Zerpmon']
 
 move_collection = db['MoveList']
 level_collection = db['levels']
+equipment_col = db['Equipment']
 
 
 def get_next_ts(days=1):
@@ -86,20 +87,20 @@ def update_user_decks(discord_id, serials, t_serial):
                'discord_id': user_obj["discord_id"]})
 
 
-def remove_user_nft(discord_id, serial, trainer=False):
+def remove_user_nft(discord_id, serial, trainer=False, equipment=False):
     users_collection = db['users']
     # Upsert user
     # print(user)
 
-    update_query = {"$unset": {f"zerpmons.{serial}": ""}} if not trainer else \
-        {"$unset": {f"trainer_cards.{serial}": ""}}
+    update_query = {"$unset": {f"equipments.{serial}": ""}} if equipment else (
+        {"$unset": {f"zerpmons.{serial}": ""}} if not trainer else {"$unset": {f"trainer_cards.{serial}": ""}})
     result = users_collection.update_one(
         {'discord_id': discord_id},
         update_query
     )
 
 
-def add_user_nft(discord_id, serial, zerpmon, trainer=False):
+def add_user_nft(discord_id, serial, zerpmon, trainer=False, equipment=False):
     users_collection = db['users']
     # Upsert user
     # print(user)
@@ -107,8 +108,9 @@ def add_user_nft(discord_id, serial, zerpmon, trainer=False):
     doc_str = json.dumps(zerpmon)
     zerpmon = json.loads(doc_str)
     # print(zerpmon)
-    update_query = {"$set": {f"zerpmons.{serial}": zerpmon}} if not trainer else \
-        {"$set": {f"trainer_cards.{serial}": zerpmon}}
+    update_query = {"$set": {f"equipments.{serial}": zerpmon}} if equipment else (
+        {"$set": {f"zerpmons.{serial}": zerpmon}} if not trainer else
+        {"$set": {f"trainer_cards.{serial}": zerpmon}})
     result = users_collection.update_one(
         {'discord_id': discord_id},
         update_query
@@ -523,19 +525,20 @@ def update_mission_trainer(trainer_serial, user_id):
         return False
 
 
-def update_mission_deck(zerpmon_id, place, user_id):
+def update_mission_deck(new_deck, user_id):
     users_collection = db['users']
 
     doc = users_collection.find_one({'discord_id': str(user_id)})
 
     # add the element to the array
     arr = {} if "mission_deck" not in doc or doc["mission_deck"] == {} else doc["mission_deck"]
-    if arr != {}:
-        for k, v in arr.copy().items():
-            if v == zerpmon_id:
-                del arr[k]
-
-    arr[str(place - 1)] = zerpmon_id
+    # if arr != {}:
+    #     for k, v in arr.copy().items():
+    #         if v == zerpmon_id:
+    #             del arr[k]
+    #
+    # arr[str(place - 1)] = zerpmon_id
+    arr = new_deck
     # save the updated document
     r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': arr}})
 
@@ -555,7 +558,7 @@ def clear_mission_deck(user_id):
         return False
 
 
-def update_battle_deck(zerpmon_id, deck_no, place, user_id):
+def update_battle_deck(deck_no, new_deck, user_id):
     users_collection = db['users']
 
     doc = users_collection.find_one({'discord_id': str(user_id)})
@@ -565,12 +568,13 @@ def update_battle_deck(zerpmon_id, deck_no, place, user_id):
         doc["battle_deck"]
     if deck_no not in arr:
         arr[deck_no] = {}
-    if arr[deck_no] != {}:
-        for k, v in arr[deck_no].copy().items():
-            if v == zerpmon_id:
-                del arr[deck_no][k]
-
-    arr[deck_no][str(place - 1)] = zerpmon_id
+    # if arr[deck_no] != {}:
+    #     for k, v in arr[deck_no].copy().items():
+    #         if v == zerpmon_id:
+    #             del arr[deck_no][k]
+    #
+    # arr[deck_no][str(place - 1)] = zerpmon_id
+    arr[deck_no] = new_deck
     # save the updated document
     r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'battle_deck': arr}})
 
@@ -593,7 +597,7 @@ def clear_battle_deck(deck_no, user_id, gym=False):
         return False
 
 
-def update_gym_deck(zerpmon_id, deck_no, place, user_id):
+def update_gym_deck(deck_no, new_deck, user_id):
     users_collection = db['users']
 
     doc = users_collection.find_one({'discord_id': str(user_id)})
@@ -603,12 +607,13 @@ def update_gym_deck(zerpmon_id, deck_no, place, user_id):
         "gym_deck"]
     if deck_no not in arr:
         arr[deck_no] = {}
-    if arr[deck_no] != {}:
-        for k, v in arr[deck_no].copy().items():
-            if v == zerpmon_id:
-                del arr[deck_no][k]
-
-    arr[deck_no][str(place - 1)] = zerpmon_id
+    # if arr[deck_no] != {}:
+    #     for k, v in arr[deck_no].copy().items():
+    #         if v == zerpmon_id:
+    #             del arr[deck_no][k]
+    #
+    # arr[deck_no][str(place - 1)] = zerpmon_id
+    arr[deck_no] = new_deck
     # save the updated document
     r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'gym_deck': arr}})
 
@@ -635,16 +640,19 @@ def set_default_deck(deck_no, user_id, gym=False):
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "gym_deck" not in doc or doc["gym_deck"] == {} else doc[
             "gym_deck"]
         arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
+        eq_deck = doc['equipment_decks']['gym_deck']
+        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
 
         # save the updated document
-        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'gym_deck': arr}})
+        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck }})
     else:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
             doc["battle_deck"]
         arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
-
+        eq_deck = doc['equipment_decks']['battle_deck']
+        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
         # save the updated document
-        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'battle_deck': arr}})
+        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck}})
 
     if r.acknowledged:
         return True
@@ -879,8 +887,10 @@ def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
         if skipped:
             reset_limit = 3
         gym_obj['won'][gym_type] = {
-            'stage': 1 if l_streak == reset_limit else (gym_obj['won'][gym_type]['stage'] if gym_type in gym_obj['won'] else 1),
-            'next_battle_t': get_next_ts(1) if lost else (gym_obj['won'][gym_type]['next_battle_t'] if gym_type in gym_obj['won'] else 0),
+            'stage': 1 if l_streak == reset_limit else (
+                gym_obj['won'][gym_type]['stage'] if gym_type in gym_obj['won'] else 1),
+            'next_battle_t': get_next_ts(1) if lost else (
+                gym_obj['won'][gym_type]['next_battle_t'] if gym_type in gym_obj['won'] else 0),
             'lose_streak': 0 if l_streak == reset_limit else (l_streak if skipped or lost else l_streak - 1)
         }
     users_collection.update_one(
@@ -1225,7 +1235,8 @@ def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, us
     if user1_id is not None:
         user1_update = UpdateOne(
             {'discord_id': str(user1_id)},
-            {'$push': {'matches': {'ts': int(time.time()), 'won': winner == 1, 'opponent': user2_name, 'battle_type': battle_type,
+            {'$push': {'matches': {'ts': int(time.time()), 'won': winner == 1, 'opponent': user2_name,
+                                   'battle_type': battle_type,
                                    'data': {'teamA': user1_team, 'teamB': user2_team}}}},
             upsert=True
         )
@@ -1234,7 +1245,8 @@ def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, us
     if user2_id is not None:
         user2_update = UpdateOne(
             {'discord_id': str(user2_id)},
-            {'$push': {'matches': {'ts': int(time.time()), 'won': winner == 2, 'opponent': user1_name, 'battle_type': battle_type,
+            {'$push': {'matches': {'ts': int(time.time()), 'won': winner == 2, 'opponent': user1_name,
+                                   'battle_type': battle_type,
                                    'data': {'teamA': user2_team, 'teamB': user1_team}}}},
             upsert=True
         )
@@ -1252,3 +1264,20 @@ def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, us
 def get_battle_log(user1_id):
     battle_log = db['battle_logs']
     return battle_log.find_one({'discord_id': str(user1_id)})
+
+
+"""EQUIPMENT"""
+
+
+def set_equipment_on(user_id, equipments, deck_type, deck_no):
+    users_collection = db['users']
+    user_id = str(user_id)
+    equipments = {str(i): eq for i, eq in enumerate(equipments)}
+    res = users_collection.update_one({'discord_id': user_id},
+                                {'$set': {f'equipment_decks.{deck_type}{ "." + deck_no if deck_no is not None else ""}': equipments}},
+                                      upsert=True)
+    print(res.acknowledged, res.matched_count, res.raw_result)
+
+
+def get_eq_by_name(name):
+    return equipment_col.find_one({'name': name},)

@@ -25,6 +25,20 @@ class CustomEmbed(nextcord.Embed):
 
 
 button_cache = {'revive': [], 'mission': []}
+SAFARI_REWARD_CHANCES = {
+    "zrp": 88.40,
+    "battle_zone": 0.8667,
+    "name_flair": 0.1667,
+    "candy_white": 2.1667,
+    "candy_gold": 2.1667,
+    "candy_level_up": 0.8333,
+    "jackpot": 0.1333,
+    "gym_refill": 2.6667,
+    "revive_potion": 1.2667,
+    "mission_refill": 1.2667,
+    "zerpmon": 0.0667
+}
+# print(sum(list(SAFARI_REWARD_CHANCES.values())))
 
 
 async def wager_battle_r_callback(_i: nextcord.Interaction, amount, user_address, reward):
@@ -791,15 +805,15 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
 
                 ]
                 for i in range(3):
-                    reward = random.choices(list(config.SAFARI_REWARD_CHANCES.keys()),
-                                            list(config.SAFARI_REWARD_CHANCES.values()))[0]
+                    reward = random.choices(list(SAFARI_REWARD_CHANCES.keys()),
+                                            list(SAFARI_REWARD_CHANCES.values()))[0]
                     embed = CustomEmbed(title=f"Safari roll {i + 1}", colour=0xff5722)
                     match reward:
                         # case "no_luck":
                         #     msg = random.choice(config.NOTHING_MSG)
                         #     rewards.append("Gained Nothing")
                         case "zrp":
-                            r_int = random.randint(1, 40)
+                            r_int = random.randint(1, 45)
                             s_amount = round(amount * r_int/100, 2)
                             status = await send_zrp(addr, s_amount, 'safari')
                             msg = random.choice(config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction Successful`" if status else ""}!'
@@ -828,7 +842,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                             msg = config.CANDY_MSG(interaction.user.name,
                                                    'Golden Liquorice' if 'Up' in reward else reward)
                             rewards.append(
-                                f"Gained 1 {'Golden Liquorice' if 'Up' in reward else reward + ' Power Candy'}!")
+                                f"Gained 1 {'Golden Liquorice' if 'Up' in reward else 'Power Candy (' + reward + ')'}!")
                         case "jackpot":
                             bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
                             amount = round(bal * 0.8, 2)
@@ -836,6 +850,9 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                             msg = config.JACKPOT_MSG(interaction.user.name,
                                                      amount) + f'\n{"Transaction Successful" if status else ""}!'
                             rewards.append(f"Won Jackpot {amount} $ZRP!")
+                            description = f'🔥 🔥 **Congratulations {interaction.user.mention} just won the **Jackpot**(`{amount} $ZRP`)! 🔥 🔥\n@everyone'
+                            await send_general_message(guild=interaction.guild, text=description,
+                                                       image='')
                         case "gym_refill":
                             db_query.add_gym_refill_potion(addr, 1, True, )
                             msg = random.choice(config.GYM_REFILL_MSG)

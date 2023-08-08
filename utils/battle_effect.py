@@ -1,19 +1,32 @@
 import inspect
+import random
 import re
 
 import config
 
 
+def get_crit_chance(effect):
+    crit_chance = config.CRIT_CHANCES.copy()
+    if 'increase' in effect and 'crit' in effect:
+        match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
+        val = int(float(match.group()))
+        crit_chance[True] += val
+    return random.choices(list(crit_chance.keys()),
+                          list(crit_chance.values()))[0]
+
+
 def update_dmg(dmg1, dmg2, status_affect_solo):
     changed_1, changed_2 = False, False
     for effect in status_affect_solo.copy():
-        if not changed_2 and dmg2 != '' and dmg2 != 0 and 'next attack' in effect and 'damage' in effect and ('oppo' in effect or 'enemy' in effect):
+        if not changed_2 and dmg2 != '' and dmg2 != 0 and 'next attack' in effect and 'damage' in effect and (
+                'oppo' in effect or 'enemy' in effect):
             match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
             val = int(float(match.group()))
-            dmg2 = (1 - (val/100)) * dmg2
+            dmg2 = (1 - (val / 100)) * dmg2
             changed_2 = True
             status_affect_solo.remove(effect)
-        elif not changed_1 and dmg1 != '' and dmg1 != 0 and 'next attack' in effect and 'damage' in effect and not ('oppo' in effect or 'enemy' in effect):
+        elif not changed_1 and dmg1 != '' and dmg1 != 0 and 'next attack' in effect and 'damage' in effect and not (
+                'oppo' in effect or 'enemy' in effect):
             match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
             val = int(float(match.group()))
             dmg1 = (1 + (val / 100)) * dmg1
@@ -90,7 +103,7 @@ def update_array(arr, index, value, own=False):
         if i != index:
             delta = remaining_value / _i
             _i -= 1
-            arr[i] = round(arr[i]+ delta, 2)
+            arr[i] = round(arr[i] + delta, 2)
 
             if arr[i] < 0:
                 remaining_value += arr[i]

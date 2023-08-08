@@ -299,10 +299,15 @@ def cache_data():
     try:
         z_nfts = get_issuer_nfts_data('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME')
         nfts = get_issuer_nfts_data('rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy')
+        e_nfts = get_issuer_nfts_data('rEQQ8tTnJm4ECbPv71K9syrHrTJTv6DX3T')
         z_nfts.extend(nfts)
+        z_nfts.extend(e_nfts)
         tba = get_cached()
         for nft in z_nfts:
             if not check_nft_cached(nft['nftokenID'], tba):
+                for _i, j in enumerate(nft['metadata']['attributes']):
+                    if j['trait_type'] == 'Type':
+                        nft['metadata']['attributes'][_i]['value'] = str(j['value']).strip().lower().title()
                 tba.append({
                     'nftid': nft['nftokenID'],
                     'metadata': nft['metadata'],
@@ -329,6 +334,22 @@ def reset_all_gyms():
                                                  return_document=ReturnDocument.AFTER)
 
 
+def import_equipments():
+    with open('Equipment.csv', 'r') as csvfile:
+        collection = db['Equipment']
+        collection.drop()
+        csvreader = csv.reader(csvfile)
+        for row in csvreader:
+            if row[1] == "":
+                continue
+            # Insert the row data to MongoDB
+            collection.insert_one({
+                'type': row[0],
+                'name': row[1],
+                'notes': row[2]
+            })
+
+
 # import_moves()
 import_movesets()
 # # import_level()
@@ -336,4 +357,5 @@ import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
 cache_data()
+import_equipments()
 # reset_all_gyms()
