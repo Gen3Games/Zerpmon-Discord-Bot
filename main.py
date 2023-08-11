@@ -358,17 +358,19 @@ async def show_equipment(interaction: nextcord.Interaction):
     for i, nft in enumerate(eqs):
         if len(embed3.fields) > 24:
             break
-        my_button = f"https://xrp.cafe/nft/{nft['token_id']}"
-        my_button2 = None
-        count = counter[nft['name']]
-        if count > 1:
-            second_item = [i for i in eqs if i['name'] == nft['name']][-1]
-            my_button2 = f"https://xrp.cafe/nft/{second_item['token_id']}"
-        nft_type = ', '.join([config.TYPE_MAPPING[i['value']] for i in nft['attributes'] if i['trait_type'] == 'Type'])
+        if nft['name'] in counter:
+            my_button = f"https://xrp.cafe/nft/{nft['token_id']}"
+            my_button2 = None
+            count = counter[nft['name']]
+            del counter[nft['name']]
+            if count > 1:
+                second_item = [i for i in eqs if i['name'] == nft['name']][-1]
+                my_button2 = f"https://xrp.cafe/nft/{second_item['token_id']}"
+            nft_type = ', '.join([config.TYPE_MAPPING[i['value']] for i in nft['attributes'] if i['trait_type'] == 'Type'])
 
-        embed3.add_field(
-            name=f"#{i + 1}  **{nft['name']}** ({nft_type}) x{count}",
-            value=f'[view]({my_button})' + (f'\n[view]({my_button2})' if my_button2 is not None else ''), inline=False)
+            embed3.add_field(
+                name=f" **{nft['name']}** ({nft_type}) x{count}",
+                value=f'[view]({my_button})' + (f'\n[view]({my_button2})' if my_button2 is not None else ''), inline=False)
     await interaction.edit_original_message(content="FOUND", embeds=[embed3])
 
 
@@ -624,17 +626,17 @@ async def set_equipment(interaction: nextcord.Interaction,
                         ):
     execute_before_command(interaction)
     user = interaction.user
+    await interaction.response.defer(ephemeral=True)
     user_obj = db_query.get_owned(user.id)
     eqs = [eq1, eq2, eq3, eq4, eq5]
 
     if deck_type not in user_obj or (
             len(user_obj[deck_type]) == 0 or (
             deck_number in user_obj[deck_type] and len(user_obj[deck_type][deck_number]) == 0)):
-        await interaction.send(
-            f"Sorry, your can't add **Equipment** to an empty deck.",
-            ephemeral=True)
+        await interaction.edit_original_message(content=f"Sorry, your can't add **Equipment** to an empty deck.")
         return
     else:
+        fail_msg = ''
         user1_z = []
         i = 0
         try:
@@ -643,114 +645,136 @@ async def set_equipment(interaction: nextcord.Interaction,
             pass
         while len(user1_z) != len(user_obj[deck_type][deck_number]):
             try:
-                user1_z.append(user_obj['zerpmons'][user_obj[deck_type][deck_number][str(i)]])
+                zerp = user_obj['zerpmons'][user_obj[deck_type][deck_number][str(i)]]
+                zerp_obj = db_query.get_zerpmon(zerp['name'])
+                user1_z.append(zerp_obj)
             except:
                 user1_z.append(None)
             i += 1
         all_types = []
-        [all_types.append(k['attributes']) for k in user1_z if k is not None]
-        # print(eqs, all_types)
+        for k in user1_z:
+            if k is not None:
+                types = {}
+                for m_i in range(4):
+                    types[k['moves'][m_i]['type']] = 1
+                all_types.append(list(types.keys()))
+            else:
+                all_types.append(None)
+        print(eqs, all_types)
         for eq_i, equipment in enumerate(eqs):
             if equipment == '' or equipment is None:
                 eqs[eq_i] = None
                 continue
             if user_obj is None or len(user_obj['equipments'].get(equipment, {})) == 0:
-                await interaction.send(
-                    f"Sorry, you don't own this **Equipment**",
-                    ephemeral=True)
+                await interaction.edit_original_message(content=f"Sorry, you don't own **{equipment}  Equipment**")
                 return
-            if all_types[eq_i] is None:
-                await interaction.send(
-                    f"Sorry, you can't set **Equipment** to an empty slot.\n"
-                    f"You don't have a Zerpmon at **{eq_i + 1}** position",
-                    ephemeral=True)
-                return
-            zerp_types = [i['value'] for i in all_types[eq_i] if i['trait_type'] == 'Type']
+            if len(all_types) < eq_i or all_types[eq_i] is None:
+                fail_msg += f"Sorry, you can't set **Equipment** to an empty slot.\n" \
+                            f"You don't have a Zerpmon at **{eq_i + 1}** position\n"
+                eqs[eq_i] = None
+                continue
+            zerp_types = all_types[eq_i]
             for item in user_obj['equipments'][equipment]['attributes']:
                 if item['trait_type'] == 'Type':
                     if item['value'] not in zerp_types:
-                        await interaction.send(
-                            f"Sorry, {config.TYPE_MAPPING[item['value']]}**{item['value']}** type equipment doesn't match **{' ,'.join(zerp_types)}** type **Zerpmon**",
-                            ephemeral=True)
-                        return
+                        fail_msg += f"Sorry, **{user_obj['equipments'][equipment]['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
+                        eqs[eq_i] = None
         db_query.set_equipment_on(user_obj['discord_id'], eqs, deck_type, deck_number)
-        await interaction.send(
-            f"**Success**",
-            ephemeral=True)
+        if fail_msg != '':
+            await interaction.edit_original_message(content=fail_msg)
+        else:
+            await interaction.edit_original_message(content=f"**Success**")
 
 
 @add.subcommand(name='equipment_mission', description="Set Zerpmon Equipment for Solo Missions")
 async def equipment_mission(interaction: nextcord.Interaction,
-                       eq1: str = SlashOption("1st", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq2: str = SlashOption("2nd", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq3: str = SlashOption("3rd", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq4: str = SlashOption("4th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq5: str = SlashOption("5th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq6: str = SlashOption("6th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq7: str = SlashOption("7th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq8: str = SlashOption("8th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq9: str = SlashOption("9th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq10: str = SlashOption("10th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq11: str = SlashOption("11th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq12: str = SlashOption("12th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq13: str = SlashOption("13th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq14: str = SlashOption("14th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq15: str = SlashOption("15th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq16: str = SlashOption("16th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq17: str = SlashOption("17th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq18: str = SlashOption("18th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq19: str = SlashOption("19th", autocomplete_callback=equipment_autocomplete, required=False),
-                       eq20: str = SlashOption("20th", autocomplete_callback=equipment_autocomplete, required=False),
-                       ):
+                            eq1: str = SlashOption("1st", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq2: str = SlashOption("2nd", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq3: str = SlashOption("3rd", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq4: str = SlashOption("4th", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq5: str = SlashOption("5th", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq6: str = SlashOption("6th", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq7: str = SlashOption("7th", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq8: str = SlashOption("8th", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq9: str = SlashOption("9th", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq10: str = SlashOption("10th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq11: str = SlashOption("11th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq12: str = SlashOption("12th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq13: str = SlashOption("13th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq14: str = SlashOption("14th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq15: str = SlashOption("15th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq16: str = SlashOption("16th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq17: str = SlashOption("17th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq18: str = SlashOption("18th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq19: str = SlashOption("19th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            eq20: str = SlashOption("20th", autocomplete_callback=equipment_autocomplete,
+                                                    required=False),
+                            ):
     execute_before_command(interaction)
     user = interaction.user
+    await interaction.response.defer(ephemeral=True)
     user_obj = db_query.get_owned(user.id)
-    eqs = [eq1, eq2, eq3, eq4, eq5, eq6, eq7, eq8, eq9, eq10, eq11, eq12, eq13, eq14, eq15, eq16, eq17, eq18, eq19, eq20]
+    eqs = [eq1, eq2, eq3, eq4, eq5, eq6, eq7, eq8, eq9, eq10, eq11, eq12, eq13, eq14, eq15, eq16, eq17, eq18, eq19,
+           eq20]
 
     if user_obj is None or (len(user_obj.get('mission_deck', {})) == 0):
-        await interaction.send(
-            f"Sorry, your can't add **Equipment** to an empty deck.",
-            ephemeral=True)
+        await interaction.edit_original_message(content=f"Sorry, your can't add **Equipment** to an empty deck.")
         return
     else:
+        fail_msg = ''
         user1_z = []
         i = 0
         while len(user1_z) != len(user_obj['mission_deck']):
             try:
-                user1_z.append(user_obj['zerpmons'][user_obj['mission_deck'][str(i)]])
+                zerp = user_obj['zerpmons'][user_obj['mission_deck'][str(i)]]
+                zerp_obj = db_query.get_zerpmon(zerp['name'])
+                user1_z.append(zerp_obj)
             except:
                 user1_z.append(None)
             i += 1
         all_types = []
-        [all_types.append(k['attributes']) for k in user1_z if k is not None]
-        # print(eqs, all_types)
+        for k in user1_z:
+            if k is not None:
+                types = {}
+                for m_i in range(4):
+                    types[k['moves'][m_i]['type']] = 1
+                all_types.append(list(types.keys()))
+            else:
+                all_types.append(None)
+        print(eqs, all_types)
         for eq_i, equipment in enumerate(eqs):
             if equipment == '' or equipment is None:
                 eqs[eq_i] = None
                 continue
             if user_obj is None or len(user_obj['equipments'].get(equipment, {})) == 0:
-                await interaction.send(
-                    f"Sorry, you don't own this **Equipment**",
-                    ephemeral=True)
+                await interaction.edit_original_message(content=f"Sorry, you don't own **{equipment}  Equipment**")
                 return
-            if all_types[eq_i] is None:
-                await interaction.send(
-                    f"Sorry, you can't set **Equipment** to an empty slot.\n"
-                    f"You don't have a Zerpmon at **{eq_i + 1}** position",
-                    ephemeral=True)
-                return
-            zerp_types = [i['value'] for i in all_types[eq_i] if i['trait_type'] == 'Type']
+            if len(all_types) < eq_i or all_types[eq_i] is None:
+                fail_msg += f"Sorry, you can't set **Equipment** to an empty slot.\n" \
+                            f"You don't have a Zerpmon at **{eq_i + 1}** position\n"
+                eqs[eq_i] = None
+                continue
+            zerp_types = all_types[eq_i]
             for item in user_obj['equipments'][equipment]['attributes']:
                 if item['trait_type'] == 'Type':
                     if item['value'] not in zerp_types:
-                        await interaction.send(
-                            f"Sorry, {config.TYPE_MAPPING[item['value']]}**{item['value']}** type equipment doesn't match **{' ,'.join(zerp_types)}** type **Zerpmon**",
-                            ephemeral=True)
-                        return
+                        fail_msg += f"Sorry, **{user_obj['equipments'][equipment]['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
+                        eqs[eq_i] = None
         db_query.set_equipment_on(user_obj['discord_id'], eqs, 'mission_deck', None)
-        await interaction.send(
-            f"**Success**",
-            ephemeral=True)
+        if fail_msg != '':
+            await interaction.edit_original_message(content=fail_msg)
+        else:
+            await interaction.edit_original_message(content=f"**Success**")
 
 
 @add.subcommand(description="Set Zerpmon for Solo Missions")
@@ -877,7 +901,7 @@ async def battle_deck(interaction: nextcord.Interaction,
 
     # Sanity checks
 
-    if user.id in [i['id'] for i in config.battle_royale_participants]:
+    if user.id in [i['id'] for i in config.battle_royale_participants] and deck_type == 'False':
         await interaction.send(
             f"Sorry you can't change your deck while in the middle of a Battle Royale", ephemeral=True)
         return
@@ -950,7 +974,7 @@ async def default_deck(interaction: nextcord.Interaction,
     user_owned_nfts = {'data': db_query.get_owned(user.id), 'user': user.name}
 
     # Sanity checks
-    if user.id in [i['id'] for i in config.battle_royale_participants]:
+    if user.id in [i['id'] for i in config.battle_royale_participants] and deck_type == 'False':
         await interaction.send(
             f"Sorry you can't change your deck while in the middle of a Battle Royale", ephemeral=True)
         return
@@ -1993,7 +2017,8 @@ async def battle_royale(interaction: nextcord.Interaction,
                         amount: int = SlashOption(required=True, min_value=0),
                         start_after: int = SlashOption(
                             name="start_after",
-                            choices={"1 min": 1, "2 min": 2, "3 min": 3, "1 hour": 60, "4 hour": 240, "8 hour": 480, "12 hour": 720},
+                            choices={"1 min": 1, "2 min": 2, "3 min": 3, "1 hour": 60, "4 hour": 240, "8 hour": 480,
+                                     "12 hour": 720},
                         ), ):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
@@ -3024,7 +3049,7 @@ async def view_gyms(interaction: nextcord.Interaction):
     main_ts = db_query.get_gym_reset()
     embed.add_field(name='\u200B', value=f'Won Gym reset: <t:{int(main_ts)}:R>', inline=False)
     embed.set_footer(icon_url=config.ICON_URL, text=f'Time left in Gym Leader Zerpmon Reset {h}h {m}m\n'
-                                                    )
+                     )
     await interaction.send(embed=embed, ephemeral=True)
 
 
@@ -3310,7 +3335,7 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                     user_data.get("flair", [])) > 0 else ''
                 user_mention = user.mention + u_flair
                 if user_data is None or (len(user_data['zerpmons']) == 0 or len(
-                        user_data['trainer_cards']) == 0 or user.id in config.ongoing_battles):
+                        user_data['trainer_cards']) == 0):
                     return
                 else:
                     if user.id not in [i['id'] for i in config.battle_royale_participants]:
@@ -3324,7 +3349,7 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                 u_flair = f' | {user_data.get("flair", [])[0]}' if len(
                     user_data.get("flair", [])) > 0 else ''
                 user_mention = user.mention + u_flair
-                if user_data is None or user.id in config.ongoing_battles:
+                if user_data is None:
                     return
                 else:
                     all_p = []

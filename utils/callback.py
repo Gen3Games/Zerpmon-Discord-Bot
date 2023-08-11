@@ -823,10 +823,15 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                         #     msg = random.choice(config.EQUIPMENT_MSG)
                         #     rewards.append("Gained 1 Equipment!")
                         case "battle_zone" | "name_flair":
+                            user_obj = db_query.get_owned(user_id)
                             if reward == "battle_zone":
-                                db_query.update_user_bg(interaction.user.id, random.choice(config.GYMS))
+                                user_bgs = [i.replace(f'./static/gym/', '').replace('.png', '') for i in user_obj.get('bgs', [])]
+                                not_owned_bgs = [i for i in config.GYMS if i not in user_bgs]
+                                db_query.update_user_bg(interaction.user.id, random.choice(not_owned_bgs if len(not_owned_bgs) > 0 else config.GYMS))
                             elif reward == "name_flair":
-                                db_query.update_user_flair(interaction.user.id, random.choice(config.name_flair_list))
+                                user_flairs = [i for i in user_obj.get('flair', [])]
+                                not_owned_flairs = [i for i in config.name_flair_list if i not in user_flairs]
+                                db_query.update_user_flair(interaction.user.id, random.choice(not_owned_flairs if len(not_owned_flairs) > 0 else config.name_flair_list))
                             reward = reward.replace('_', ' ').title()
 
                             msg = config.COSMETIC_MSG(reward)

@@ -52,6 +52,111 @@ async def send_global_message(guild, text, image):
         logging.error(f'ERROR: {traceback.format_exc()}')
 
 
+def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buffed_zerp1, buffed_zerp2, gym_bg, p1,
+                          p2):
+    percentages1 = [(float(p['percent']) if p['percent'] not in ["0.00", "0", ""] else None) for p in
+                    z1_obj['moves']] if p1 is None else p1
+    percentages2 = [(float(p['percent']) if p['percent'] not in ["0.00", "0", ""] else None) for p in
+                    z2_obj['moves']] if p2 is None else p2
+    status_affects = [[], []]
+
+    w_candy1, g_candy1, lvl_candy1 = z1_obj.get('white_candy', 0), z1_obj.get('gold_candy', 0), z1_obj.get(
+        'licorice', 0)
+    w_candy2, g_candy2, lvl_candy2 = z2_obj.get('white_candy', 0), z2_obj.get('gold_candy', 0), z2_obj.get(
+        'licorice', 0)
+    eq1_note = db_query.get_eq_by_name(z1.get('buff_eq', None)) if z1.get('buff_eq', None) is not None else {}
+    eq2_note = db_query.get_eq_by_name(z2.get('buff_eq', None)) if z2.get('buff_eq', None) is not None else {}
+    extra_star1, extra_star2 = 0, 0
+    eq1_lower = eq1_note.get('notes', '').lower()
+    eq2_lower = eq2_note.get('notes', '').lower()
+    print(z1, z2)
+    if 'eq_applied' not in z1:
+        z1['eq_applied'] = True
+        if 'miss chance' in eq1_lower:
+            status_affects[0].append(eq1_lower)
+    if 'increase' in eq1_lower and 'stars' in eq1_lower:
+        match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
+        extra_star1 = int(float(match.group())) if match is not None else 0
+    if 'eq_applied' not in z2:
+        z2['eq_applied'] = True
+        if 'miss chance' in eq2_lower:
+            status_affects[1].append(eq2_lower)
+    if 'increase' in eq2_lower and 'stars' in eq2_lower:
+        match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
+        extra_star2 = int(float(match.group())) if match is not None else 0
+    print(extra_star1, extra_star2)
+    p1, p2, m1, m2 = apply_status_effects(percentages1, percentages2, status_affects)
+
+    main_embed = CustomEmbed(title="Zerpmon rolling attacks...", color=0x35bcbf)
+    path1 = f"./static/images/{z1_obj['name']}.png"
+    path2 = f"./static/images/vs.png"
+    path3 = f"./static/images/{z2_obj['name']}.png"
+
+    zimg1 = z1_obj['image']
+    z1_moves = z1_obj['moves']
+    zimg2 = z2_obj['image']
+    z2_moves = z2_obj['moves']
+
+    url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
+    main_embed.add_field(
+        name=f"{z1_obj['name']} ({', '.join(z1_type)})\t`{w_candy1}x🍬\t{g_candy1}x🍭\t{lvl_candy1}x🍯`",
+        value=f"{config.TYPE_MAPPING[buffed_zerp1]} Trainer buff" if buffed_zerp1 != '' else "\u200B",
+        inline=False)
+    if eq1_note != {}:
+        main_embed.add_field(
+            name=f"{config.TYPE_MAPPING[eq1_note.get('type')]} Equipment",
+            value=f"{z1.get('buff_eq')}: `{eq1_note.get('notes')}`\n",
+            inline=False)
+
+    for i, move in enumerate(z1_moves):
+        if move['name'] == "":
+            continue
+        notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
+
+        main_embed.add_field(
+            name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
+            value=f"> **{move['name']}** \n" + \
+                  (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
+                  (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
+                  (f"> Stars: {(len(move['stars']) + extra_star1) * '★'}\n" if 'stars' in move else "") + \
+                  (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
+                  f"> Percentage: {move['percent'] if p1 is None else p1[i]}%\n",
+            inline=True)
+    main_embed.add_field(name="\u200B", value="\u200B", inline=False)
+    main_embed.add_field(name=f"🆚", value="\u200B", inline=False)
+    main_embed.add_field(name="\u200B", value="\u200B", inline=False)
+
+    url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
+    main_embed.add_field(
+        name=f"{z2['name']} ({', '.join(z2_type)})\t`{w_candy2}x🍬\t{g_candy2}x🍭\t{lvl_candy2}x🍯`",
+        value=f"{config.TYPE_MAPPING[buffed_zerp2]} Trainer buff" if buffed_zerp2 != '' else "\u200B",
+        inline=False)
+    if eq2_note != {}:
+        main_embed.add_field(
+            name=f"{config.TYPE_MAPPING[eq2_note.get('type')]} Equipment",
+            value=f"{z2.get('buff_eq')}: `{eq2_note.get('notes')}`\n",
+            inline=False)
+    for i, move in enumerate(z2_moves):
+        if move['name'] == "":
+            continue
+        notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
+        main_embed.add_field(
+            name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
+            value=f"> **{move['name']}** \n" + \
+                  (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
+                  (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
+                  (f"> Stars: {(len(move['stars']) + extra_star2) * '★'}\n" if 'stars' in move else "") + \
+                  (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
+                  f"> Percentage: {move['percent'] if p2 is None else p2[i]}%\n",
+            inline=True)
+
+    gen_image(message.id, url1, url2, path1, path2, path3, gym_bg=gym_bg)
+
+    file = nextcord.File(f"{message.id}.png", filename="image.png")
+    main_embed.set_image(url=f'attachment://image.png')
+    return main_embed, file, p1, p2
+
+
 def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False):
     if gym_bg and gym_bg is not None:
         bg_img = Image.open(gym_bg)
@@ -91,7 +196,8 @@ def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False):
     smaller_img.save(f'{_id}.png', quality=50)
 
 
-def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_types, buff_eqs, p1=None, p2=None, p1_temp=None,
+def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_types, buff_eqs, p1=None, p2=None,
+                    p1_temp=None,
                     p2_temp=None):
     z1 = db_query.get_zerpmon(zerpmon1_name)
     print(p1, p2, p1_temp, p2_temp)
@@ -130,10 +236,10 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
     if p2_temp is None:
         p2_temp = percentages2
     # print(f'Percentages2: {percentages2}')
-    if 'miss chance' in eq1:
-        status_affects[0].append(eq1)
-    if 'miss chance' in eq2:
-        status_affects[1].append(eq2)
+    # if 'miss chance' in eq1:
+    #     status_affects[0].append(eq1)
+    # if 'miss chance' in eq2:
+    #     status_affects[1].append(eq2)
     percentages1, percentages2, m1, m2 = \
         apply_status_effects(percentages1, percentages2, status_affects if status_affects is not None else [[], []])
 
@@ -196,10 +302,12 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
         winner['move1']['dmg'] = round(move1['dmg'])
         winner['move1']['mul'] = "x½" if d1m == 0.5 else f'x{d1m}'
         if 'reduce opponent damage' in eq2:
-            move1['dmg'] = round((eq2_val/100) * int(move1['dmg']))
+            move1['dmg'] = round((eq2_val / 100) * int(move1['dmg']))
             winner['move1']['dmg'] = round(move1['dmg'])
         elif move1['color'] == 'gold' and 'enemy gold attack to do 0 damage' in eq2:
-            new_dmg = random.choices([0, move1['dmg']], [eq2_val, 100 - eq2_val])
+            new_dmg = random.choices([0, move1['dmg']], [eq2_val, 100 - eq2_val])[0]
+            if new_dmg == 0:
+                winner['eq_name'] = buff_eqs[1]
             move1['dmg'] = new_dmg
             winner['move1']['dmg'] = new_dmg
         crit = get_crit_chance(eq1)
@@ -223,10 +331,12 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
         winner['move2']['dmg'] = round(move2['dmg'])
         winner['move2']['mul'] = "x½" if d2m == 0.5 else f'x{d2m}'
         if 'reduce opponent damage' in eq1:
-            move2['dmg'] = round((eq1_val/100) * int(move2['dmg']))
+            move2['dmg'] = round((eq1_val / 100) * int(move2['dmg']))
             winner['move2']['dmg'] = round(move2['dmg'])
         elif move2['color'] == 'gold' and 'enemy gold attack to do 0 damage' in eq1:
-            new_dmg = random.choices([0, move2['dmg']], [eq1_val, 100 - eq1_val])
+            new_dmg = random.choices([0, move2['dmg']], [eq1_val, 100 - eq1_val])[0]
+            if new_dmg == 0:
+                winner['eq_name'] = buff_eqs[0]
             move2['dmg'] = new_dmg
             winner['move2']['dmg'] = new_dmg
         crit = get_crit_chance(eq2)
@@ -243,19 +353,30 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                                                                                    status_affects[1])
 
     if winner['move1']['dmg'] != old_dmg1:
-        winner['dmg_str1'] = f"({old_dmg1} x{winner['move1']['dmg'] / old_dmg1:.1f})={winner['move1']['dmg']} ❤️‍🩹 "
+        n_dmg = winner['move1']['dmg']
+        winner['dmg_str1'] = f"({old_dmg1} x{n_dmg / old_dmg1:.1f})={n_dmg} {'❤️‍🩹' if n_dmg < old_dmg1 else '❤️‍🔥'} "
     if winner['move2']['dmg'] != old_dmg2:
-        winner['dmg_str2'] = f"({old_dmg2} x{winner['move2']['dmg'] / old_dmg2:.1f})={winner['move2']['dmg']} ❤️‍🩹 "
+        n_dmg = winner['move2']['dmg']
+        winner['dmg_str2'] = f"({old_dmg2} x{n_dmg / old_dmg2:.1f})={n_dmg} {'❤️‍🩹' if n_dmg < old_dmg2 else '❤️‍🔥'} "
     # Check Color of both moves
-    if move1['color'] in ['white', 'gold'] and move2['color'] in ['purple', 'blue'] and 'chance for white/gold attack to ignore opponent resistances' in eq1:
+    decided = False
+    if move1['color'] in ['white', 'gold'] and move2['color'] in ['purple',
+                                                                  'blue'] and 'chance for own white/gold attack to ignore opponent resistances' in eq1:
         d1 = float(winner['move1']['dmg'])
-        if d1 > 0:
+        trigger = random.choices([True, False], [eq1_val, 100 - eq1_val])[0]
+        if d1 > 0 and trigger:
             winner['winner'] = '1'
-    elif move2['color'] in ['white', 'gold'] and move1['color'] in ['purple', 'blue'] and 'chance for white/gold attack to ignore opponent resistances' in eq2:
+            winner['eq_name'] = buff_eqs[0]
+            decided = True
+    elif move2['color'] in ['white', 'gold'] and move1['color'] in ['purple',
+                                                                    'blue'] and 'chance for own white/gold attack to ignore opponent resistances' in eq2:
         d2 = float(winner['move2']['dmg'])
-        if d2 > 0:
+        trigger = random.choices([True, False], [eq2_val, 100 - eq2_val])[0]
+        if d2 > 0 and trigger:
             winner['winner'] = '2'
-    else:
+            winner['eq_name'] = buff_eqs[1]
+            decided = True
+    if not decided:
         match (move1['color'], move2['color']):
             case ("white", "white") | ("white", "gold") | ("gold", "white") | ("gold", "gold"):
 
@@ -274,7 +395,8 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 if winner['move2']['stars'] > 0:
                     m2 = db_query.get_move(move2['name'])
                     note = m2['notes'].lower()
-                    percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2, [[], [note]])
+                    percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                                                                                [[], [note]])
                     winner['winner'] = '2'
                     winner['status_effect'] = note
                     winner['move2']['msg'] = _m2
@@ -285,7 +407,8 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 if winner['move1']['stars'] > 0:
                     m1 = db_query.get_move(move1['name'])
                     note = m1['notes'].lower()
-                    percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2, [[note], []])
+                    percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                                                                                [[note], []])
 
                     winner['winner'] = '1'
                     winner['status_effect'] = note
@@ -293,8 +416,9 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 else:
                     winner['winner'] = ""
 
-            case ("blue", "white") | ("blue", "gold") | ("blue", "purple") | ("blue", "miss") | ("white", "blue") | ("gold",
-                                                                                                                     "blue") | (
+            case ("blue", "white") | ("blue", "gold") | ("blue", "purple") | ("blue", "miss") | ("white", "blue") | (
+                "gold",
+                "blue") | (
                      "purple", "blue") | ("miss", "blue") | ("blue", "blue"):
 
                 winner['winner'] = ""
@@ -360,15 +484,17 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             case _:
                 print(f"IDK what this is {move1}, {move2}")
     if winner['winner'] == "2" and 'chance to survive from being knocked out' in eq1:
-        new_winner = random.choices(["", "2"], [eq1_val, 100 - eq1_val])
+        new_winner = random.choices(["", "2"], [eq1_val, 100 - eq1_val])[0]
         winner['winner'] = new_winner
         if winner['winner'] == "":
-            winner['msg'] = eq1
+            winner['eq_name'] = buff_eqs[0]
+            winner['eq_msg'] = f'@me {eq1}'
     if winner['winner'] == "1" and 'chance to survive from being knocked out' in eq2:
-        new_winner = random.choices(["", "1"], [eq2_val, 100 - eq2_val])
+        new_winner = random.choices(["", "1"], [eq2_val, 100 - eq2_val])[0]
         winner['winner'] = new_winner
         if winner['winner'] == "":
-            winner['msg'] = eq2
+            winner['eq_name'] = buff_eqs[1]
+            winner['eq_msg'] = f'@op {eq2}'
     return winner, percentages1, percentages2, status_affects, p1_temp, p2_temp
 
 
@@ -460,9 +586,8 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                 temp_zerp = user1_zerpmons[_data1['gym_deck']['0'][str(i)]]
                 eq = _data1['equipment_decks']['gym_deck']['0'][str(i)]
                 if eq is not None and eq in _data1['equipments']:
-                    eq = _data1['equipments'][eq]
-                    if [_i['value'] for _i in eq['attributes'] if _i['trait_type'] == 'Type'][-1] in [_i['value'] for _i in temp_zerp['attributes'] if _i['trait_type'] == 'Type']:
-                        temp_zerp['buff_eq'] = eq['name']
+                    eq_ = _data1['equipments'][eq]
+                    temp_zerp['buff_eq'], temp_zerp['eq'] = eq_['name'], eq
                 user1_z.append(temp_zerp)
             except:
                 pass
@@ -492,9 +617,8 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
     while len(user1_zerpmons) != 0 and len(user2_zerpmons) != 0:
         z1 = user1_zerpmons[-1]
         z1_obj = db_query.get_zerpmon(z1['name'])
-        w_candy, g_candy, lvl_candy = z1_obj.get('white_candy', 0), z1_obj.get('gold_candy', 0), z1_obj.get('licorice', 0)
         z1_moves = z1_obj['moves']
-        zimg1 = z1['image']
+
         z1_type = [i['value'] for i in z1['attributes'] if i['trait_type'] == 'Type']
         buffed_zerp = ''
         for i in z1_type:
@@ -503,69 +627,23 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
 
         z2 = user2_zerpmons[-1]
         z2_moves = z2['moves']
-        zimg2 = z2['image']
         z2_type = [i['value'] for i in z2['attributes'] if i['trait_type'] == 'Type']
+        if 'buff_eq' in z1:
+            eq1 = _data1['equipments'][z1['eq']]
+            types1 = {}
+            for m_i in range(4):
+                types1[z1_obj['moves'][m_i]['type']] = 1
+            if [_i['value'] for _i in eq1['attributes'] if _i['trait_type'] == 'Type'][-1] not in list(types1.keys()):
+                del z1['buff_eq']
 
         if p2 is None:
             p2 = [(float(p['percent']) if p['percent'] not in ["0.00", "0", ""] else None) for p in
                   z2['moves']]
-
-        main_embed = CustomEmbed(title="Zerpmon rolling attacks...", color=0x35bcbf)
-        path1 = f"./static/images/{z1['name']}.png"
-        path2 = f"./static/images/vs.png"
-        path3 = f"./static/images/{z2['name']}.png"
-
-        url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
-        main_embed.add_field(name=f"{z1['name']} ({', '.join(z1_type)})\t`{w_candy}x🍬\t{g_candy}x🍭\t{lvl_candy}x🍯`",
-                             value=f"{config.TYPE_MAPPING[buffed_zerp]} Trainer buff" if buffed_zerp != '' else "\u200B",
-                             inline=False)
-
-        eq1_note = db_query.get_eq_by_name(z1.get('buff_eq', None)) if z1.get('buff_eq', None) is not None else ''
-        if eq1_note != '':
-            main_embed.add_field(
-                name=f"{config.TYPE_MAPPING[eq1_note.get('type')]} Equipment",
-                value=f"{z1.get('buff_eq')}: `{eq1_note.get('notes')}`\n",
-                inline=False)
-        for i, move in enumerate(z1_moves):
-            if move['name'] == "":
-                continue
-            notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
-
-            main_embed.add_field(
-                name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
-                value=f"> **{move['name']}** \n" + \
-                      (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
-                      (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
-                      (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
-                      (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                      f"> Percentage: {move['percent'] if p1 is None else p1[i]}%\n",
-                inline=True)
-        main_embed.add_field(name="\u200B", value="\u200B", inline=False)
-        main_embed.add_field(name=f"🆚", value="\u200B", inline=False)
-        main_embed.add_field(name="\u200B", value="\u200B", inline=False)
-
-        url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
-        main_embed.add_field(name=f"{z2['name']} ({', '.join(z2_type)})",
-                             value=f"{config.TYPE_MAPPING[gym_type]} Trainer buff" if stage > 4 else "\u200B",
-                             inline=False)
-        for i, move in enumerate(z2_moves):
-            if move['name'] == "":
-                continue
-            notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
-            main_embed.add_field(
-                name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
-                value=f"> **{move['name']}** \n" + \
-                      (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
-                      (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
-                      (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
-                      (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                      f"> Percentage: {move['percent'] if p2 is None else p2[i]}%\n",
-                inline=True)
-
-        gen_image(interaction.id, url1, url2, path1, path2, path3, leader['bg'])
-
-        file = nextcord.File(f"{interaction.id}.png", filename="image.png")
-        main_embed.set_image(url=f'attachment://image.png')
+        main_embed, file, p1, p2 = get_zerp_battle_embed(interaction, z1, z2, z1_obj.copy(), z2.copy(), z1_type,
+                                                         z2_type, buffed_zerp, gym_type if stage > 4 else '',
+                                                         leader['bg'],
+                                                         p1.copy() if p1 is not None else p1,
+                                                         p2.copy() if p2 is not None else p2)
 
         if msg_hook is None:
             msg_hook = interaction
@@ -600,7 +678,9 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
 
             result, p1, p2, status_stack, p1_temp, p2_temp = battle_zerpmons(z1['name'], z2['name'], [z1_type, z2_type],
                                                                              status_stack,
-                                                                             [buffed_type1, buffed_type2], [z1.get('buff_eq', None), z2.get('buff_eq', None)], p1, p2,
+                                                                             [buffed_type1, buffed_type2],
+                                                                             [z1.get('buff_eq', None),
+                                                                              z2.get('buff_eq', None)], p1, p2,
                                                                              p1_temp, p2_temp)
             t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
             t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
@@ -760,14 +840,24 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
 
             # DRAW
             if result['winner'] == "":
-                await msg_hook.send(content=f"**DRAW**", ephemeral=True)
+                if 'eq_msg' in result:
+                    defender = result['eq_msg'][0:3].replace('@me', z1['name']).replace('@op', z2['name'])
+                    await msg_hook.send(
+                        content=f"Woah! **{defender}** seemingly comes back to life with its **{result['eq_name']}**!",
+                        ephemeral=True)
+                else:
+                    await msg_hook.send(
+                        content=f"**DRAW** {'✨**' + result['eq_name'] + '**✨' if 'eq_name' in result else ''}",
+                        ephemeral=True)
                 move_counter += 1
                 continue
 
             if result['winner'] == '1':
                 await msg_hook.send(
-                    content=f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
-                        'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}", ephemeral=True)
+                    content=(f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
+                        'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}") + (
+                                f'\n✨ **{result["eq_name"]} Triggered** ✨' if "eq_name" in result else ''),
+                    ephemeral=True)
                 eliminate = (2, z2['name'])
                 p2 = None
                 status_stack[0] = [i for i in status_stack[0] if ('oppo' not in i) and ('enemy' not in i)]
@@ -958,12 +1048,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                     temp_zerp = user1_zerpmons[_data1['battle_deck']['0'][str(i)]]
                     eq = _data1['equipment_decks']['battle_deck']['0'][str(i)]
                     if eq is not None and eq in _data1['equipments']:
-                        eq = _data1['equipments'][eq]
-                        if [_i['value'] for _i in eq['attributes'] if _i['trait_type'] == 'Type'][-1] in [_i['value']
-                                                                                                          for _i in
-                                                                                                          temp_zerp['attributes']
-                                                                                                          if _i['trait_type'] == 'Type']:
-                            temp_zerp['buff_eq'] = eq['name']
+                        eq_ = _data1['equipments'][eq]
+                        temp_zerp['buff_eq'], temp_zerp['eq'] = eq_['name'], eq
                     user1_z.append(temp_zerp)
                 except:
                     print(f'{traceback.format_exc()}')
@@ -983,14 +1069,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                     temp_zerp2 = user2_zerpmons[_data2['battle_deck']['0'][str(i)]]
                     eq = _data2['equipment_decks']['battle_deck']['0'][str(i)]
                     if eq is not None and eq in _data2['equipments']:
-                        eq = _data2['equipments'][eq]
-                        if [_i['value'] for _i in eq['attributes'] if _i['trait_type'] == 'Type'][-1] in [_i['value']
-                                                                                                          for _i in
-                                                                                                          temp_zerp2[
-                                                                                                              'attributes']
-                                                                                                          if _i[
-                                                                                                                 'trait_type'] == 'Type']:
-                            temp_zerp2['buff_eq'] = eq['name']
+                        eq_ = _data2['equipments'][eq]
+                        temp_zerp2['buff_eq'], temp_zerp2['eq'] = eq_['name'], eq
                     user2_z.append(temp_zerp2)
                 except:
                     pass
@@ -1026,89 +1106,41 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         z1 = user1_zerpmons[-1]
         z1_obj = db_query.get_zerpmon(z1['name'])
         z1_moves = z1_obj['moves']
-        w_candy1, g_candy1, lvl_candy1 = z1_obj.get('white_candy', 0), z1_obj.get('gold_candy', 0), z1_obj.get('licorice', 0)
-        zimg1 = z1['image']
         z1_type = [i['value'] for i in z1['attributes'] if i['trait_type'] == 'Type']
         buffed_zerp1 = ''
         for i in z1_type:
             if i in buffed_type1:
                 buffed_zerp1 = i
+        if 'buff_eq' in z1:
+            eq1 = _data1['equipments'][z1['eq']]
+            types1 = {}
+            for m_i in range(4):
+                types1[z1_obj['moves'][m_i]['type']] = 1
+            if [_i['value'] for _i in eq1['attributes'] if _i['trait_type'] == 'Type'][-1] not in list(types1.keys()):
+                del z1['buff_eq']
 
         z2 = user2_zerpmons[-1]
+        print(z1, z2)
         z2_obj = db_query.get_zerpmon(z2['name'])
         z2_moves = z2_obj['moves']
-        w_candy2, g_candy2, lvl_candy2 = z2_obj.get('white_candy', 0), z2_obj.get('gold_candy', 0), z2_obj.get(
-            'licorice', 0)
-        zimg2 = z2['image']
         z2_type = [i['value'] for i in z2['attributes'] if i['trait_type'] == 'Type']
         buffed_zerp2 = ''
         for i in z2_type:
             if i in buffed_type2:
                 buffed_zerp2 = i
+        if 'buff_eq' in z2:
+            eq2 = _data2['equipments'][z2['eq']]
+            types2 = {}
+            for m_i in range(4):
+                types2[z2_obj['moves'][m_i]['type']] = 1
+            if [_i['value'] for _i in eq2['attributes'] if _i['trait_type'] == 'Type'][-1] not in list(types2.keys()):
+                del z2['buff_eq']
 
-        main_embed = CustomEmbed(title="Zerpmon rolling attacks...", color=0x35bcbf)
+        main_embed, file, p1, p2 = get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type,
+                                                         buffed_zerp1,
+                                                         buffed_zerp2, bg_img, p1, p2)
         if battle_instance['type'] == 'free_br':
             main_embed.description = f'{battle_instance["username1"]} vs {battle_instance["username2"]}'
-        path1 = f"./static/images/{z1['name']}.png"
-        path2 = f"./static/images/vs.png"
-        path3 = f"./static/images/{z2['name']}.png"
-
-        url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
-        main_embed.add_field(name=f"{z1['name']} ({', '.join(z1_type)})\t`{w_candy1}x🍬\t{g_candy1}x🍭\t{lvl_candy1}x🍯`",
-                             value=f"{config.TYPE_MAPPING[buffed_zerp1]} Trainer buff" if buffed_zerp1 != '' else "\u200B",
-                             inline=False)
-        eq1_note = db_query.get_eq_by_name(z1.get('buff_eq', None)) if z1.get('buff_eq', None) is not None else ''
-        if eq1_note != '':
-            main_embed.add_field(
-                name=f"{config.TYPE_MAPPING[eq1_note.get('type')]} Equipment",
-                value=f"{z1.get('buff_eq')}: `{eq1_note.get('notes')}`\n",
-                inline=False)
-        for i, move in enumerate(z1_moves):
-            if move['name'] == "":
-                continue
-            notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
-
-            main_embed.add_field(
-                name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
-                value=f"> **{move['name']}** \n" + \
-                      (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
-                      (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
-                      (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
-                      (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                      f"> Percentage: {move['percent'] if p1 is None else p1[i]}%\n",
-                inline=True)
-        main_embed.add_field(name="\u200B", value="\u200B", inline=False)
-        main_embed.add_field(name=f"🆚", value="\u200B", inline=False)
-        main_embed.add_field(name="\u200B", value="\u200B", inline=False)
-
-        url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
-        main_embed.add_field(name=f"{z2['name']} ({', '.join(z2_type)})\t`{w_candy2}x🍬\t{g_candy2}x🍭\t{lvl_candy2}x🍯`",
-                             value=f"{config.TYPE_MAPPING[buffed_zerp2]} Trainer buff" if buffed_zerp2 != '' else "\u200B",
-                             inline=False)
-        eq2_note = db_query.get_eq_by_name(z2.get('buff_eq', None)) if z2.get('buff_eq', None) is not None else ''
-        if eq2_note != '':
-            main_embed.add_field(
-                name=f"{config.TYPE_MAPPING[eq2_note.get('type')]} Equipment",
-                value=f"{z2.get('buff_eq')}: `{eq2_note.get('notes')}`\n",
-                inline=False)
-        for i, move in enumerate(z2_moves):
-            if move['name'] == "":
-                continue
-            notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
-            main_embed.add_field(
-                name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
-                value=f"> **{move['name']}** \n" + \
-                      (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
-                      (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
-                      (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
-                      (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                      f"> Percentage: {move['percent'] if p2 is None else p2[i]}%\n",
-                inline=True)
-
-        gen_image(message.id, url1, url2, path1, path2, path3, gym_bg=bg_img)
-
-        file = nextcord.File(f"{message.id}.png", filename="image.png")
-        main_embed.set_image(url=f'attachment://image.png')
 
         if message.id == msg_hook.id and battle_instance['type'] != 'free_br':
             msg_hook = await msg_hook.reply(content="\u200B", embeds=[trainer_embed, main_embed], files=[file2, file])
@@ -1139,7 +1171,9 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
             result, p1, p2, status_stack, p1_temp, p2_temp = battle_zerpmons(z1['name'], z2['name'], [z1_type, z2_type],
                                                                              status_stack,
-                                                                             [buffed_type1, buffed_type2], [z1.get('buff_eq', None), z2.get('buff_eq', None)], p1, p2,
+                                                                             [buffed_type1, buffed_type2],
+                                                                             [z1.get('buff_eq', None),
+                                                                              z2.get('buff_eq', None)], p1, p2,
                                                                              p1_temp, p2_temp)
             t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
             t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
@@ -1298,14 +1332,22 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
             # DRAW
             if result['winner'] == "":
-                await msg_hook.channel.send(content=f"**DRAW**")
+                if 'eq_msg' in result:
+                    defender = result['eq_msg'][0:3].replace('@me', z1['name']).replace('@op', z2['name'])
+                    await msg_hook.channel.send(
+                        content=f"Woah! **{defender}** seemingly comes back to life with its **{result['eq_name']}**!")
+                else:
+                    await msg_hook.channel.send(
+                        content=f"**DRAW** {'✨**' + result['eq_name'] + '**✨' if 'eq_name' in result else ''}")
                 move_counter += 1
                 continue
 
             if result['winner'] == '1':
                 await msg_hook.channel.send(
-                    content=f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
+                    content=(f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
                         'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}")
+                            + (f'\n✨ **{result["eq_name"]} Triggered** ✨' if "eq_name" in result else '')
+                )
                 eliminate = (2, z2['name'])
                 p2 = None
                 status_stack[0] = [i for i in status_stack[0] if ('oppo' not in i) and ('enemy' not in i)]
@@ -1316,7 +1358,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             elif result['winner'] == '2':
                 await msg_hook.channel.send(
                     content=f"{z2['name']} **knocked out** 💀 {z1['name']} 💀!" if '🎯' not in result['move2'][
-                        'mul'] else f"**{z1['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}")
+                        'mul'] else f"**{z1['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}" + (
+                        f'\n✨ **{result["eq_name"]} Triggered** ✨' if "eq_name" in result else ''))
                 eliminate = (1, z1['name'])
                 p1 = None
                 status_stack[1] = [i for i in status_stack[1] if ('oppo' not in i) and ('enemy' not in i)]
@@ -1384,12 +1427,10 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
 async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zerpmon, old_num):
     serial, z1 = active_zerpmon
-    z1_moves = db_query.get_zerpmon(z1['name'])
-    w_candy, g_candy, lvl_candy = z1_moves.get('white_candy', 0), z1_moves.get('gold_candy', 0), z1_moves.get('licorice', 0)
-    z1_level = z1_moves['level'] if 'level' in z1_moves else 1
-    z1_moves = z1_moves['moves']
+    z1_obj = db_query.get_zerpmon(z1['name'])
+    z1_level = z1_obj['level'] if 'level' in z1_obj else 1
+    z1_moves = z1_obj['moves']
 
-    zimg1 = z1['image']
     _data1 = db_query.get_owned(user_id)
     u_flair = f' | {_data1.get("flair", [])[0]}' if len(
         _data1.get("flair", [])) > 0 else ''
@@ -1411,81 +1452,23 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
     while z2['name'] == z1['name']:
         z2 = db_query.get_rand_zerpmon(level=z1_level)
     z2_moves = z2['moves']
-    zimg2 = z2['image']
     z2_type = [i['value'] for i in z2['attributes'] if i['trait_type'] == 'Type']
-
-    main_embed = CustomEmbed(title="Zerpmon rolling attacks...", color=0x8971d0)
-
-    path1 = f"./static/images/{z1['name']}.png"
-    path2 = f"./static/images/vs.png"
-    path3 = f"./static/images/{z2['name']}.png"
-
-    url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
-    main_embed.add_field(name=f"{z1['name']} ({', '.join(z1_type)})\t`{w_candy}x🍬\t{g_candy}x🍭\t{lvl_candy}x🍯`",
-                         value=f"{config.TYPE_MAPPING[buffed_zerp]} Trainer buff" if buffed_zerp != '' else "\u200B",
-                         inline=False)
     # Dealing with Equipment
     try:
         cur_z_index = [key for key, value in _data1['mission_deck'].items() if value == str(serial)][0]
         eq = _data1['equipment_decks']['mission_deck'][str(cur_z_index)]
         if eq is not None and eq in _data1['equipments']:
             eq = _data1['equipments'][eq]
-            if [_i['value'] for _i in eq['attributes'] if _i['trait_type'] == 'Type'][-1] in [_i['value']
-                                                                                              for _i in
-                                                                                              z1[
-                                                                                                  'attributes']
-                                                                                              if _i[
-                                                                                                     'trait_type'] == 'Type']:
+            types1 = {}
+            for m_i in range(4):
+                types1[z1_obj['moves'][m_i]['type']] = 1
+            if [_i['value'] for _i in eq['attributes'] if _i['trait_type'] == 'Type'][-1] in list(types1.keys()):
                 z1['buff_eq'] = eq['name']
     except:
         pass
 
-    eq1_note = db_query.get_eq_by_name(z1.get('buff_eq', None)) if z1.get('buff_eq', None) is not None else ''
-    if eq1_note != '':
-        main_embed.add_field(
-            name=f"{config.TYPE_MAPPING[eq1_note.get('type')]} Equipment",
-            value=f"{z1.get('buff_eq')}: `{eq1_note.get('notes')}`\n",
-            inline=False)
-    for i, move in enumerate(z1_moves):
-        if move['name'] == "":
-            continue
-        notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
-
-        main_embed.add_field(
-            name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
-            value=f"> **{move['name']}** \n" + \
-                  (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
-                  (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
-                  (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
-                  (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                  f"> Percentage: {move['percent']}%\n",
-            inline=True)
-    main_embed.add_field(name="\u200B", value="\u200B", inline=False)
-    main_embed.add_field(name=f"🆚", value="\u200B", inline=False)
-    main_embed.add_field(name="\u200B", value="\u200B", inline=False)
-
-    url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
-    main_embed.add_field(name=f"{z2['name']} ({', '.join(z2_type)})",
-                         value="\u200B", inline=False)
-
-    for i, move in enumerate(z2_moves):
-        if move['name'] == "":
-            continue
-        notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
-
-        main_embed.add_field(
-            name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
-            value=f"> **{move['name']}** \n" + \
-                  (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
-                  (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
-                  (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
-                  (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                  f"> Percentage: {move['percent']}%\n",
-            inline=True)
-    gen_image(interaction.id, url1, url2, path1, path2, path3, _data1.get('bg', [None])[0])
-
-    file = nextcord.File(f"{interaction.id}.png", filename="image.png")
-    main_embed.set_image(url=f'attachment://image.png')
+    main_embed, file, p1, p2 = get_zerp_battle_embed(interaction, z1, z2, z1_obj, z2, z1_type, z2_type, buffed_zerp, '',
+                                                     _data1.get('bg', [None])[0], None, None)
 
     await interaction.send(content="\u200B", embed=main_embed, file=file, ephemeral=True)
 
@@ -1504,7 +1487,9 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
         await asyncio.sleep(4)
         result, p1, p2, status_stack, p1_temp, p2_temp = battle_zerpmons(z1['name'], z2['name'], [z1_type, z2_type],
                                                                          status_stack,
-                                                                         [buffed_type1, []], [z1.get('buff_eq', None), z2.get('buff_eq', None)], p1, p2, p1_temp,
+                                                                         [buffed_type1, []], [z1.get('buff_eq', None),
+                                                                                              z2.get('buff_eq', None)],
+                                                                         p1, p2, p1_temp,
                                                                          p2_temp)
         t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
         t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
@@ -1673,15 +1658,25 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
 
         # DRAW
         if result['winner'] == "" and lost == 0:
-            await interaction.send(content=f"**DRAW**", ephemeral=True)
+            if 'eq_msg' in result:
+                defender = result['eq_msg'][0:3].replace('@me', z1['name']).replace('@op', z2['name'])
+                await interaction.send(
+                    content=f"Woah! **{defender}** seemingly comes back to life with its **{result['eq_name']}**!",
+                    ephemeral=True)
+            else:
+                await interaction.send(
+                    content=f"**DRAW** {'✨**' + result['eq_name'] + '**✨' if 'eq_name' in result else ''}",
+                    ephemeral=True)
             move_counter += 1
             continue
 
         if (result['winner'] == '1' and lost == 0) or lost == 2:
             if lost == 0:
                 await interaction.send(
-                    content=f"{z1['name']} **knocked out** {z2['name']}!" if '🎯' not in result['move1'][
-                        'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}", ephemeral=True)
+                    content=(f"{z1['name']} **knocked out** {z2['name']}!" if '🎯' not in result['move1'][
+                        'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}") + (
+                                f'\n✨ **{result["eq_name"]} Triggered** ✨' if "eq_name" in result else ''),
+                    ephemeral=True)
             eliminate = (2, z2['name'])
             await interaction.send(
                 f"**WINNER**   👑**{user_mention}**👑",

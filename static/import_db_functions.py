@@ -335,7 +335,7 @@ def reset_all_gyms():
 
 
 def import_equipments():
-    with open('Equipment.csv', 'r') as csvfile:
+    with open('Equipment2.csv', 'r') as csvfile:
         collection = db['Equipment']
         collection.drop()
         csvreader = csv.reader(csvfile)
