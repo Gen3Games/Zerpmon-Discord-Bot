@@ -3038,12 +3038,12 @@ async def view_gyms(interaction: nextcord.Interaction):
         zerps = leader["zerpmons"]
         zerps = sorted(zerps, key=lambda i: i['name'])
         embed.add_field(
-            name=f'{emj} {gym[0]} Gym {emj} (Stage {gym[1]}){f" - Reset <t:{gym[2]}:R>" if gym[2] > time.time() else ""}',
-            value=f'> {zerps[0]["name"]}\n'
-                  f'> {zerps[1]["name"]}\n'
-                  f'> {zerps[2]["name"]}\n'
-                  f'> {zerps[3]["name"]}\n'
-                  f'> {zerps[4]["name"]}\n',
+            name=f'__{emj} {gym[0]} Gym {emj} (Stage {gym[1]})__{f" - Reset <t:{gym[2]}:R>" if gym[2] > time.time() else ""}',
+            value=f'> **{zerps[0]["name"]}**\t({checks.get_type_emoji(zerps[0]["attributes"])})\n'
+                  f'> **{zerps[1]["name"]}**\t({checks.get_type_emoji(zerps[1]["attributes"])})\n'
+                  f'> **{zerps[2]["name"]}**\t({checks.get_type_emoji(zerps[2]["attributes"])})\n'
+                  f'> **{zerps[3]["name"]}**\t({checks.get_type_emoji(zerps[3]["attributes"])})\n'
+                  f'> **{zerps[4]["name"]}**\t({checks.get_type_emoji(zerps[4]["attributes"])})\n',
             inline=False)
     h, m, s = await checks.get_time_left_utc(1)
     main_ts = db_query.get_gym_reset()
@@ -3438,7 +3438,7 @@ async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
         for k, v in cards.items():
             if len(choices) == 25:
                 break
-            choices[v['name']] = k
+            choices[f'{v["name"]} ({checks.get_type_emoji(v["attributes"])})'] = k
     await interaction.response.send_autocomplete(choices)
 
 

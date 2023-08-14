@@ -54,6 +54,11 @@ def get_next_ts():
     return target_time.timestamp()
 
 
+def get_type_emoji(attrs):
+    emj_list = [config.TYPE_MAPPING[i['value']] for i in attrs if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
+    return ', '.join(emj_list)
+
+
 async def check_wager_entry(interaction: nextcord.Interaction, users):
     for owned_nfts in users:
         if owned_nfts['data'] is None:

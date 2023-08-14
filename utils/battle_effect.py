@@ -174,7 +174,7 @@ def apply_status_effects(p1, p2, status_e):
 
         if "increase" in effect:
             val = + val
-            if "opposing" in effect:
+            if "oppo" in effect:
                 (index, m1) = (7, f'@op⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect or "miss" in effect else (None, '0')
                 if index is None:
                     continue
@@ -195,7 +195,7 @@ def apply_status_effects(p1, p2, status_e):
 
         elif "decrease" in effect:
             val = -val
-            if "opposing" in effect:
+            if "oppo" in effect:
                 (index, m1) = (7, f'@op⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect or "miss" in effect else (
                     (6, f'@op⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
                     ((mg_index2,
@@ -268,7 +268,7 @@ def apply_status_effects(p1, p2, status_e):
 
         if "increase" in effect:
             val = + val
-            if "opposing" in effect:
+            if "oppo" in effect:
                 (index, m2) = (7, f'@op⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect or "miss" in effect else (None, '0')
                 if index is None:
                     continue
@@ -287,7 +287,7 @@ def apply_status_effects(p1, p2, status_e):
 
         elif "decrease" in effect:
             val = -val
-            if "opposing" in effect:
+            if "oppo" in effect:
                 (index, m2) = (7, f'@op⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect or "miss" in effect else (
                     (6, f'@op⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
                     ((mg_index1,

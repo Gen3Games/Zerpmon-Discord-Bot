@@ -120,7 +120,7 @@ async def send_reset_message(client: nextcord.Client):
                                             title=f"🌟 GYM RANKINGS LEADERBOARD 🌟")
                         embed.add_field(name='\u200B', value=f"\u200B", inline=False)
                         for i, user in enumerate(top_players):
-                            battle_deck = user['battle_deck']['0']
+                            battle_deck = user.get('gym_deck', {'0': {}})['0']
                             zerp_msg = ('> Battle Zerpmons:\n'
                                         f'> \n') if len(battle_deck) > 0 else '> Battle Zerpmons:\n'
                             for index, v in battle_deck.items():

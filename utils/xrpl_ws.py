@@ -107,7 +107,7 @@ async def listener(client, store_address, wager_address):
                 message = msg['transaction']
                 # if 'NFT' in message['TransactionType']:
                 # print(message)
-                await send_txn(config.STORE_ADDR, 0, 'reward')
+                # await send_txn(config.STORE_ADDR, 0, 'reward')
                 if 'TransactionType' in message and message['TransactionType'] == "Payment" and \
                         'Destination' in message and (
                         message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR,

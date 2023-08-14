@@ -302,7 +302,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
         winner['move1']['dmg'] = round(move1['dmg'])
         winner['move1']['mul'] = "x½" if d1m == 0.5 else f'x{d1m}'
         if 'reduce opponent damage' in eq2:
-            move1['dmg'] = round((eq2_val / 100) * int(move1['dmg']))
+            move1['dmg'] = round((1 - (eq2_val / 100)) * int(move1['dmg']))
             winner['move1']['dmg'] = round(move1['dmg'])
         elif move1['color'] == 'gold' and 'enemy gold attack to do 0 damage' in eq2:
             new_dmg = random.choices([0, move1['dmg']], [eq2_val, 100 - eq2_val])[0]
@@ -331,7 +331,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
         winner['move2']['dmg'] = round(move2['dmg'])
         winner['move2']['mul'] = "x½" if d2m == 0.5 else f'x{d2m}'
         if 'reduce opponent damage' in eq1:
-            move2['dmg'] = round((eq1_val / 100) * int(move2['dmg']))
+            move2['dmg'] = round((1 - (eq1_val / 100)) * int(move2['dmg']))
             winner['move2']['dmg'] = round(move2['dmg'])
         elif move2['color'] == 'gold' and 'enemy gold attack to do 0 damage' in eq1:
             new_dmg = random.choices([0, move2['dmg']], [eq1_val, 100 - eq1_val])[0]
@@ -851,12 +851,12 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                         ephemeral=True)
                 move_counter += 1
                 continue
-
+            # {}'s "Crystal Ball" activated and nullified {} attack!
             if result['winner'] == '1':
                 await msg_hook.send(
                     content=(f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
                         'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}") + (
-                                f'\n✨ **{result["eq_name"]} Triggered** ✨' if "eq_name" in result else ''),
+                                f"\n{z1['name']}'s **{result['eq_name']}** activated and nullified {z2['name']}'s attack" if "eq_name" in result else ''),
                     ephemeral=True)
                 eliminate = (2, z2['name'])
                 p2 = None
@@ -1346,7 +1346,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                 await msg_hook.channel.send(
                     content=(f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
                         'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}")
-                            + (f'\n✨ **{result["eq_name"]} Triggered** ✨' if "eq_name" in result else '')
+                            + (f"\n{z1['name']}'s **{result['eq_name']}** activated and nullified {z2['name']}'s attack" if "eq_name" in result else '')
                 )
                 eliminate = (2, z2['name'])
                 p2 = None
@@ -1359,7 +1359,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                 await msg_hook.channel.send(
                     content=f"{z2['name']} **knocked out** 💀 {z1['name']} 💀!" if '🎯' not in result['move2'][
                         'mul'] else f"**{z1['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}" + (
-                        f'\n✨ **{result["eq_name"]} Triggered** ✨' if "eq_name" in result else ''))
+                        f"\n{z2['name']}'s **{result['eq_name']}** activated and nullified {z1['name']}'s attack" if "eq_name" in result else ''))
                 eliminate = (1, z1['name'])
                 p1 = None
                 status_stack[1] = [i for i in status_stack[1] if ('oppo' not in i) and ('enemy' not in i)]
@@ -1626,7 +1626,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                         if result['move1']['color'] in effect:
                             result['winner'] = '2'
                         else:
-                            new_m = f"{result['move1']['name']} was ineffective! Draw!"
+                            new_m = f"{result['move2']['name']} was ineffective! Draw!"
                             await interaction.send(
                                 content=new_m, ephemeral=True)
                             move_counter += 1
@@ -1675,7 +1675,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                 await interaction.send(
                     content=(f"{z1['name']} **knocked out** {z2['name']}!" if '🎯' not in result['move1'][
                         'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}") + (
-                                f'\n✨ **{result["eq_name"]} Triggered** ✨' if "eq_name" in result else ''),
+                                f"\n{z1['name']}'s **{result['eq_name']}** activated and nullified {z2['name']}'s attack" if "eq_name" in result else ''),
                     ephemeral=True)
             eliminate = (2, z2['name'])
             await interaction.send(
