@@ -21,7 +21,7 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
         for k, v in cards.items():
             if len(choices) == 24:
                 break
-            choices[f'{v["name"]} ({get_type_emoji(v["attributes"])})'] = k
+            choices[f'{v["name"]} ({get_type_emoji(v["attributes"], emoji=False)})'] = k
     choices['Empty slot'] = ''
     await interaction.response.send_autocomplete(choices)
 
@@ -31,7 +31,7 @@ async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
     params = interaction.data['options'][0]['options']
     remove_items = [i['value'] for i in params if i['name'][0].isdigit()]
     if user_owned is not None and 'equipments' in user_owned:
-        choices = {f'{i["name"]} ({get_type_emoji(i["attributes"])})': k for k, i in user_owned['equipments'].items() if item in i['name'] and k not in remove_items}
+        choices = {f'{i["name"]} ({get_type_emoji(i["attributes"], emoji=False)})': k for k, i in user_owned['equipments'].items() if item in i['name'] and k not in remove_items}
     else:
         choices = {}
     choices = dict(sorted(choices.items()))

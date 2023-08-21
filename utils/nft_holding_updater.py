@@ -119,17 +119,22 @@ async def update_nft_holdings(client: nextcord.Client):
                                     if len(user_obj['zerpmons']) > 0:
                                         try:
                                             role = nextcord.utils.get(guild.roles, name="Zerpmon Holder")
+                                            if role is None:
+                                                continue
                                             await user.add_roles(role)
                                         except Exception as e:
                                             print(f"USER already has the required role {traceback.format_exc()}")
                                     if len(user_obj['trainer_cards']) > 0:
                                         try:
                                             role = nextcord.utils.get(guild.roles, name="Trainer")
+                                            if role is None:
+                                                continue
                                             await user.add_roles(role)
                                         except:
                                             print("USER already has the required role")
                             except Exception as e:
                                 print(f"USER already has the required role {e}")
+                            await asyncio.sleep(2)
 
                 db_query.update_user_decks(user_obj['discord_id'], serials, t_serial)
             except Exception as e:

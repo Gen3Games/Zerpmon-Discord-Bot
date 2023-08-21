@@ -126,6 +126,26 @@ def execute_before_command(ctx: nextcord.Interaction):
 
 
 @client.event
+async def on_http_ratelimit(limit, remaining, reset_after, bucket, scope):
+    print(f'Hit rate limit {limit}, {remaining}, {reset_after}, {bucket}, {scope}')
+
+
+@client.event
+async def on_global_http_ratelimit(retry_after):
+    print(f'Hit Global rate limit {retry_after}')
+
+
+@client.event
+async def on_error(event, *args, **kwargs):
+    print(f'Discord Error in {event}\n{args}\n{kwargs}')
+
+
+@client.event
+async def on_close():
+    print(f'Discord connection closed!')
+
+    
+@client.event
 async def on_ready():
     print('Bot connected to Discord!')
     for guild in client.guilds:
@@ -251,6 +271,12 @@ async def wallet(interaction: nextcord.Interaction):
             # Save the address to stop dual accounts
             user_obj['address'] = address
             db_query.save_user(user_obj)
+            for k in ['gym_deck', 'battle_deck', 'mission_deck']:
+                if k != 'mission_deck':
+                    for i in range(5):
+                        db_query.set_equipment_on(user_obj['discord_id'], [None, None, None, None, None], k, str(i))
+                else:
+                    db_query.set_equipment_on(user_obj['discord_id'], [None, None, None, None, None] * 4, k, None)
             return
         await asyncio.sleep(1)
     await msg.edit(embed=CustomEmbed(title="QR code **expired** please generate a new one.", color=0x000))
@@ -759,7 +785,7 @@ async def equipment_mission(interaction: nextcord.Interaction,
             if user_obj is None or len(user_obj['equipments'].get(equipment, {})) == 0:
                 await interaction.edit_original_message(content=f"Sorry, you don't own **{equipment}  Equipment**")
                 return
-            if len(all_types) < eq_i or all_types[eq_i] is None:
+            if len(all_types) < eq_i + 1 or all_types[eq_i] is None:
                 fail_msg += f"Sorry, you can't set **Equipment** to an empty slot.\n" \
                             f"You don't have a Zerpmon at **{eq_i + 1}** position\n"
                 eqs[eq_i] = None
@@ -3039,11 +3065,11 @@ async def view_gyms(interaction: nextcord.Interaction):
         zerps = sorted(zerps, key=lambda i: i['name'])
         embed.add_field(
             name=f'__{emj} {gym[0]} Gym {emj} (Stage {gym[1]})__{f" - Reset <t:{gym[2]}:R>" if gym[2] > time.time() else ""}',
-            value=f'> **{zerps[0]["name"]}**\t({checks.get_type_emoji(zerps[0]["attributes"])})\n'
-                  f'> **{zerps[1]["name"]}**\t({checks.get_type_emoji(zerps[1]["attributes"])})\n'
-                  f'> **{zerps[2]["name"]}**\t({checks.get_type_emoji(zerps[2]["attributes"])})\n'
-                  f'> **{zerps[3]["name"]}**\t({checks.get_type_emoji(zerps[3]["attributes"])})\n'
-                  f'> **{zerps[4]["name"]}**\t({checks.get_type_emoji(zerps[4]["attributes"])})\n',
+            value=f'> {zerps[0]["name"]}\t({checks.get_type_emoji(zerps[0]["attributes"])})\n'
+                  f'> {zerps[1]["name"]}\t({checks.get_type_emoji(zerps[1]["attributes"])})\n'
+                  f'> {zerps[2]["name"]}\t({checks.get_type_emoji(zerps[2]["attributes"])})\n'
+                  f'> {zerps[3]["name"]}\t({checks.get_type_emoji(zerps[3]["attributes"])})\n'
+                  f'> {zerps[4]["name"]}\t({checks.get_type_emoji(zerps[4]["attributes"])})\n',
             inline=False)
     h, m, s = await checks.get_time_left_utc(1)
     main_ts = db_query.get_gym_reset()
@@ -3341,6 +3367,7 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                     if user.id not in [i['id'] for i in config.battle_royale_participants]:
                         config.battle_royale_participants.append(
                             {'id': user.id, 'username': user_mention, 'address': user_data['address']})
+                        await reaction.message.reply(content=f'{user_mention} **successfully** added to Battle Royale')
         elif reaction.message.id in config.free_battle_royale_p:
             user_data = db_query.get_owned(user.id)
             if user_data is None:
@@ -3358,6 +3385,7 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                     if user.id not in [i['id'] for i in all_p]:
                         config.free_battle_royale_p[reaction.message.id].append(
                             {'id': user.id, 'username': user_mention, 'address': user_data['address']})
+                        await reaction.message.reply(content=f'{user_mention} **successfully** added to Free Battle Royale')
         for _id, potion_trade in config.potion_trades.copy().items():
             if user.id == potion_trade["challenged"] and _id == reaction.message.id:
                 oppo = db_query.get_owned(user.id)
@@ -3438,7 +3466,7 @@ async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
         for k, v in cards.items():
             if len(choices) == 25:
                 break
-            choices[f'{v["name"]} ({checks.get_type_emoji(v["attributes"])})'] = k
+            choices[f'{v["name"]} ({checks.get_type_emoji(v["attributes"], emoji=False)})'] = k
     await interaction.response.send_autocomplete(choices)
 
 

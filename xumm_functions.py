@@ -128,6 +128,35 @@ async def gen_nft_txn_url(from_address, nft_id):
     return res_json['uuid'], res_json['refs']['qr_png'], res_json['next']['always']
 
 
+async def gen_nft_accept_txn(from_address, offer, nft_id):
+    tjson = {
+        "Account": from_address,
+        "NFTokenSellOffer": offer,
+        "TransactionType": "NFTokenAcceptOffer"
+    }
+    payload = {
+        "txjson": tjson,
+        "options": {
+            "pathfinding_fallback": False,
+            "force_network": "N/A"
+        }
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+    res_json = response.json()
+    r_remain = response.headers['x-ratelimit-remaining']
+    # print(json.dumps(res_json, indent=2), )
+
+    print(r_remain)
+    if float(r_remain) < 2:
+        sleep_timer = float(response.headers['x-ratelimit-reset']) - time.time()
+        await asyncio.sleep(sleep_timer)
+
+    print(json.dumps(res_json, indent=2))
+
+    return res_json['uuid'], res_json['refs']['qr_png'], res_json['next']['always']
+
+
 async def gen_zrp_txn_url(to_address, from_address, amount):
     amount = float(amount)
     tjson = {

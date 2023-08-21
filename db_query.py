@@ -193,8 +193,11 @@ def get_move(name):
     return result
 
 
-def get_zerpmon(name):
-    zerpmon_collection = db['MoveSets']
+def get_zerpmon(name, mission=False):
+    if mission:
+        zerpmon_collection = db['MoveSets2']
+    else:
+        zerpmon_collection = db['MoveSets']
     # print(name)
 
     result = zerpmon_collection.find_one({"name": name})
@@ -262,7 +265,10 @@ def update_level(name, new_lvl):
 
 def update_zerpmon_alive(zerpmon, serial, user_id):
     users_collection = db['users']
-
+    if 'buff_eq' in zerpmon:
+        del zerpmon['buff_eq']
+    if 'eq_applied' in zerpmon:
+        del zerpmon['eq_applied']
     r = users_collection.find_one_and_update({'discord_id': str(user_id)},
                                              {'$set': {f'zerpmons.{serial}': zerpmon}},
                                              return_document=ReturnDocument.AFTER)
@@ -1014,10 +1020,21 @@ def set_user_flair(user_obj, flair):
 
 def double_xp_24hr(user_id):
     users_collection = db['users']
-    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'double_xp': time.time() + 86400}})
 
-    if r.acknowledged:
-        return True
+    user_record = users_collection.find_one({'discord_id': str(user_id)})
+    if user_record:
+        current_time = time.time()
+        if user_record.get('double_xp', 0) > current_time:
+            new_double_xp = user_record['double_xp'] + 86400
+        else:
+            new_double_xp = current_time + 86400
+
+        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'double_xp': new_double_xp}})
+
+        if r.acknowledged:
+            return True
+        else:
+            return False
     else:
         return False
 
@@ -1105,8 +1122,10 @@ def apply_white_candy(user_id, zerp_name):
     z_collection = db['MoveSets']
     users_collection = db['users']
     user = users_collection.find_one({'discord_id': str(user_id)})
-
     zerp = z_collection.find_one({'name': zerp_name})
+    if zerp.get('white_candy', 0) >= 5:
+        return False
+
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'white':
@@ -1116,6 +1135,7 @@ def apply_white_candy(user_id, zerp_name):
     zerp['white_candy'] = white_candy_usage + 1
     save_new_zerpmon(zerp)
     add_white_candy(user['address'], -1)
+    return True
 
 
 def apply_gold_candy(user_id, zerp_name):
@@ -1123,6 +1143,9 @@ def apply_gold_candy(user_id, zerp_name):
     users_collection = db['users']
     user = users_collection.find_one({'discord_id': str(user_id)})
     zerp = z_collection.find_one({'name': zerp_name})
+    if zerp.get('white_candy', 0) >= 5:
+        return False
+
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'gold':
@@ -1132,6 +1155,7 @@ def apply_gold_candy(user_id, zerp_name):
     zerp['gold_candy'] = gold_candy_usage + 1
     save_new_zerpmon(zerp)
     add_gold_candy(user['address'], -1)
+    return True
 
 
 def update_moves(document, save_z=True):
@@ -1281,3 +1305,7 @@ def set_equipment_on(user_id, equipments, deck_type, deck_no):
 
 def get_eq_by_name(name):
     return equipment_col.find_one({'name': name},)
+
+
+def get_all_eqs():
+    return [i for i in equipment_col.find({})]

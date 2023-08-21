@@ -54,9 +54,22 @@ def get_next_ts():
     return target_time.timestamp()
 
 
-def get_type_emoji(attrs):
-    emj_list = [config.TYPE_MAPPING[i['value']] for i in attrs if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
+def get_type_emoji(attrs, emoji=True):
+    emj_list = [(config.TYPE_MAPPING[i['value']] if emoji else i['value']) for i in attrs if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
     return ', '.join(emj_list)
+
+
+def show_headers(headers):
+    x_rate_limit_limit = headers.get('X-RateLimit-Limit')
+    x_rate_limit_remaining = headers.get('X-RateLimit-Remaining')
+    x_rate_limit_reset = headers.get('X-RateLimit-Reset')
+
+    # Print rate limit information
+    print('Rate Limit Headers:')
+    print('-------------------')
+    print('X-RateLimit-Limit:', x_rate_limit_limit)
+    print('X-RateLimit-Remaining:', x_rate_limit_remaining)
+    print('X-RateLimit-Reset:', x_rate_limit_reset)
 
 
 async def check_wager_entry(interaction: nextcord.Interaction, users):

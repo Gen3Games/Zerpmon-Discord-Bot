@@ -4,11 +4,10 @@ import traceback
 from statistics import mean
 
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
-from xrpl.models import IssuedCurrency, AccountLines
+from xrpl.models import IssuedCurrency, AccountLines, Transaction
 from xrpl.models.requests.account_nfts import AccountNFTs
-from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, AccountTx
-
-from xrpl.models.requests import Subscribe
+from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx
+from xrpl.transaction import get_transaction_from_hash
 import config
 import json
 import requests
@@ -162,13 +161,20 @@ async def get_zrp_price_api():
 # print(res)
 
 
-def get_nft_metadata(uri):
+def get_nft_metadata(uri, multi=False):
     try:
         with open("./static/metadata.json", "r") as f:
             data = json.load(f)
+            obj = {}
             for item in data:
-                if item["uri"] == uri:
-                    return item['metadata']
+                if multi:
+                    if item["uri"] in uri:
+                        obj[item["uri"]] = item['metadata']
+                else:
+                    if item["uri"] == uri:
+                        return item['metadata']
+            if multi:
+                return obj
         return None
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
@@ -249,3 +255,20 @@ async def get_zrp_balance(address, issuer=False):
     except Exception as e:
         print(e)
         return 0
+
+
+async def get_tx(client, hash_):
+    for i in range(5):
+        try:
+            acct_info = tx.Tx(
+                transaction=hash_
+            )
+            response = await client.request(acct_info)
+            result = response.result
+            print(result)
+            return result
+        except Exception as e:
+            print(e)
+            await asyncio.sleep(1)
+
+# asyncio.run(get_tx('D2968E78B65ED83C7247EFBCF38C57C84C81A329B24706EDF71872E077B14D39'))

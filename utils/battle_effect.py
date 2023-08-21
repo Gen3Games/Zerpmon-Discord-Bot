@@ -170,7 +170,7 @@ def apply_status_effects(p1, p2, status_e):
         if 'next' in effect or 'knock' in effect or 'stars' in effect or '0 damage' in effect:
             continue
         match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
-        val = int(float(match.group()))
+        val = float(match.group())
 
         if "increase" in effect:
             val = + val
@@ -264,7 +264,7 @@ def apply_status_effects(p1, p2, status_e):
         if 'next' in effect or 'knock' in effect or 'stars' in effect or '0 damage' in effect:
             continue
         match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
-        val = int(float(match.group()))
+        val = float(match.group())
 
         if "increase" in effect:
             val = + val

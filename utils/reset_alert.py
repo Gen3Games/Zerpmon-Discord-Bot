@@ -2,13 +2,12 @@ import asyncio
 import logging
 import time
 import traceback
-
 import nextcord
-
 import config
 import db_query
 from utils.checks import get_next_ts, get_time_left_utc
-from utils.xrpl_ws import get_balance
+from utils.xrpl_ws import get_balance, send_zrp
+from xrpl_functions import get_zrp_balance
 
 
 class CustomEmbed(nextcord.Embed):
@@ -178,4 +177,11 @@ async def send_reset_message(client: nextcord.Client):
                         # await asyncio.sleep(5)
                 except Exception as e:
                     logging.error(f'ERROR: {traceback.format_exc()}')
+            try:
+                store_bal = await get_zrp_balance(config.STORE_ADDR, )
+                store_bal = round(float(store_bal), 2)
+                if store_bal > 500:
+                    await send_zrp(config.ISSUER['ZRP'], store_bal, 'store')
+            except Exception as e:
+                logging.error(f'ERROR while burning ZRP: {traceback.format_exc()}')
             next_run = time.time() + 300

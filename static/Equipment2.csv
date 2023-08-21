@@ -3,7 +3,7 @@ Fire,Flaming Orb,20% chance to survive from being knocked out by opponent
 Water,Water Pendant,Increase own purple moves by 2 stars
 Grass,Golden Leaf,Decrease own miss chance by 25%
 Electric,Lightning Ring,35% chance for enemy Gold Attack to do 0 damage
-Ice,Tundra Ice,Increase opponent miss chance by 25%
+Ice,Tundra Ice,Increase opponent miss chance by 12.5%
 Fighting,Winner's Belt,20% chance to survive from being knocked out by opponent
 Poison,Toxic Vile,Reduce opponent damage by 35%
 Ground,Desert Pouch,Increase own purple moves by 2 stars
@@ -17,4 +17,4 @@ Dark,Shadow Bangle,Increases own crit chance by 15%
 Steel,Power Core,Increases own crit chance by 15%
 Fairy,Fairy Dust,40% chance for own White/Gold attack to ignore opponent resistances
 Cosmic,Meteorite,40% chance for own White/Gold attack to ignore opponent resistances
-Undead,Odd Skull,Increase opponent miss chance by 25%
+Undead,Odd Skull,Increase opponent miss chance by 12.5%
