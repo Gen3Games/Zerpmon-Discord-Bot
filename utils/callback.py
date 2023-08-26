@@ -351,7 +351,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
             reset_str = f' reset time **{_hours}**h **{_minutes}**m'
 
     sr, nft = _battle_z[0]
-    lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'], in_mission=True if loser == 2 else False)
+    lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'], in_mission=True if loser == 2 else False, double_xp=_user_owned_nfts['data'].get('double_xp', 0) > time.time())
     embed = CustomEmbed(title=f"Level Up ⬆{lvl}" if xp == 0 else f"\u200B",
                         color=0xff5252,
                         )
@@ -777,11 +777,12 @@ async def send_general_message(guild, text, image):
         logging.error(f'ERROR: {traceback.format_exc()}')
 
 
-async def on_button_click(interaction: nextcord.Interaction, label, amount):
+async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=1, defer=True):
     user_id = interaction.user.id
     addr = db_query.get_owned(user_id)['address']
     amount = round(amount, 2)
-    await interaction.response.defer(ephemeral=True)
+    if defer:
+        await interaction.response.defer(ephemeral=True)
     match label:
         case "Buy Zerpmon Equipment":
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
@@ -900,7 +901,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
             select_menu.callback = handle_select_menu
 
         case "Buy Safari Trip":
-            addr, purchased = await zrp_purchase_callback(interaction, amount, label.replace('Buy ', ''), safari=True)
+            addr, purchased = await zrp_purchase_callback(interaction, amount * qty, label.replace('Buy ', '' if qty == 1 else f'{qty} '), safari=True)
             if purchased:
                 j_amount = round(amount * 0.2, 2)
                 await send_zrp(config.JACKPOT_ADDR, j_amount, 'safari')
@@ -908,111 +909,113 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
                 rewards = [
 
                 ]
-                for i in range(3):
-                    reward = random.choices(list(SAFARI_REWARD_CHANCES.keys()),
-                                            list(SAFARI_REWARD_CHANCES.values()))[0]
-                    embed = CustomEmbed(title=f"Safari roll {i + 1}", colour=0xff5722)
-                    match reward:
-                        # case "no_luck":
-                        #     msg = random.choice(config.NOTHING_MSG)
-                        #     rewards.append("Gained Nothing")
-                        case "zrp":
-                            r_int = random.randint(1, 45)
-                            s_amount = round(amount * r_int / 100, 2)
-                            status = await send_zrp(addr, s_amount, 'safari')
-                            msg = random.choice(
-                                config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction Successful`" if status else ""}!'
-                            rewards.append(f"Gained {s_amount} $ZRP!")
-                        case "equipment":
-                            db_query.add_equipment(addr, 1)
-                            msg = random.choice(config.EQUIPMENT_MSG)
-                            success, data = await send_equipment(user_id, addr, label, safari=True, random_eq=True)
-                            if success:
-                                rewards.append(f"Gained 1 Equipment({data[0]})!\nhttps://xrp.cafe/nft/{data[-1]}")
-                                description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{data[0]}**\n{data[1]}! 🔥 🔥\n@everyone'
+                for i in range(qty):
+                    for i in range(3):
+                        reward = random.choices(list(SAFARI_REWARD_CHANCES.keys()),
+                                                list(SAFARI_REWARD_CHANCES.values()))[0]
+                        embed = CustomEmbed(title=f"Safari roll {i + 1}", colour=0xff5722)
+                        match reward:
+                            # case "no_luck":
+                            #     msg = random.choice(config.NOTHING_MSG)
+                            #     rewards.append("Gained Nothing")
+                            case "zrp":
+                                r_int = random.randint(1, 45)
+                                s_amount = round(amount * r_int / 100, 2)
+                                status = await send_zrp(addr, s_amount, 'safari')
+                                msg = random.choice(
+                                    config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction Successful`" if status else ""}!'
+                                rewards.append(f"Gained {s_amount} $ZRP!")
+                            case "equipment":
+                                db_query.add_equipment(addr, 1)
+                                msg = random.choice(config.EQUIPMENT_MSG)
+                                success, data = await send_equipment(user_id, addr, label, safari=True, random_eq=True)
+                                if success:
+                                    rewards.append(f"Gained 1 Equipment({data[0]})!\nhttps://xrp.cafe/nft/{data[-1]}")
+                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{data[0]}**\n{data[1]} ! 🔥 🔥\n@everyone'
+                                    await send_general_message(guild=interaction.guild, text=description,
+                                                               image='')
+                                else:
+                                    rewards.append("Gained 1 Equipment\nFailed, Something went wrong while sending the Sell offer\n"
+                                                "Please contact an admin")
+
+                            case "battle_zone" | "name_flair":
+                                user_obj = db_query.get_owned(user_id)
+                                if reward == "battle_zone":
+                                    user_bgs = [i.replace(f'./static/gym/', '').replace('.png', '') for i in
+                                                user_obj.get('bgs', [])]
+                                    not_owned_bgs = [i for i in config.GYMS if i not in user_bgs]
+                                    db_query.update_user_bg(interaction.user.id, random.choice(
+                                        not_owned_bgs if len(not_owned_bgs) > 0 else config.GYMS))
+                                elif reward == "name_flair":
+                                    user_flairs = [i for i in user_obj.get('flair', [])]
+                                    not_owned_flairs = [i for i in config.name_flair_list if i not in user_flairs]
+                                    db_query.update_user_flair(interaction.user.id, random.choice(
+                                        not_owned_flairs if len(not_owned_flairs) > 0 else config.name_flair_list))
+                                reward = reward.replace('_', ' ').title()
+
+                                msg = config.COSMETIC_MSG(reward)
+                                rewards.append(f"Gained 1 {reward}!")
+                            case "candy_white" | "candy_gold" | "candy_level_up":
+                                if 'white' in reward:
+                                    db_query.add_white_candy(addr, 1)
+                                elif 'gold' in reward:
+                                    db_query.add_gold_candy(addr, 1)
+                                else:
+                                    db_query.add_lvl_candy(addr, 1)
+                                reward = reward.split('_')[-1].title()
+                                msg = config.CANDY_MSG(interaction.user.name,
+                                                       'Golden Liquorice' if 'Up' in reward else reward)
+                                rewards.append(
+                                    f"Gained 1 {'Golden Liquorice' if 'Up' in reward else 'Power Candy (' + reward + ')'}!")
+                            case "jackpot":
+                                bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
+                                amount_ = round(bal * 0.8, 2)
+                                status = await send_zrp(addr, amount_, 'jackpot')
+                                msg = config.JACKPOT_MSG(interaction.user.name,
+                                                         amount_) + f'\n{"Transaction Successful" if status else ""}!'
+                                rewards.append(f"Won Jackpot {amount_} $ZRP!")
+                                description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won the **Jackpot**(`{amount_} $ZRP`)! 🔥 🔥\n@everyone'
                                 await send_general_message(guild=interaction.guild, text=description,
                                                            image='')
-                            else:
-                                rewards.append("Gained 1 Equipment\nFailed, Something went wrong while sending the Sell offer\n"
-                                            "Please contact an admin")
+                            case "gym_refill":
+                                db_query.add_gym_refill_potion(addr, 1, True, )
+                                msg = random.choice(config.GYM_REFILL_MSG)
+                                rewards.append(f"Gained 1 Gym Refill!")
+                            case "revive_potion":
+                                db_query.add_revive_potion(addr, 5, False, )
+                                msg = random.choice(config.REVIVE_MSG)
+                                rewards.append(f"Gained 5 Revive Potions!")
+                            case "mission_refill":
+                                db_query.add_mission_potion(addr, 5, False, )
+                                msg = random.choice(config.MISSION_REFILL_MSG)
+                                rewards.append(f"Gained 5 Mission Refills!")
+                            case "zerpmon":
+                                res, token_id = await send_random_zerpmon(addr, safari=True)
+                                msg = config.ZERP_MSG(token_id[0])
+                                rewards.append(f"Won {token_id[0]}!")
+                                description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just caught **{token_id[0]}** !! 🔥 🔥\n@everyone'
+                                await send_general_message(guild=interaction.guild, text=description,
+                                                           image=token_id[1])
+                            case _:
+                                msg = random.choice(config.NOTHING_MSG)
+                                rewards.append("Gained Nothing")
+                        embed.description = msg
+                        await interaction.send(embed=embed, ephemeral=True)
+                        await asyncio.sleep(1)
+                    embed = CustomEmbed(title="Summary", colour=0xff5722)
+                    path = f'./static/safari/Success {random.randint(1, 14)}.png'
+                    file = nextcord.File(path, filename="image.png")
+                    embed.set_image(url=f'attachment://image.png')
+                    for reward in rewards:
+                        embed.add_field(name=reward, value='\u200B', inline=False)
+                    view = View()
+                    view.timeout = 120
+                    b_s = Button(label="Buy another Safari Trip", style=ButtonStyle.green, emoji='🎰', row=0)
+                    b_s.callback = lambda i: on_button_click(i, label='Buy Safari Trip', amount=amount)
+                    view.add_item(b_s)
 
-                        case "battle_zone" | "name_flair":
-                            user_obj = db_query.get_owned(user_id)
-                            if reward == "battle_zone":
-                                user_bgs = [i.replace(f'./static/gym/', '').replace('.png', '') for i in
-                                            user_obj.get('bgs', [])]
-                                not_owned_bgs = [i for i in config.GYMS if i not in user_bgs]
-                                db_query.update_user_bg(interaction.user.id, random.choice(
-                                    not_owned_bgs if len(not_owned_bgs) > 0 else config.GYMS))
-                            elif reward == "name_flair":
-                                user_flairs = [i for i in user_obj.get('flair', [])]
-                                not_owned_flairs = [i for i in config.name_flair_list if i not in user_flairs]
-                                db_query.update_user_flair(interaction.user.id, random.choice(
-                                    not_owned_flairs if len(not_owned_flairs) > 0 else config.name_flair_list))
-                            reward = reward.replace('_', ' ').title()
-
-                            msg = config.COSMETIC_MSG(reward)
-                            rewards.append(f"Gained 1 {reward}!")
-                        case "candy_white" | "candy_gold" | "candy_level_up":
-                            if 'white' in reward:
-                                db_query.add_white_candy(addr, 1)
-                            elif 'gold' in reward:
-                                db_query.add_gold_candy(addr, 1)
-                            else:
-                                db_query.add_lvl_candy(addr, 1)
-                            reward = reward.split('_')[-1].title()
-                            msg = config.CANDY_MSG(interaction.user.name,
-                                                   'Golden Liquorice' if 'Up' in reward else reward)
-                            rewards.append(
-                                f"Gained 1 {'Golden Liquorice' if 'Up' in reward else 'Power Candy (' + reward + ')'}!")
-                        case "jackpot":
-                            bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
-                            amount = round(bal * 0.8, 2)
-                            status = await send_zrp(addr, amount, 'jackpot')
-                            msg = config.JACKPOT_MSG(interaction.user.name,
-                                                     amount) + f'\n{"Transaction Successful" if status else ""}!'
-                            rewards.append(f"Won Jackpot {amount} $ZRP!")
-                            description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won the **Jackpot**(`{amount} $ZRP`)! 🔥 🔥\n@everyone'
-                            await send_general_message(guild=interaction.guild, text=description,
-                                                       image='')
-                        case "gym_refill":
-                            db_query.add_gym_refill_potion(addr, 1, True, )
-                            msg = random.choice(config.GYM_REFILL_MSG)
-                            rewards.append(f"Gained 1 Gym Refill!")
-                        case "revive_potion":
-                            db_query.add_revive_potion(addr, 5, False, )
-                            msg = random.choice(config.REVIVE_MSG)
-                            rewards.append(f"Gained 5 Revive Potions!")
-                        case "mission_refill":
-                            db_query.add_mission_potion(addr, 5, False, )
-                            msg = random.choice(config.MISSION_REFILL_MSG)
-                            rewards.append(f"Gained 5 Mission Refills!")
-                        case "zerpmon":
-                            res, token_id = await send_random_zerpmon(addr, safari=True)
-                            msg = config.ZERP_MSG(token_id[0])
-                            rewards.append(f"Won {token_id[0]}!")
-                            description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just caught **{token_id[0]}**!! 🔥 🔥\n@everyone'
-                            await send_general_message(guild=interaction.guild, text=description,
-                                                       image=token_id[1])
-                        case _:
-                            msg = random.choice(config.NOTHING_MSG)
-                            rewards.append("Gained Nothing")
-                    embed.description = msg
-                    await interaction.send(embed=embed, ephemeral=True)
-                embed = CustomEmbed(title="Summary", colour=0xff5722)
-                path = f'./static/safari/Success {random.randint(1, 14)}.png'
-                file = nextcord.File(path, filename="image.png")
-                embed.set_image(url=f'attachment://image.png')
-                for reward in rewards:
-                    embed.add_field(name=reward, value='\u200B', inline=False)
-                view = View()
-                view.timeout = 120
-                b_s = Button(label="Buy another Safari Trip", style=ButtonStyle.green, emoji='🎰', row=0)
-                b_s.callback = lambda i: on_button_click(i, label='Buy Safari Trip', amount=amount)
-                view.add_item(b_s)
-
-                await interaction.send(embed=embed, file=file, ephemeral=True)
-                await interaction.send(view=view, ephemeral=True)
+                    await interaction.send(embed=embed, file=file, view=view, ephemeral=True)
+                    # await interaction.send(view=view, ephemeral=True)
         case "Buy Name Flair":
             # Create a select menu with the dropdown options
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
@@ -1047,23 +1050,25 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount):
             select_menu2.callback = handle_select_menu
 
 
-async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextcord.Member, potion_key, potion, fn):
+async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextcord.Member, potion_key, potion, fn, item=False):
     user_id = user.id
 
     user_owned_nfts = {'data': db_query.get_owned(user_id), 'user': user.name}
 
     # Sanity checks
-    if user.id == interaction.user.id:
+    if user_id == interaction.user.id:
         await interaction.send(
-            f"Sorry you can't gift Potions/Candies to yourself.")
+            f"Sorry you can't gift **Potions/Candies/Battle Zones/Flairs** to yourself.")
         return False
 
-    if interaction.user.id not in config.ADMINS:
+    if interaction.user.id not in config.ADMINS or item:
         sender = db_query.get_owned(interaction.user.id)
         user_qty = sender[potion_key] if potion_key != 'gym_refill' else (sender.get('gym', {})).get('refill_potion', 0)
+        if potion_key in ['bg', 'flair']:
+            user_qty = len([i for i in user_qty if item in i])
         if sender is None or user_qty < qty:
             await interaction.send(
-                f"Sorry you don't have **{qty}** {potion}.")
+                f"Sorry you don't have {f'**{item}**' if item else f'**{qty}**'} {potion}.")
             return False
         elif user_owned_nfts['data'] is None:
             await interaction.send(
@@ -1071,9 +1076,13 @@ async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextc
             return False
         else:
             # Put potions on hold os user doesn't spam
-            fn(sender['address'], -qty)
-            fn(user_owned_nfts['data']['address'], qty)
-            await interaction.send(f"Successfully gifted **{qty}** {potion} to **{user.name}**!",
+            if potion_key not in ['bg', 'flair']:
+                fn(sender['address'], -qty)
+                fn(user_owned_nfts['data']['address'], qty)
+            else:
+                fn(sender['discord_id'], item, -qty)
+                fn(user_id, item, qty)
+            await interaction.send(f"Successfully gifted {f'**{item}**' if item else f'**{qty}**'} {potion} to **{user.name}**!",
                                    ephemeral=False)
             return
 

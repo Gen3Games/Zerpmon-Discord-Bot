@@ -774,13 +774,13 @@ def add_xp(zerpmon_name, user_address, double_xp=False):
     return True
 
 
-def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False) -> tuple:
+def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=False) -> tuple:
     zerpmon_collection = db['MoveSets']
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
     level = old['level'] + 1 if 'level' in old else 1
     maxed = old.get('maxed_out', 0)
-    if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and old['xp'] == 0:
+    if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
         update_moves(old)
     if level > 30:
         level = 30
@@ -920,6 +920,8 @@ def add_gp(discord_id, gym_obj, gym_type, stage):
             'gp': 1
         }
     else:
+        if stage + 1 == 10:
+            log_user_gym(discord_id, gym_type)
         gym_obj['won'][gym_type] = {
             'stage': stage + 1 if stage < 10 else 1,
             'next_battle_t': config.gym_main_reset,
@@ -995,6 +997,31 @@ def update_user_flair(user_id, flair_name):
     user_id = str(user_id)
     users_collection.update_one({'discord_id': user_id},
                                 {'$push': {'flair': flair_name}})
+
+
+def add_bg(user_id, gym_type, type_):
+    if type_ < 0:
+        users_collection = db['users']
+        user_id = str(user_id)
+        bg_value = f'./static/gym/{gym_type}.png'
+        users_collection.update_one(
+            {'discord_id': user_id},
+            {'$pull': {'bg': bg_value}}  # Remove the specific 'bg_value' from the 'bg' array
+        )
+    else:
+        update_user_bg(user_id, gym_type)
+
+
+def add_flair(user_id, flair_name, type_):
+    if type_ < 0:
+        users_collection = db['users']
+        user_id = str(user_id)
+        users_collection.update_one(
+            {'discord_id': user_id},
+            {'$pull': {'flair': flair_name}}  # Remove the specific 'bg_value' from the 'bg' array
+        )
+    else:
+        update_user_flair(user_id, flair_name)
 
 
 def set_user_bg(user_obj, gym_type):
@@ -1143,7 +1170,7 @@ def apply_gold_candy(user_id, zerp_name):
     users_collection = db['users']
     user = users_collection.find_one({'discord_id': str(user_id)})
     zerp = z_collection.find_one({'name': zerp_name})
-    if zerp.get('white_candy', 0) >= 5:
+    if zerp.get('gold_candy', 0) >= 5:
         return False
 
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
@@ -1290,6 +1317,21 @@ def get_battle_log(user1_id):
     return battle_log.find_one({'discord_id': str(user1_id)})
 
 
+def log_user_gym(user_id, gym_type):
+    battle_log = db['battle_logs']
+    return battle_log.update_one({'discord_id': str(user_id)},
+                                 {'$push': {'gym_clear_history': {
+                                     'time': int(time.time()),
+                                     'gym_type': gym_type,
+                                 }}}, upsert=True)
+
+
+def log_get_gym_cleared(user_id):
+    battle_log = db['battle_logs']
+    log = battle_log.find_one({'discord_id': str(user_id)})
+    return log['gym_clear_history'] if log is not None and 'gym_clear_history' in log else None
+
+
 """EQUIPMENT"""
 
 
@@ -1303,8 +1345,11 @@ def set_equipment_on(user_id, equipments, deck_type, deck_no):
     print(res.acknowledged, res.matched_count, res.raw_result)
 
 
-def get_eq_by_name(name):
-    return equipment_col.find_one({'name': name},)
+def get_eq_by_name(name, gym=False):
+    if gym:
+        return equipment_col.find_one({'type': name}, )
+    else:
+        return equipment_col.find_one({'name': name},)
 
 
 def get_all_eqs():

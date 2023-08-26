@@ -1,10 +1,9 @@
 import time
-
+import csv
 import nextcord
 import datetime
 import pytz
 from nextcord.ui import View
-
 import config
 import db_query
 from db_query import get_owned
@@ -57,6 +56,21 @@ def get_next_ts():
 def get_type_emoji(attrs, emoji=True):
     emj_list = [(config.TYPE_MAPPING[i['value']] if emoji else i['value']) for i in attrs if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
     return ', '.join(emj_list)
+
+
+def convert_timestamp_to_datetime(timestamp):
+    return datetime.datetime.utcfromtimestamp(timestamp)
+
+
+def save_csv(data, name):
+    fields = data[0].keys()
+    # Writing to CSV file
+    with open(name, mode="w", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fields)
+        writer.writeheader()
+        for entry in data:
+            entry["time"] = convert_timestamp_to_datetime(entry["time"])
+            writer.writerow(entry)
 
 
 def show_headers(headers):

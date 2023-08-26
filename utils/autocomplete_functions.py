@@ -1,3 +1,6 @@
+import json
+import traceback
+
 import nextcord
 from db_query import get_owned
 from utils.checks import get_type_emoji
@@ -36,3 +39,27 @@ async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
         choices = {}
     choices = dict(sorted(choices.items()))
     await interaction.response.send_autocomplete(choices)
+
+
+async def trade_autocomplete(interaction: nextcord.Interaction, item: str):
+    try:
+        # print(f"{interaction.data['options'][0]['options']}")
+        params = interaction.data['options'][0]['options']
+        op_id = params[1]['value']
+        own = [i['value'] for i in params if i['name'] == 'give' and 'focused' in i]
+        user_id = str(interaction.user.id) if len(own) > 0 else op_id
+        trade_t = json.loads(params[0]['value'])['key']
+
+        user_owned = get_owned(user_id)
+        if user_owned is not None and trade_t in user_owned:
+            if trade_t == 'flair':
+                vals = [i for i in user_owned['flair'] if item in i]
+            else:
+                vals = [i.replace('./static/gym/', '').replace('.png', '') for i in user_owned['bg'] if item in i]
+            choices = {i: i for i in vals}
+        else:
+            choices = {}
+        choices = dict(sorted(choices.items()))
+        await interaction.response.send_autocomplete(choices)
+    except:
+        print(traceback.format_exc())

@@ -2,6 +2,7 @@ import asyncio
 import concurrent
 import json
 import logging
+import os
 import random
 import threading
 import time
@@ -16,11 +17,12 @@ from nextcord.ext import commands, tasks
 import xumm_functions
 import xrpl_functions
 import db_query
+from db_query import add_bg, add_flair
 from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, checks, callback, reset_alert, \
     auction_functions
 from xrpl.utils import xrp_to_drops
-
-from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete
+from utils.trade import trade_item
+from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete
 from utils.callback import wager_battle_r_callback
 
 intents = nextcord.Intents.all()
@@ -135,16 +137,16 @@ async def on_global_http_ratelimit(retry_after):
     print(f'Hit Global rate limit {retry_after}')
 
 
-@client.event
-async def on_error(event, *args, **kwargs):
-    print(f'Discord Error in {event}\n{args}\n{kwargs}')
+# @client.event
+# async def on_error(event, *args, **kwargs):
+#     print(f'Discord Error in {event}\n{args}\n{kwargs}')
 
 
 @client.event
 async def on_close():
     print(f'Discord connection closed!')
 
-    
+
 @client.event
 async def on_ready():
     print('Bot connected to Discord!')
@@ -392,11 +394,13 @@ async def show_equipment(interaction: nextcord.Interaction):
             if count > 1:
                 second_item = [i for i in eqs if i['name'] == nft['name']][-1]
                 my_button2 = f"https://xrp.cafe/nft/{second_item['token_id']}"
-            nft_type = ', '.join([config.TYPE_MAPPING[i['value']] for i in nft['attributes'] if i['trait_type'] == 'Type'])
+            nft_type = ', '.join(
+                [config.TYPE_MAPPING[i['value']] for i in nft['attributes'] if i['trait_type'] == 'Type'])
 
             embed3.add_field(
                 name=f" **{nft['name']}** ({nft_type}) x{count}",
-                value=f'[view]({my_button})' + (f'\n[view]({my_button2})' if my_button2 is not None else ''), inline=False)
+                value=f'[view]({my_button})' + (f'\n[view]({my_button2})' if my_button2 is not None else ''),
+                inline=False)
     await interaction.edit_original_message(content="FOUND", embeds=[embed3])
 
 
@@ -588,6 +592,26 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
     execute_before_command(interaction)
     await callback.gift_callback(interaction, qty, user, 'gym_refill', 'Gym Refill',
                                  db_query.add_gym_refill_potion)
+
+
+@gift.subcommand(name='battle_zone', description="Gift Battle Zone")
+async def gift_battle_zone(interaction: nextcord.Interaction,
+                           user: Optional[nextcord.Member] = SlashOption(required=True),
+                           zone: str = SlashOption("zone")):
+    # msg = await interaction.send(f"Searching...")
+    execute_before_command(interaction)
+    await callback.gift_callback(interaction, 1, user, 'bg', 'Battle Zone',
+                                 db_query.add_bg, item=zone)
+
+
+@gift.subcommand(name='name_flair', description="Gift Name Flair")
+async def gift_name_flair(interaction: nextcord.Interaction,
+                          user: Optional[nextcord.Member] = SlashOption(required=True),
+                          flair: str = SlashOption("flair")):
+    # msg = await interaction.send(f"Searching...")
+    execute_before_command(interaction)
+    await callback.gift_callback(interaction, 1, user, 'flair', 'Name Flair',
+                                 db_query.add_flair, item=flair)
 
 
 @client.slash_command(name="add",
@@ -1306,6 +1330,42 @@ async def mission_refill(interaction: nextcord.Interaction, quantity: int):
         return
 
     await callback.purchase_callback(interaction, config.MISSION_REFILL[0], quantity)
+
+
+@buy.subcommand(description="Purchase Safari Trip using ZRP (multiple option)")
+async def safari_trip(interaction: nextcord.Interaction, quantity: int):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    # Sanity checks
+    if quantity <= 0:
+        await interaction.edit_original_message(
+            content="Sorry, the quantity can't be less than 1")
+        return
+    zrp_price = await xrpl_functions.get_zrp_price_api()
+    safari_p = config.ZRP_STORE['safari'] / zrp_price
+    await callback.on_button_click(interaction, 'Buy Safari Trip', safari_p, qty=quantity, defer=False)
+
+
+@client.slash_command(name="show_gym_cleared",
+                      description="Shows a list of Gym's cleared (level 10) by a User (admins only)")
+async def show_zerpmon(interaction: nextcord.Interaction, user: Optional[nextcord.Member] = SlashOption(required=True)):
+    execute_before_command(interaction)
+    msg = await interaction.response.defer(ephemeral=True)
+    if user.id not in config.ADMINS:
+        await interaction.edit_original_message(content=f"Only **Admins** can access this command")
+        return
+    gym_history = db_query.log_get_gym_cleared(user.id)
+    if gym_history is None:
+        await interaction.edit_original_message(content=f"Sorry, {user.name} hasn't cleared any **level 10** Gym yet")
+    else:
+        csv_file_name = f'{user.name}_{user.id}.csv'
+        checks.save_csv(gym_history, name=csv_file_name)
+        with open(csv_file_name, 'rb') as data:
+            csv_file = nextcord.File(csv_file_name, filename=csv_file_name)
+            await interaction.edit_original_message(content=f"**Found**", file=csv_file)
+        csv_file.close()
+        # Remove the CSV file after sending
+        os.remove(csv_file_name)
 
 
 @client.slash_command(name="show_zerpmon", description="Show a Zerpmon's stats")
@@ -2314,17 +2374,24 @@ async def trade_nft(interaction: nextcord.Interaction, your_nft_id: str, opponen
         await msg.edit(embed=CustomEmbed(title="Finished"), view=None)
 
 
-@client.slash_command(name="trade_potion",
-                      description="Trade potions (Mission Refill potion <-> Revive All potion)",
+@client.slash_command(name="trade",
+                      description="Trade Items",
                       )
-async def trade_potion(interaction: nextcord.Interaction, amount: int,
-                       trade_type: int = SlashOption(
-                           name="picker",
-                           choices={"Give Mission Refill Potion get Revive All Potion": 1,
-                                    "Give Revive All Potion get Mission Refill Potion": 2},
-                       ),
-                       trade_with: Optional[nextcord.Member] = SlashOption(required=True),
-                       ):
+async def trade(interaction: nextcord.Interaction):
+    pass
+
+
+@trade.subcommand(name="potion",
+                  description="Trade potions (Mission Refill potion <-> Revive All potion)",
+                  )
+async def potion(interaction: nextcord.Interaction, amount: int,
+                 trade_type: int = SlashOption(
+                     name="picker",
+                     choices={"Give Mission Refill Potion get Revive All Potion": 1,
+                              "Give Revive All Potion get Mission Refill Potion": 2},
+                 ),
+                 trade_with: Optional[nextcord.Member] = SlashOption(required=True),
+                 ):
     user = interaction.user
     if user.id == trade_with.id:
         await interaction.send(
@@ -2411,6 +2478,41 @@ async def trade_potion(interaction: nextcord.Interaction, amount: int,
                     db_query.add_mission_potion(user_owned_nfts['address'], amount)
                 elif trade_type == 2:
                     db_query.add_revive_potion(user_owned_nfts['address'], amount)
+
+
+@trade.subcommand(name="item",
+                  description="Trade Battle Zones/Name Flairs",
+                  )
+async def trade_bg_flair(interaction: nextcord.Interaction,
+                         key: str = SlashOption(
+                             name="picker",
+                             choices={"Battle Zone": '{"key": "bg", "name": "Battle Zone", "fn": "add_bg"}',
+                                      "Name Flair": '{"key": "flair", "name": "Name Flair", "fn": "add_flair"}'},
+                         ),
+                         trade_with: Optional[nextcord.Member] = SlashOption(required=True),
+                         spend: str = SlashOption(name='give', autocomplete_callback=trade_autocomplete),
+                         get: str = SlashOption(name='get', autocomplete_callback=trade_autocomplete)
+                         ):
+    user = interaction.user
+    key = json.loads(key)
+    fn = globals().get(key['fn'])
+    await interaction.response.defer(ephemeral=True)
+    if user.id == trade_with.id:
+        await interaction.edit_original_message(
+            content=f"Please choose a valid member to Trade with.")
+        return False
+    user_owned_nfts = db_query.get_owned(user.id)
+    u_flair = f' | {user_owned_nfts.get("flair", [])[0]}' if len(
+        user_owned_nfts.get("flair", [])) > 0 else ''
+    user_mention = interaction.user.mention + u_flair
+    user_owned_nfts['mention'] = user_mention
+    opponent_owned_nfts = db_query.get_owned(trade_with.id)
+    o_flair = f' | {opponent_owned_nfts.get("flair", [])[0]}' if len(
+        opponent_owned_nfts.get("flair", [])) > 0 else ''
+    oppo_mention = trade_with.mention + o_flair
+    opponent_owned_nfts['mention'] = oppo_mention
+    await trade_item(interaction, trade_with, user_owned_nfts, opponent_owned_nfts, key['key'], key['name'], spend, get,
+                     fn=fn)
 
 
 @client.slash_command(name="free",
@@ -2659,6 +2761,37 @@ async def ranked_battle(interaction: nextcord.Interaction,
         logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
         config.ongoing_battles.remove(user_id)
         config.ongoing_battles.remove(opponent.id)
+
+
+@client.slash_command(name="equipment",
+                      description="Wager Battle between Trainers (XRP or NFTs)",
+                      )
+async def equipment(interaction: nextcord.Interaction):
+    # ...
+    pass
+
+
+@equipment.subcommand(name='show', description="Show all equipments")
+async def show_equipments(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    owned_nfts = db_query.get_owned(interaction.user.id)
+    embed3 = CustomEmbed(title=f"**ZERPMON** EQUIPMENTS\n",
+                         color=0x962071,
+                         )
+    all_eqs = db_query.get_all_eqs()
+    eqs = sorted(all_eqs, key=lambda k: k['name'])
+    for i, nft in enumerate(eqs):
+        if len(embed3.fields) > 24:
+            break
+        nft_type = ', '.join(
+            [config.TYPE_MAPPING[i] for i in nft['type'].split(',')])
+
+        embed3.add_field(
+            name=f" **{nft['name']}** ({nft_type})",
+            value=f'> **Affect**: `{nft["notes"]}`',
+            inline=False)
+    await interaction.edit_original_message(embeds=[embed3])
 
 
 @client.slash_command(name="view",
@@ -3298,6 +3431,7 @@ async def gym_battle(interaction: nextcord.Interaction,
 @client.event
 async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
     print(f'{user.name} reacted with {reaction.emoji}.')
+    r_msg_id = reaction.message.id
     if reaction.emoji == "⚔":
         for _id, battle_instance in config.battle_dict.copy().items():
             if user.id == battle_instance["challenged"] and _id == reaction.message.id and battle_instance[
@@ -3351,7 +3485,7 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                     config.ongoing_battles.remove(user.id)
                     config.ongoing_battles.remove(battle_instance["challenger"])
     elif reaction.emoji == "✅":
-        if config.battle_royale_started and reaction.message.id == config.battle_royale_msg:
+        if config.battle_royale_started and r_msg_id == config.battle_royale_msg:
             user_data = db_query.get_owned(user.id)
 
             if user_data is None:
@@ -3385,15 +3519,17 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                     if user.id not in [i['id'] for i in all_p]:
                         config.free_battle_royale_p[reaction.message.id].append(
                             {'id': user.id, 'username': user_mention, 'address': user_data['address']})
-                        await reaction.message.reply(content=f'{user_mention} **successfully** added to Free Battle Royale')
-        for _id, potion_trade in config.potion_trades.copy().items():
-            if user.id == potion_trade["challenged"] and _id == reaction.message.id:
+                        await reaction.message.reply(
+                            content=f'{user_mention} **successfully** added to Free Battle Royale')
+        elif r_msg_id in config.potion_trades:
+            potion_trade = config.potion_trades[reaction.message.id]
+            if user.id == potion_trade["challenged"]:
                 oppo = db_query.get_owned(user.id)
-                config.potion_trades[_id]['active'] = True
+                config.potion_trades[r_msg_id]['active'] = True
                 await reaction.message.edit(embeds=[CustomEmbed(title="**Trade Successful**!")])
                 if potion_trade['trade_type'] == 1:
                     if oppo['revive_potion'] < potion_trade['amount']:
-                        del config.potion_trades[_id]
+                        del config.potion_trades[r_msg_id]
                         db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount'])
                         return
                     db_query.add_revive_potion(potion_trade['address2'], -potion_trade['amount'])
@@ -3401,12 +3537,28 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                     db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount'])
                 elif potion_trade['trade_type'] == 2:
                     if oppo['mission_potion'] < potion_trade['amount']:
-                        del config.potion_trades[_id]
+                        del config.potion_trades[r_msg_id]
                         db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount'])
                         return
                     db_query.add_mission_potion(potion_trade['address2'], -potion_trade['amount'])
                     db_query.add_revive_potion(potion_trade['address2'], potion_trade['amount'])
                     db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount'])
+        elif r_msg_id in config.trades:
+            trade_obj = config.trades[reaction.message.id]
+            if user.id == trade_obj["challenged"]:
+                config.trades[r_msg_id]['active'] = True
+                oppo = db_query.get_owned(user.id)
+                print(trade_obj, '\n', oppo[trade_obj['key']])
+                if len([i for i in oppo[trade_obj['key']] if trade_obj['item2'] in i]) == 0:
+                    del config.trades[r_msg_id]
+                    trade_obj['fn'](trade_obj['challenger'], trade_obj['item1'], 1)
+                    await reaction.message.edit(embeds=[CustomEmbed(title="**Failed**!")])
+                else:
+                    del config.trades[r_msg_id]
+                    trade_obj['fn'](trade_obj['challenger'], trade_obj['item2'], 1)
+                    trade_obj['fn'](trade_obj['challenged'], trade_obj['item1'], 1)
+                    trade_obj['fn'](trade_obj['challenged'], trade_obj['item2'], -1)
+                    await reaction.message.edit(embeds=[CustomEmbed(title="**Trade Successful**!")])
 
 
 # Reaction Tracker
@@ -3415,6 +3567,7 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
 # Autocomplete functions
 
 @set_battle_zone.on_autocomplete("zone")
+@gift_battle_zone.on_autocomplete("zone")
 async def battle_zone_autocomplete(interaction: nextcord.Interaction, item: str):
     # Determine the choices for the trainer_name option based on a condition
     user_owned = db_query.get_owned(interaction.user.id)
@@ -3428,7 +3581,8 @@ async def battle_zone_autocomplete(interaction: nextcord.Interaction, item: str)
 
 
 @set_flair.on_autocomplete("flair")
-async def battle_zone_autocomplete(interaction: nextcord.Interaction, item: str):
+@gift_name_flair.on_autocomplete("flair")
+async def flair_autocomplete(interaction: nextcord.Interaction, item: str):
     # Determine the choices for the trainer_name option based on a condition
     user_owned = db_query.get_owned(interaction.user.id)
     if user_owned is not None and 'flair' in user_owned:

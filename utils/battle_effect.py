@@ -71,9 +71,12 @@ def update_purple_stars(total, status_affect_solo):
         if total == 0:
             break
         if 'reduce' in effect and 'star' in effect:
-            match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
-            val = int(float(match.group()))
-            total -= val
+            if 'to 0' in effect:
+                total = 0
+            else:
+                match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
+                val = int(float(match.group()))
+                total -= val
     return total, status_affect_solo
 
 

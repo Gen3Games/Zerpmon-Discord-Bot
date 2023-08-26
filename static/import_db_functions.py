@@ -31,7 +31,7 @@ def update_type(name, attrs):
 
 
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List_NEW.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
