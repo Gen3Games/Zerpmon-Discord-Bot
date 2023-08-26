@@ -558,6 +558,18 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
                                  db_query.add_revive_potion)
 
 
+@gift.subcommand(name='double_xp', description="Gift double XP potion (only Admins)")
+async def xp_potion(interaction: nextcord.Interaction,
+                    user: Optional[nextcord.Member] = SlashOption(required=True)):
+    # msg = await interaction.send(f"Searching...")
+    execute_before_command(interaction)
+    if interaction.user.id not in config.ADMINS:
+        await interaction.send('You must be an Admin to use this command')
+        return
+    await callback.gift_callback(interaction, 1, user, 'double_xp', 'Double XP Potion',
+                                 db_query.double_xp_24hr)
+
+
 @gift.subcommand(name='white_candy', description="Gift White Power Candy")
 async def revive_potion(interaction: nextcord.Interaction, qty: int,
                         user: Optional[nextcord.Member] = SlashOption(required=True)):
@@ -1333,7 +1345,7 @@ async def mission_refill(interaction: nextcord.Interaction, quantity: int):
 
 
 @buy.subcommand(description="Purchase Safari Trip using ZRP (multiple option)")
-async def safari_trip(interaction: nextcord.Interaction, quantity: int):
+async def safari_trip(interaction: nextcord.Interaction, quantity: int = SlashOption(max_value=5)):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
     # Sanity checks

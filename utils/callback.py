@@ -158,6 +158,7 @@ async def show_store(interaction: nextcord.Interaction):
 
 async def store_callback(interaction: nextcord.Interaction):
     user_id = interaction.user.id
+    await interaction.response.defer(ephemeral=True)
     main_embed = CustomEmbed(title="Zerpmon Store", color=0xfcff82)
     main_embed.add_field(name="**Revive All Potions**" + '\t🍹',
                          value=f"Cost: `{config.POTION[0]} XRP`" if str(user_id) in config.store_24_hr_buyers else
@@ -206,7 +207,7 @@ async def store_callback(interaction: nextcord.Interaction):
     b1.callback = lambda i: purchase_callback(i, config.POTION[0])
     b2.callback = lambda i: purchase_callback(i, config.MISSION_REFILL[0])
     b3.callback = lambda i: double_xp_callback(i)
-    await interaction.send(embeds=[main_embed, sec_embed], view=view, ephemeral=True)
+    await interaction.edit_original_message(embeds=[main_embed, sec_embed], view=view)
 
 
 async def double_xp_callback(i: nextcord.Interaction):
@@ -1092,7 +1093,10 @@ async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextc
                 f"Sorry no User found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
             return
 
-    fn(user_owned_nfts['data']['address'], qty)
+    if potion_key != 'double_xp':
+        fn(user_owned_nfts['data']['address'], qty)
+    else:
+        fn(user_id, )
     await interaction.send(
         f"**Success!**",
         ephemeral=True)
