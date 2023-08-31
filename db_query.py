@@ -564,7 +564,7 @@ def clear_mission_deck(user_id):
         return False
 
 
-def update_battle_deck(deck_no, new_deck, user_id):
+def update_battle_deck(deck_no, new_deck, eqs, user_id):
     users_collection = db['users']
 
     doc = users_collection.find_one({'discord_id': str(user_id)})
@@ -581,8 +581,10 @@ def update_battle_deck(deck_no, new_deck, user_id):
     #
     # arr[deck_no][str(place - 1)] = zerpmon_id
     arr[deck_no] = new_deck
-    # save the updated document
-    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'battle_deck': arr}})
+    equipments = {str(i): eq for i, eq in enumerate(eqs)}
+    r = users_collection.update_one({'discord_id': str(user_id)},
+                                    {"$set": {f'equipment_decks.battle_deck.{deck_no}': equipments,
+                                              'battle_deck': arr}})
 
     if r.acknowledged:
         return True
@@ -603,7 +605,7 @@ def clear_battle_deck(deck_no, user_id, gym=False):
         return False
 
 
-def update_gym_deck(deck_no, new_deck, user_id):
+def update_gym_deck(deck_no, new_deck, eqs, user_id):
     users_collection = db['users']
 
     doc = users_collection.find_one({'discord_id': str(user_id)})
@@ -620,8 +622,10 @@ def update_gym_deck(deck_no, new_deck, user_id):
     #
     # arr[deck_no][str(place - 1)] = zerpmon_id
     arr[deck_no] = new_deck
-    # save the updated document
-    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'gym_deck': arr}})
+    equipments = {str(i): eq for i, eq in enumerate(eqs)}
+    r = users_collection.update_one({'discord_id': str(user_id)},
+                                    {"$set": {f'equipment_decks.gym_deck.{deck_no}': equipments,
+                                              'gym_deck': arr}})
 
     if r.acknowledged:
         return True
@@ -650,7 +654,8 @@ def set_default_deck(deck_no, user_id, gym=False):
         eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
 
         # save the updated document
-        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck }})
+        r = users_collection.update_one({'discord_id': str(user_id)},
+                                        {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck}})
     else:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
             doc["battle_deck"]
@@ -658,7 +663,8 @@ def set_default_deck(deck_no, user_id, gym=False):
         eq_deck = doc['equipment_decks']['battle_deck']
         eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
         # save the updated document
-        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck}})
+        r = users_collection.update_one({'discord_id': str(user_id)},
+                                        {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck}})
 
     if r.acknowledged:
         return True
@@ -780,7 +786,8 @@ def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=Fals
     old = zerpmon_collection.find_one({'name': zerpmon_name})
     level = old['level'] + 1 if 'level' in old else 1
     maxed = old.get('maxed_out', 0)
-    if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
+    if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (
+            old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
         update_moves(old)
     if level > 30:
         level = 30
@@ -1340,7 +1347,8 @@ def set_equipment_on(user_id, equipments, deck_type, deck_no):
     user_id = str(user_id)
     equipments = {str(i): eq for i, eq in enumerate(equipments)}
     res = users_collection.update_one({'discord_id': user_id},
-                                {'$set': {f'equipment_decks.{deck_type}{ "." + deck_no if deck_no is not None else ""}': equipments}},
+                                      {'$set': {
+                                          f'equipment_decks.{deck_type}{"." + deck_no if deck_no is not None else ""}': equipments}},
                                       upsert=True)
     print(res.acknowledged, res.matched_count, res.raw_result)
 
@@ -1349,8 +1357,58 @@ def get_eq_by_name(name, gym=False):
     if gym:
         return equipment_col.find_one({'type': name}, )
     else:
-        return equipment_col.find_one({'name': name},)
+        return equipment_col.find_one({'name': name}, )
 
 
 def get_all_eqs():
     return [i for i in equipment_col.find({})]
+
+
+"""LOAN"""
+
+
+def list_for_loan(zerp, user_id, username, price, active_for, xrp=True):
+    loan_col = db['loan']
+    found_in_listing = loan_col.find_one({'zerpmon_name': zerp['name']})
+    if found_in_listing:
+        return False
+    listing_obj = {
+        'zerp_data': zerp,
+        'zerpmon_name': zerp['name'],
+        'token_id': zerp['token_id'],
+        'listed_by': {'id': user_id, 'username': username},
+        'listed_at': time.time()//1,
+        'per_day_cost': price,
+        'active_for': active_for,
+        'expires_at': get_next_ts(active_for),
+        'xrp': xrp,
+        'accepted_by': {'id': None, 'username': None},
+        'accepted_on': None,
+        'accepted_days': 0
+    }
+
+    res = loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': listing_obj}, upsert=True)
+    return res.acknowledged
+
+
+def remove_listed_loan(zerp_name, user_id):
+    loan_col = db['loan']
+    r = loan_col.delete_one({'zerpmon_name': zerp_name})
+    return r.acknowledged
+
+
+def update_loanee(zerp, loanee, days):
+    loan_col = db['loan']
+    res = loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': {
+        'accepted_by': loanee,
+        'accepted_on': time.time() // 1,
+        'accepted_days': days
+    }}, upsert=True)
+    return res.acknowledged
+
+
+def get_loaned(user_id):
+    loan_col = db['loan']
+    listings = loan_col.find({'listed_by.id': user_id})
+    loanee_list = loan_col.find({'accepted_by.id': user_id})
+    return [i for i in listings] if listings is not None else [], [i for i in loanee_list] if loanee_list is not None else []

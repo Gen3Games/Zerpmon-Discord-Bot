@@ -6,7 +6,7 @@ from statistics import mean
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models import IssuedCurrency, AccountLines, Transaction
 from xrpl.models.requests.account_nfts import AccountNFTs
-from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx
+from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx, NFTSellOffers
 from xrpl.transaction import get_transaction_from_hash
 import config
 import json
@@ -149,11 +149,12 @@ async def get_zrp_price_api():
         req = requests.get('https://s1.xrplmeta.org/token/ZRP:rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe')
         result = req.json()
         token_price = float(result['metrics']['price'])
+        config.zrp_price = token_price
         print(token_price)
         return token_price
     except Exception as e:
-        print("Error occurred while fetching XRP price:", e)
-        return None
+        print("Error occurred while fetching ZRP price:", e)
+        return config.zrp_price
 
 
 # asyncio.run(get_zrp_price_api())
@@ -270,5 +271,22 @@ async def get_tx(client, hash_):
         except Exception as e:
             print(e)
             await asyncio.sleep(1)
+
+
+async def get_sell_offers(client, nft_id):
+    for i in range(5):
+        try:
+            req_obj = NFTSellOffers(nft_id=nft_id)
+            response = await client.request(req_obj)
+            result = response.result
+            print(nft_id, result)
+            if 'offers' in result:
+                return len(result['offers']) > 0
+            elif 'error' in result and result['error'] == 'objectNotFound':
+                return False
+        except Exception as e:
+            print(e)
+            await asyncio.sleep(1)
+    return None
 
 # asyncio.run(get_tx('D2968E78B65ED83C7247EFBCF38C57C84C81A329B24706EDF71872E077B14D39'))

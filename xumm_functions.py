@@ -96,14 +96,14 @@ async def gen_txn_url(to_address, from_address, amount):
     return res_json['uuid'], res_json['refs']['qr_png'], res_json['next']['always']
 
 
-async def gen_nft_txn_url(from_address, nft_id):
+async def gen_nft_txn_url(from_address, nft_id, destination = config.WAGER_ADDR):
     tjson = {
         "TransactionType": "NFTokenCreateOffer",
         "Account": from_address,
         "NFTokenID": nft_id,
         "Amount": "0",
         "Flags": 1,
-        "Destination": config.WAGER_ADDR,
+        "Destination": destination,
     }
     payload = {
         "txjson": tjson,

@@ -220,7 +220,7 @@ async def listener(client, store_address, wager_address):
                             except:
                                 print("Not XRP")
                 elif 'TransactionType' in message and message['TransactionType'] == "NFTokenCreateOffer" and \
-                        'Destination' in message and message['Destination'] in [wager_address]:
+                        'Destination' in message and message['Destination'] in [wager_address, config.LOAN_ADDR]:
                     if len(hashes) > 1000:
                         hashes = hashes[900:]
                     if message['hash'] not in hashes:
@@ -234,8 +234,11 @@ async def listener(client, store_address, wager_address):
                                         'CreatedNode' in i and i['CreatedNode']['LedgerEntryType'] == 'NFTokenOffer']
                                 offer = node[0]['CreatedNode']['LedgerIndex']
                                 logging.error(f'OFFER: {offer}')
-                                # Accept SEll offer here
-                                await accept_nft("wager", offer, sender=message['Account'], token=message['NFTokenID'])
+                                if message['Destination'] == wager_address:
+                                    # Accept SEll offer here
+                                    await accept_nft("wager", offer, sender=message['Account'], token=message['NFTokenID'])
+                                else:
+                                    config.loan_listings[message['Account']] = None
 
                         except Exception as e:
                             logging.error(f"Error detecting NFT txn {e} \nDATA: {message}")
@@ -262,7 +265,7 @@ async def listener(client, store_address, wager_address):
                         print('OfferCreate: ', message)
                         amount = float(message['TakerPays']['value'])
                         xrp = float(int(message['TakerGets']) / 10 ** 6)
-                        config.zrp_price = xrp / amount
+                        # config.zrp_price = xrp / amount
         except Exception as e:
             logging.error(f"ERROR in listener: {traceback.format_exc()}")
 

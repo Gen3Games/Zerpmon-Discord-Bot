@@ -644,7 +644,7 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     await interaction.edit_original_message(embeds=[main_embed, sec_embed], view=view)
 
 
-async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=False, buy_offer=False, offerId='', token_id=''):
+async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=False, buy_offer=False, offerId='', token_id='', fee=False):
     user_owned_nfts = db_query.get_owned(_i.user.id)
 
     # Sanity checks
@@ -663,7 +663,7 @@ async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=F
         uuid, url, href = await xumm_functions.gen_nft_accept_txn(
             user_address,
             offerId, token_id)
-    embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here.",
+    embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here." + ('\n(**listing fee transaction**)' if fee else ''),
                         url=href)
 
     embed.set_image(url=url)
@@ -675,7 +675,7 @@ async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=F
                 if not buy_offer:
                     del config.zrp_purchases[user_id]
                     await _i.edit_original_message(embed=CustomEmbed(title="**Success**",
-                                                                     description=f"Bought {item}." if 'Equipment' not in item else f'Sent `{amount} ZRP`\nCreating Sell Offer...'
+                                                                     description='Listing fee paid' if fee else (f"Bought {item}." if 'Equipment' not in item else f'Sent `{amount} ZRP`\nCreating Sell Offer...')
                                                                      ))
                 else:
                     return user_address, True
