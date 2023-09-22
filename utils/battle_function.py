@@ -52,7 +52,8 @@ async def send_global_message(guild, text, image):
         logging.error(f'ERROR: {traceback.format_exc()}')
 
 
-def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buffed_types, buffed_zerp1, buffed_zerp2, gym_bg, p1,
+def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buffed_types, buffed_zerp1, buffed_zerp2,
+                          gym_bg, p1,
                           p2):
     percentages1 = [(float(p['percent']) if p['percent'] not in ["0.00", "0", ""] else None) for p in
                     z1_obj['moves']] if p1 is None else p1
@@ -89,6 +90,13 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
     print(z1, z2)
     if 'eq_applied' not in z1 or z1.get('eq_applied', '') != z2['name']:
         if 'opponent miss chance' in eq1_lower or ('eq_applied' not in z1 and 'miss chance' in eq1_lower):
+            # if 'own miss chance' in eq1_lower:
+            #     match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
+            #     buffer_m = (int(float(match.group())) if match is not None else 0)
+            #     percentages1[-1] -= buffer_m
+                # z1['buffer_miss'] = (int(float(match.group())) if match is not None else 0) - float(z1_moves[-1]['percent'])
+                # if z1['buffer_miss'] < 0:
+                #     z1['buffer_miss'] = 0
             z1['eq_applied'] = z2['name']
             status_affects[0].append(eq1_lower)
     if 'increase' in eq1_lower and 'stars' in eq1_lower:
@@ -96,6 +104,13 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
         extra_star1 = int(float(match.group())) if match is not None else 0
     if 'eq_applied' not in z2 or z2.get('eq_applied', '') != z1['name']:
         if 'opponent miss chance' in eq2_lower or ('eq_applied' not in z2 and 'miss chance' in eq2_lower):
+            # if 'own miss chance' in eq2_lower:
+            #     match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
+            #     buffer_m = (int(float(match.group())) if match is not None else 0)
+            #     percentages2[-1] -= buffer_m
+                # z2['buffer_miss'] = (int(float(match.group())) if match is not None else 0) - float(z2_moves[-1]['percent'])
+                # if z2['buffer_miss'] < 0:
+                #     z2['buffer_miss'] = 0
             z2['eq_applied'] = z1['name']
             status_affects[1].append(eq2_lower)
     if 'increase' in eq2_lower and 'stars' in eq2_lower:
@@ -132,7 +147,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
                   (f"> Stars: {(len(move['stars']) + extra_star1) * '★'}\n" if 'stars' in move else "") + \
                   (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                  f"> Percentage: {move['percent'] if p1 is None else p1[i]}%\n",
+                  f"> Percentage: {move['percent'] if p1 is None else round(p1[i], 2)}%\n",
             inline=True)
     main_embed.add_field(name="\u200B", value="\u200B", inline=False)
     main_embed.add_field(name=f"🆚", value="\u200B", inline=False)
@@ -159,7 +174,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
                   (f"> Stars: {(len(move['stars']) + extra_star2) * '★'}\n" if 'stars' in move else "") + \
                   (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                  f"> Percentage: {move['percent'] if p2 is None else p2[i]}%\n",
+                  f"> Percentage: {move['percent'] if p2 is None else round(p2[i], 2)}%\n",
             inline=True)
 
     gen_image(message.id, url1, url2, path1, path2, path3, gym_bg=gym_bg)
@@ -259,12 +274,12 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
 
     indexes = list(range(len(percentages1)))
 
-    chosen_index1 = random.choices(indexes, weights=[(0 if i is None else i) for i in p1_temp])[0]
+    chosen_index1 = random.choices(indexes, weights=[(0 if i is None or i < 0 else i) for i in p1_temp])[0]
     move1 = z1['moves'][chosen_index1]
     p1_temp = percentages1
     # print(move1)
 
-    chosen_index2 = random.choices(indexes, weights=[(0 if i is None else i) for i in p2_temp])[0]
+    chosen_index2 = random.choices(indexes, weights=[(0 if i is None or i < 0 else i) for i in p2_temp])[0]
     move2 = z2['moves'][chosen_index2]
     p2_temp = percentages2
     # print(move2)
@@ -298,6 +313,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
         winner['move2']['stars'], status_affects[0] = update_purple_stars(len(move2['stars']), status_affects[0])
         if 'increase' in eq2 and 'stars' in eq2:
             winner['move2']['stars'] += eq2_val
+    decided = False
     if 'dmg' in move1:
         d1m = 1.0
         # print(types[1], types[0])
@@ -309,13 +325,25 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             d1m = int(d1m) if float(d1m).is_integer() else d1m
         # print(d1m)
         d1m_t, status_affects[1] = update_next_dmg(status_affect_solo=status_affects[1])
-        if d1m < 1 and 'dmg' in move2 and 'chance for own white/gold attack to ignore opponent resistances' in eq1:
+        if d1m * d1m_t > 0 and ((move1['color'] == 'white' and move2['color'] in ['blue', 'purple']) or (move1['color'] == 'gold' and move2['color'] == 'blue')) \
+                and 'chance for own white/gold attack to ignore opponent resistances' in eq1:
             trigger = random.choices([True, False], [eq1_val, 100 - eq1_val])[0]
             if trigger:
-                d1m = 1
+                decided = True
+                if random.randint(1, 2) == 1:
+                    winner[
+                        'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** has miraculously pierced through {z2['name']}'s {move2['name']}!"
+                    winner['winner'] = '1'
+                else:
+                    winner[
+                        'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** has successfully nullified {z2['name']}'s {move2['name']}!"
+                    winner['winner'] = '1'
                 winner['eq1_name'] = buff_eqs[0]
-                winner['eq1_msg'] = f"{z1['name']}'s **{buff_eqs[0]}** pierced through {z2['name']}'s resistances!"
                 winner['eq_name'] = buff_eqs[0]
+            else:
+                winner[
+                    'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** couldn't break through {z2['name']}'s **{move2['name']}**!"
+                winner['eq1_name'] = buff_eqs[0]
         move1['dmg'] = round(d1m * int(move1['dmg']) * d1m_t)
         winner['move1']['dmg'] = round(move1['dmg'])
         winner['move1']['mul'] = "x½" if d1m == 0.5 else f'x{d1m}'
@@ -346,13 +374,25 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             d2m = int(d2m) if float(d2m).is_integer() else d2m
 
         d2m_t, status_affects[0] = update_next_dmg(status_affect_solo=status_affects[0])
-        if d2m < 1 and 'dmg' in move1 and 'chance for own white/gold attack to ignore opponent resistances' in eq2:
+        if d2m * d2m_t > 0 and ((move2['color'] == 'white' and move1['color'] in ['blue', 'purple']) or (move2['color'] == 'gold' and move1['color'] == 'blue'))\
+                and 'chance for own white/gold attack to ignore opponent resistances' in eq2:
             trigger = random.choices([True, False], [eq2_val, 100 - eq2_val])[0]
             if trigger:
-                d2m = 1
+                decided = True
+                if random.randint(1, 2) == 1:
+                    winner[
+                        'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** has miraculously pierced through {z1['name']}'s {move1['name']}!"
+                    winner['winner'] = '2'
+                else:
+                    winner[
+                        'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** has successfully nullified {z1['name']}'s {move1['name']}!"
+                    winner['winner'] = '2'
                 winner['eq2_name'] = buff_eqs[1]
-                winner['eq2_msg'] = f"{z2['name']}'s **{buff_eqs[1]}** pierced through {z1['name']}'s resistances!"
                 winner['eq_name'] = buff_eqs[1]
+            else:
+                winner[
+                    'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** couldn't break through {z1['name']}'s **{move1['name']}**!"
+                winner['eq2_name'] = buff_eqs[1]
         # print(d2m)
         move2['dmg'] = round(d2m * int(move2['dmg']) * d2m_t)
         winner['move2']['dmg'] = round(move2['dmg'])
@@ -388,7 +428,6 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
         n_dmg = winner['move2']['dmg']
         winner['dmg_str2'] = f"({old_dmg2} x{n_dmg / old_dmg2:.1f})={n_dmg} {'❤️‍🩹' if n_dmg < old_dmg2 else '❤️‍🔥'} "
     # Check Color of both moves
-    decided = False
     if not decided:
         match (move1['color'], move2['color']):
             case ("white", "white") | ("white", "gold") | ("gold", "white") | ("gold", "gold"):
@@ -413,8 +452,15 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                     winner['winner'] = '2'
                     winner['status_effect'] = note
                     winner['move2']['msg'] = _m2
+                elif move1['color'] == 'white' and winner['move1']['dmg'] > 0:
+                    winner['winner'] = '1'
+                    winner['status_effect'] = '@sc'
+                    winner['move1']['msg'] = f'''{z2['name']}'s {move2['name']} was ineffective because it has 0 stars! {z1['name']}'s {move1['name']} breaks through with ease!'''
                 else:
                     winner['winner'] = ""
+                    winner['status_effect'] = '@sc'
+                    winner['move1'][
+                        'msg'] = f'''{z2['name']}'s {move2['name']} was ineffective because it has 0 stars!'''
 
             case ("purple", "white") | ("purple", "miss"):
                 if winner['move1']['stars'] > 0:
@@ -426,8 +472,16 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                     winner['winner'] = '1'
                     winner['status_effect'] = note
                     winner['move1']['msg'] = _m1
+                elif move2['color'] == 'white' and winner['move2']['dmg'] > 0:
+                    winner['winner'] = '2'
+                    winner['status_effect'] = '@sc'
+                    winner['move2'][
+                        'msg'] = f'''{z1['name']}'s {move1['name']} was ineffective because it has 0 stars! {z2['name']}'s {move2['name']} breaks through with ease!'''
                 else:
                     winner['winner'] = ""
+                    winner['status_effect'] = '@sc'
+                    winner['move1'][
+                        'msg'] = f'''{z1['name']}'s {move1['name']} was ineffective because it has 0 stars!'''
 
             case ("blue", "white") | ("blue", "gold") | ("blue", "purple") | ("blue", "miss") | ("white", "blue") | (
                 "gold",
@@ -451,22 +505,41 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             case ("gold", "purple"):
                 m2 = db_query.get_move(move2['name'])
                 note = m2['notes'].lower()
-                if 'knock' in note and 'against' in note and 'gold' in note:
-                    winner['winner'] = '2'
-                elif winner['move1']['dmg'] == 0:
-                    winner['winner'] = ""
+                if winner['move2']['stars'] > 0 and 'knock' in note and 'against' in note and 'gold' in note:
+                        winner['winner'] = '2'
                 else:
-                    winner['winner'] = '1'
+                    if winner['move1']['dmg'] == 0:
+                        if winner['move2']['stars'] > 0:
+
+                            percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                                                                                        [[], [note]])
+
+                            winner['winner'] = '2'
+                            winner['status_effect'] = note
+                            winner['move2']['msg'] = _m2
+                        else:
+                            winner['winner'] = ""
+                    else:
+                        winner['winner'] = '1'
 
             case ("purple", "gold"):
                 m1 = db_query.get_move(move1['name'])
                 note = m1['notes'].lower()
-                if 'knock' in note and 'against' in note and 'gold' in note:
-                    winner['winner'] = '1'
-                elif winner['move2']['dmg'] == 0:
-                    winner['winner'] = ""
+                if winner['move1']['stars'] > 0 and 'knock' in note and 'against' in note and 'gold' in note:
+                        winner['winner'] = '1'
                 else:
-                    winner['winner'] = '2'
+                    if winner['move2']['dmg'] == 0:
+                        if winner['move1']['stars'] > 0:
+                            percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                                                                                        [[note], []])
+
+                            winner['winner'] = '1'
+                            winner['status_effect'] = note
+                            winner['move1']['msg'] = _m1
+                        else:
+                            winner['winner'] = ""
+                    else:
+                        winner['winner'] = '2'
 
             case ("purple", "purple"):
                 s1 = winner['move1']['stars']
@@ -496,13 +569,15 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
 
             case _:
                 print(f"IDK what this is {move1}, {move2}")
-    if winner['winner'] == "2" and 'chance to survive from being knocked out' in eq1:
+    s_e = winner.get('status_effect', 'knock')
+    k_o_s_e = 'knock' in s_e and 'against' not in s_e
+    if k_o_s_e and winner['winner'] == "2" and 'chance to survive from being knocked out' in eq1:
         new_winner = random.choices(["", "2"], [eq1_val, 100 - eq1_val])[0]
         winner['winner'] = new_winner
         if winner['winner'] == "":
             winner['eq_name'] = buff_eqs[0]
             winner['eq_msg'] = f'@me {eq1}'
-    if winner['winner'] == "1" and 'chance to survive from being knocked out' in eq2:
+    if k_o_s_e and winner['winner'] == "1" and 'chance to survive from being knocked out' in eq2:
         new_winner = random.choices(["", "1"], [eq2_val, 100 - eq2_val])[0]
         winner['winner'] = new_winner
         if winner['winner'] == "":
@@ -657,11 +732,13 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                   z2['moves']]
         buffed_type2 = [gym_type] * (stage - 3) if stage < 7 else [gym_type] * (stage - 4)
 
-        main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(interaction, z1, z2, z1_obj.copy(), z2.copy(), z1_type,
-                                                         z2_type, [buffed_type1, buffed_type2], buffed_zerp, gym_type if stage > 3 else '',
-                                                         leader['bg'],
-                                                         p1.copy() if p1 is not None else p1,
-                                                         p2.copy() if p2 is not None else p2)
+        main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(interaction, z1, z2, z1_obj.copy(),
+                                                                             z2.copy(), z1_type,
+                                                                             z2_type, [buffed_type1, buffed_type2],
+                                                                             buffed_zerp, gym_type if stage > 3 else '',
+                                                                             leader['bg'],
+                                                                             p1.copy() if p1 is not None else p1,
+                                                                             p2.copy() if p2 is not None else p2)
         await asyncio.sleep(1)
         if msg_hook is None:
             msg_hook = interaction
@@ -698,7 +775,8 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                                              [buffed_type1, buffed_type2],
                                                                              [z1.get('buff_eq', None),
                                                                               z2.get('buff_eq', None)], p1, p2,
-                                                                             p1_temp, p2_temp)
+                                                                             p1_temp, p2_temp,
+                                                                             )
             t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
             t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
             t_info1 = f'({t_info1})' if t_info1 not in ["", " "] else t_info1
@@ -780,25 +858,30 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                 continue
                     elif 'reduce' in effect and 'star' in effect:
                         status_stack[0].append(effect)
-                        new_m = f"{z2['name']} has had their purple moves reduced by 1 star!"
+                        new_m = f"reduced {z2['name']}'s Purple stars to 0 for the rest of the combat!"
                         await msg_hook.send(
                             content=new_m, ephemeral=True)
                         move_counter += 1
                         continue
                     else:
-                        new_m = result['move1']['msg'][:-1]
-                        i = int(result['move1']['msg'][-1])
+                        if effect == '@sc':
+                            new_m = result['move1']['msg']
+                        else:
+                            new_m = result['move1']['msg'][:-1]
+                            i = int(result['move1']['msg'][-1])
 
-                        new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
-                            config.COLOR_MAPPING[z2_moves[i]['color']], '')
-                        new_m = new_m.replace("@me", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ').replace(
-                            "@op", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ')
-                        new_m += f" ({str(z1_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z1_moves[i] and z1_moves[i]['dmg'] != '' else ''}{(str(int(float(p2[i]))) if p2[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(int(float(p1[i]))) if p1[i] is not None else 0)}%)"
+                            new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
+                                config.COLOR_MAPPING[z2_moves[i]['color']], '')
+                            new_m = new_m.replace("@me", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ').replace(
+                                "@op", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ')
+                            new_m += f" ({str(z1_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z1_moves[i] and z1_moves[i]['dmg'] != '' else ''}{(str(round(float(p2[i]))) if p2[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(round(float(p1[i]))) if p1[i] is not None else 0)}%)"
                         await msg_hook.send(
-                            content=new_m, ephemeral=True)
+                            content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                            f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + new_m, ephemeral=True)
                         move_counter += 1
-                        continue
-                else:
+                        if effect != '@sc':
+                            continue
+                elif result['winner'] == '2':
                     if 'next' in effect:
                         if 'next attack' in effect:
                             status_stack[1].append(effect)
@@ -842,26 +925,30 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                 continue
                     elif 'reduce' in effect and 'star' in effect:
                         status_stack[1].append(effect)
-                        new_m = f"{z1['name']} has had their purple moves reduced to 0 star!"
+                        new_m = new_m = f"reduced {z1['name']}'s Purple stars to 0 for the rest of the combat!"
                         await msg_hook.send(
                             content=new_m, ephemeral=True)
                         move_counter += 1
                         continue
                     else:
+                        if effect == '@sc':
+                            new_m = result['move2']['msg']
+                        else:
+                            new_m = result['move2']['msg'][:-1]
+                            i = int(result['move2']['msg'][-1])
 
-                        new_m = result['move2']['msg'][:-1]
-                        i = int(result['move2']['msg'][-1])
-
-                        new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
-                            config.COLOR_MAPPING[z2_moves[i]['color']], '')
-                        new_m = new_m.replace("@me", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ').replace(
-                            "@op", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ')
-                        new_m += f" ({str(z2_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z2_moves[i] and z2_moves[i]['dmg'] != '' else ''}{(str(int(float(p1[i]))) if p1[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(int(float(p2[i]))) if p2[i] is not None else 0)}%)"
+                            new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
+                                config.COLOR_MAPPING[z2_moves[i]['color']], '')
+                            new_m = new_m.replace("@me", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ').replace(
+                                "@op", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ')
+                            new_m += f" ({str(z2_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z2_moves[i] and z2_moves[i]['dmg'] != '' else ''}{(str(round(float(p1[i]))) if p1[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(round(float(p2[i]))) if p2[i] is not None else 0)}%)"
 
                         await msg_hook.send(
-                            content=new_m, ephemeral=True)
+                            content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                            f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + new_m, ephemeral=True)
                         move_counter += 1
-                        continue
+                        if effect != '@sc':
+                            continue
 
             # DRAW
             if result['winner'] == "":
@@ -872,15 +959,17 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                         ephemeral=True)
                 else:
                     await msg_hook.send(
-                        content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + f"**DRAW**",
+                        content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                            f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + f"**DRAW**",
                         ephemeral=True)
                 move_counter += 1
                 continue
             # {}'s "Crystal Ball" activated and nullified {} attack!
             if result['winner'] == '1':
                 await msg_hook.send(
-                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
-                    + (f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
+                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
+                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
+                            + (f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
                         'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"),
                     ephemeral=True)
                 eliminate = (2, z2['name'])
@@ -891,7 +980,8 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
 
             elif result['winner'] == '2':
                 await msg_hook.send(
-                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
+                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
+                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + f"{z2['name']} **knocked out** 💀 {z1['name']} 💀!" if '🎯' not in result['move2'][
                         'mul'] else f"**{z1['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}",
                     ephemeral=True)
@@ -909,8 +999,9 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                         result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
             eq1_lower = eq1_note.get('notes', '').lower()
-            if 'opponent miss chance' in eq1_lower:
-                p1, p2, _, __ = apply_status_effects(p1, p2, [[], [eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')]])
+            # if 'opponent miss chance' in eq1_lower:
+            #     p1, p2, _, __ = apply_status_effects(p1, p2, [[], [
+            #         eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')]])
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
@@ -921,8 +1012,9 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                         result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
             eq2_lower = eq2_note.get('notes', '').lower()
-            if 'opponent miss chance' in eq2_lower:
-                p1, p2, _, __ = apply_status_effects(p1, p2, [[eq2_lower.replace('opponent', 'own').replace('increase', 'decrease')], []])
+            # if 'opponent miss chance' in eq2_lower:
+            #     p1, p2, _, __ = apply_status_effects(p1, p2, [
+            #         [eq2_lower.replace('opponent', 'own').replace('increase', 'decrease')], []])
             p2 = None
             p2_temp = None
         file.close()
@@ -1169,9 +1261,10 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             if [_i['value'] for _i in eq2['attributes'] if _i['trait_type'] == 'Type'][-1] not in list(types2.keys()):
                 del z2['buff_eq']
 
-        main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type,
-                                                         [buffed_type1, buffed_type2], buffed_zerp1,
-                                                         buffed_zerp2, bg_img, p1, p2)
+        main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type,
+                                                                             z2_type,
+                                                                             [buffed_type1, buffed_type2], buffed_zerp1,
+                                                                             buffed_zerp2, bg_img, p1, p2)
         if battle_instance['type'] == 'free_br':
             main_embed.description = f'{battle_instance["username1"]} vs {battle_instance["username2"]}'
 
@@ -1208,7 +1301,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                                              [buffed_type1, buffed_type2],
                                                                              [z1.get('buff_eq', None),
                                                                               z2.get('buff_eq', None)], p1, p2,
-                                                                             p1_temp, p2_temp)
+                                                                             p1_temp, p2_temp,
+                                                                             )
             t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
             t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
             t_info1 = f'({t_info1})' if t_info1 not in ["", " "] else t_info1
@@ -1287,25 +1381,30 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                 continue
                     elif 'reduce' in effect and 'star' in effect:
                         status_stack[0].append(effect)
-                        new_m = f"{z2['name']} has had their purple moves reduced by 1 star!"
+                        new_m = f"reduced {z2['name']}'s Purple stars to 0 for the rest of the combat!"
                         await msg_hook.channel.send(
                             content=new_m)
                         move_counter += 1
                         continue
                     else:
-                        new_m = result['move1']['msg'][:-1]
-                        i = int(result['move1']['msg'][-1])
+                        if effect == '@sc':
+                            new_m = result['move1']['msg']
+                        else:
+                            new_m = result['move1']['msg'][:-1]
+                            i = int(result['move1']['msg'][-1])
 
-                        new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
-                            config.COLOR_MAPPING[z2_moves[i]['color']], '')
-                        new_m = new_m.replace("@me", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ').replace(
-                            "@op", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ')
-                        new_m += f" ({str(z1_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z1_moves[i] and z1_moves[i]['dmg'] != '' else ''}{(str(int(float(p2[i]))) if p2[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(int(float(p1[i]))) if p1[i] is not None else 0)}%)"
+                            new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
+                                config.COLOR_MAPPING[z2_moves[i]['color']], '')
+                            new_m = new_m.replace("@me", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ').replace(
+                                "@op", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ')
+                            new_m += f" ({str(z1_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z1_moves[i] and z1_moves[i]['dmg'] != '' else ''}{(str(round(float(p2[i]))) if p2[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(round(float(p1[i]))) if p1[i] is not None else 0)}%)"
                         await msg_hook.channel.send(
-                            content=new_m)
+                            content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                            f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + new_m)
                         move_counter += 1
-                        continue
-                else:
+                        if effect != '@sc':
+                            continue
+                elif result['winner'] == '2':
                     if 'next' in effect:
                         if 'next attack' in effect:
                             status_stack[1].append(effect)
@@ -1349,26 +1448,30 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                 continue
                     elif 'reduce' in effect and 'star' in effect:
                         status_stack[1].append(effect)
-                        new_m = f"{z1['name']} has had their purple moves reduced by 1 star!"
+                        new_m = f"reduced {z1['name']}'s Purple stars to 0 for the rest of the combat!"
                         await  msg_hook.channel.send(
                             content=new_m)
                         move_counter += 1
                         continue
                     else:
+                        if effect == '@sc':
+                            new_m = result['move2']['msg']
+                        else:
+                            new_m = result['move2']['msg'][:-1]
+                            i = int(result['move2']['msg'][-1])
 
-                        new_m = result['move2']['msg'][:-1]
-                        i = int(result['move2']['msg'][-1])
-
-                        new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
-                            config.COLOR_MAPPING[z2_moves[i]['color']], '')
-                        new_m = new_m.replace("@me", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ').replace(
-                            "@op", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ')
-                        new_m += f" ({str(z2_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z2_moves[i] and z2_moves[i]['dmg'] != '' else ''}{(str(int(float(p1[i]))) if p1[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(int(float(p2[i]))) if p2[i] is not None else 0)}%)"
+                            new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
+                                config.COLOR_MAPPING[z2_moves[i]['color']], '')
+                            new_m = new_m.replace("@me", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ').replace(
+                                "@op", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ')
+                            new_m += f" ({str(z2_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z2_moves[i] and z2_moves[i]['dmg'] != '' else ''}{(str(round(float(p1[i]))) if p1[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(round(float(p2[i]))) if p2[i] is not None else 0)}%)"
 
                         await msg_hook.channel.send(
-                            content=new_m)
+                            content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                            f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + new_m)
                         move_counter += 1
-                        continue
+                        if effect != '@sc':
+                            continue
 
             # DRAW
             if result['winner'] == "":
@@ -1378,13 +1481,15 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                         content=f"Woah! **{defender}** seemingly comes back to life with its **{result['eq_name']}**!")
                 else:
                     await msg_hook.channel.send(
-                        content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + f"**DRAW**",)
+                        content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                            f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + f"**DRAW**", )
                 move_counter += 1
                 continue
 
             if result['winner'] == '1':
                 await msg_hook.channel.send(
-                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
+                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
+                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + (f"{z1['name']} **knocked out** 💀 {z2['name']} 💀!" if '🎯' not in result['move1'][
                         'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}")
                 )
@@ -1396,7 +1501,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
             elif result['winner'] == '2':
                 await msg_hook.channel.send(
-                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
+                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
+                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + f"{z2['name']} **knocked out** 💀 {z1['name']} 💀!" if '🎯' not in result['move2'][
                         'mul'] else f"**{z1['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}")
 
@@ -1414,8 +1520,9 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                         result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
             eq1_lower = eq1_note.get('notes', '').lower()
-            if 'opponent miss chance' in eq1_lower:
-                p1, p2, _, __ = apply_status_effects(p1, p2, [[], [eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')]])
+            # if 'opponent miss chance' in eq1_lower:
+            #     p1, p2, _, __ = apply_status_effects(p1, p2, [[], [
+            #         eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')]])
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
@@ -1426,8 +1533,9 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                         result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
             eq2_lower = eq2_note.get('notes', '').lower()
-            if 'opponent miss chance' in eq2_lower:
-                p1, p2, _, __ = apply_status_effects(p1, p2, [[eq2_lower.replace('opponent', 'own').replace('increase', 'decrease')], []])
+            # if 'opponent miss chance' in eq2_lower:
+            #     p1, p2, _, __ = apply_status_effects(p1, p2, [
+            #         [eq2_lower.replace('opponent', 'own').replace('increase', 'decrease')], []])
             p2 = None
             p2_temp = None
         file.close()
@@ -1512,8 +1620,9 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
     except:
         pass
 
-    main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(interaction, z1, z2, z1_obj, z2, z1_type, z2_type, [buffed_type1, []], buffed_zerp, '',
-                                                     _data1.get('bg', [None])[0], None, None)
+    main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(interaction, z1, z2, z1_obj, z2, z1_type,
+                                                                         z2_type, [buffed_type1, []], buffed_zerp, '',
+                                                                         _data1.get('bg', [None])[0], None, None)
 
     await asyncio.sleep(1)
     await interaction.send(content="\u200B", embed=main_embed, file=file, ephemeral=True)
@@ -1535,8 +1644,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                                                                          status_stack,
                                                                          [buffed_type1, []], [z1.get('buff_eq', None),
                                                                                               z2.get('buff_eq', None)],
-                                                                         p1, p2, p1_temp,
-                                                                         p2_temp, mission=True)
+                                                                         p1, p2, p1_temp, p2_temp,
+                                                                         mission=True)
         t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
         t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
         t_info1 = f'({t_info1})' if t_info1 not in ["", " "] else t_info1
@@ -1623,25 +1732,30 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                             continue
                 elif 'reduce' in effect and 'star' in effect:
                     status_stack[0].append(effect)
-                    new_m = f"{z2['name']} has had their purple moves reduced by 1 star!"
+                    new_m = f"reduced {z2['name']}'s Purple stars to 0 for the rest of the combat!"
                     await interaction.send(
                         content=new_m, ephemeral=True)
                     move_counter += 1
                     continue
                 else:
-                    new_m = result['move1']['msg'][:-1]
-                    i = int(result['move1']['msg'][-1])
+                    if effect == '@sc':
+                        new_m = result['move1']['msg']
+                    else:
+                        new_m = result['move1']['msg'][:-1]
+                        i = int(result['move1']['msg'][-1])
 
-                    new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
-                        config.COLOR_MAPPING[z2_moves[i]['color']], '')
-                    new_m = new_m.replace("@me", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ').replace(
-                        "@op", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ')
-                    new_m += f" ({str(z1_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z1_moves[i] and z1_moves[i]['dmg'] != '' else ''}{(str(int(float(p2[i]))) if p2[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(int(float(p1[i]))) if p1[i] is not None else 0)}%)"
+                        new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
+                            config.COLOR_MAPPING[z2_moves[i]['color']], '')
+                        new_m = new_m.replace("@me", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ').replace(
+                            "@op", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ')
+                        new_m += f" ({str(z1_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z1_moves[i] and z1_moves[i]['dmg'] != '' else ''}{(str(round(float(p2[i]))) if p2[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(round(float(p1[i]))) if p1[i] is not None else 0)}%)"
                     await interaction.send(
-                        content=new_m, ephemeral=True)
+                        content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                            f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + new_m, ephemeral=True)
                     move_counter += 1
-                    continue
-            else:
+                    if effect != '@sc':
+                        continue
+            elif result['winner'] == '2':
                 if 'next' in effect:
                     if 'next attack' in effect:
                         status_stack[1].append(effect)
@@ -1685,26 +1799,30 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                             continue
                 elif 'reduce' in effect and 'star' in effect:
                     status_stack[1].append(effect)
-                    new_m = f"{z1['name']} has had their purple moves reduced by 1 star!"
+                    new_m = f"reduced {z1['name']}'s Purple stars to 0 for the rest of the combat!"
                     await interaction.send(
                         content=new_m, ephemeral=True)
                     move_counter += 1
                     continue
                 else:
+                    if effect == '@sc':
+                        new_m = result['move2']['msg']
+                    else:
+                        new_m = result['move2']['msg'][:-1]
+                        i = int(result['move2']['msg'][-1])
 
-                    new_m = result['move2']['msg'][:-1]
-                    i = int(result['move2']['msg'][-1])
-
-                    new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
-                        config.COLOR_MAPPING[z2_moves[i]['color']], '')
-                    new_m = new_m.replace("@me", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ').replace(
-                        "@op", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ')
-                    new_m += f" ({str(z2_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z2_moves[i] and z2_moves[i]['dmg'] != '' else ''}{(str(int(float(p1[i]))) if p1[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(int(float(p2[i]))) if p2[i] is not None else 0)}%)"
+                        new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
+                            config.COLOR_MAPPING[z2_moves[i]['color']], '')
+                        new_m = new_m.replace("@me", ' ' + z2['name'] + '\'s ' + z2_moves[i]['name'] + '  ').replace(
+                            "@op", ' ' + z1['name'] + '\'s ' + z1_moves[i]['name'] + '  ')
+                        new_m += f" ({str(z2_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z2_moves[i] and z2_moves[i]['dmg'] != '' else ''}{(str(round(float(p1[i]))) if p1[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(round(float(p2[i]))) if p2[i] is not None else 0)}%)"
 
                     await interaction.send(
-                        content=new_m, ephemeral=True)
+                        content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                            f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + new_m, ephemeral=True)
                     move_counter += 1
-                    continue
+                    if effect != '@sc':
+                        continue
 
         # Check if status effect has stacked upto 3 then knock the Zerpmon
 
@@ -1717,7 +1835,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                     ephemeral=True)
             else:
                 await interaction.send(
-                    content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + f"**DRAW**",
+                    content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
+                        f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + f"**DRAW**",
                     ephemeral=True)
             move_counter += 1
             continue
@@ -1725,7 +1844,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
         if (result['winner'] == '1' and lost == 0) or lost == 2:
             if lost == 0:
                 await interaction.send(
-                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
+                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
+                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + (f"{z1['name']} **knocked out** {z2['name']}!" if '🎯' not in result['move1'][
                         'mul'] else f"**{z2['name']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"),
                     ephemeral=True)

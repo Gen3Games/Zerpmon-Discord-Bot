@@ -44,10 +44,7 @@ async def get_time_left_utc(days=1):
 
 
 def get_next_ts():
-    # Get the current time in UTC
     current_time = datetime.datetime.now(pytz.utc)
-
-    # Calculate the time difference until the next UTC 00:00
     next_day = current_time + datetime.timedelta(days=1)
     target_time = next_day.replace(hour=0, minute=0, second=0, microsecond=0)
     return target_time.timestamp()
@@ -298,3 +295,59 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
                 f"Sorry please enter a valid Gym.", ephemeral=True)
             return False
     return True
+
+
+def get_show_zerp_embed(zerpmon, interaction: nextcord.Interaction):
+    lvl, xp, w_candy, g_candy, l_candy = db_query.get_lvl_xp(zerpmon['name'], get_candies=True)
+    embed = CustomEmbed(title=f"**{zerpmon['name']}**:\n",
+                        color=0xff5252,
+                        )
+    my_button = f"https://xrp.cafe/nft/{zerpmon['nft_id']}"
+    nft_type = ', '.join([i['value'] for i in zerpmon['attributes'] if i['trait_type'] == 'Type'])
+
+    embed.add_field(
+        name=f"**{nft_type}**",
+        value=f'           [view]({my_button})', inline=False)
+
+    embed.add_field(
+        name=f"**White Candy 🍬: {w_candy[1]}**",
+        value=f"\u200B", inline=True)
+    embed.add_field(
+        name=f"**Gold Candy 🍭: {g_candy}**",
+        value=f"\u200B", inline=False)
+    # embed.add_field(
+    #     name=f"**Liquorice 🍵: {l_candy}**",
+    #     value=f"\u200B", inline=True)
+    embed.add_field(
+        name=f"**Level:**",
+        value=f"**{lvl}/30**", inline=True)
+    embed.add_field(
+        name=f"**XP:**",
+        value=f"**{xp}/{w_candy[0]}**", inline=True)
+
+    for i, move in enumerate([i for i in zerpmon['moves'] if i['name'] != ""]):
+        notes = f"{db_query.get_move(move['name'])['notes']}"
+
+        embed.add_field(
+            name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
+            value=f"> **{move['name']}** \n" + \
+                  (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
+                  (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
+                  (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
+                  (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
+                  f"> Percentage: {move['percent']}%\n",
+            inline=False)
+
+    admin_role = nextcord.utils.get(interaction.guild.roles, name="Founders")
+    if admin_role in interaction.user.roles:
+        embed.add_field(
+            name=f"**Total Matches:**",
+            value=f"{0 if 'total' not in zerpmon else zerpmon['total']}", inline=False)
+        embed.add_field(
+            name=f"**Winrate:**",
+            value=f"{0 if 'winrate' not in zerpmon else round(zerpmon['winrate'], 2)}%", inline=True)
+
+    embed.set_image(
+        url=zerpmon['image'] if "https:/" in zerpmon['image'] else 'https://cloudflare-ipfs.com/ipfs/' + zerpmon[
+            'image'].replace("ipfs://", ""))
+    return embed

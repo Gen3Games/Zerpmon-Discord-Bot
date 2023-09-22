@@ -99,7 +99,8 @@ async def update_nft_holdings(client: nextcord.Client):
                         await asyncio.sleep(2)
                 for serial in list(old_user['zerpmons'].keys()):
                     if serial not in serials:
-                        db_query.remove_user_nft(user_obj['discord_id'], serial, False)
+                        if not old_user['zerpmons'][serial].get('loaned', False):
+                            db_query.remove_user_nft(user_obj['discord_id'], serial, False)
                 for serial in list(old_user['trainer_cards'].keys()):
                     if serial not in t_serial:
                         db_query.remove_user_nft(user_obj['discord_id'], serial, True)

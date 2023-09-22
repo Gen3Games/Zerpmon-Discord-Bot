@@ -2,6 +2,9 @@ import json
 import traceback
 
 import nextcord
+
+import config
+import db_query
 from db_query import get_owned
 from utils.checks import get_type_emoji
 
@@ -32,9 +35,16 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
 async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
     user_owned = get_owned(interaction.user.id)
     params = interaction.data['options'][0]['options']
-    remove_items = [i['value'] for i in params if i['name'][0].isdigit() or 'equipment' in i['name']]
+    focused = [i['name'] for i in params if i.get('focused', False)][0].split('_')[-1]
+    print(focused)
+    slot_zerpmon = [i['value'] for i in params if i['name'] == focused]
+    slot_zerpmon = slot_zerpmon[0] if len(slot_zerpmon) > 0 else False
+    z_moves = [] if not slot_zerpmon else db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name'])['moves']
+    types = config.TYPE_MAPPING if not slot_zerpmon else [i['type'] for idx, i in enumerate(z_moves) if idx < 4]
+    remove_items = [i['value'] for i in params if 'equipment' in i['name']]
     if user_owned is not None and 'equipments' in user_owned:
-        choices = {f'{i["name"]} ({get_type_emoji(i["attributes"], emoji=False)})': k for k, i in user_owned['equipments'].items() if item in i['name'] and k not in remove_items}
+        choices = {f'{i["name"]} ({get_type_emoji(i["attributes"], emoji=False)})': k for k, i in user_owned['equipments'].items() if item in i['name'] and k not in remove_items and
+                   [_i['value'] for _i in i['attributes'] if _i['trait_type'] == 'Type'][0] in types}
     else:
         choices = {}
     sorted_c = sorted(choices.items())
@@ -65,3 +75,23 @@ async def trade_autocomplete(interaction: nextcord.Interaction, item: str):
         await interaction.response.send_autocomplete(choices)
     except:
         print(traceback.format_exc())
+
+
+async def loan_autocomplete(interaction: nextcord.Interaction, item: str):
+    expired = False
+    flag = interaction.data['options'][0]['name']
+    if 'relist' in flag:
+        expired = True
+    if not expired:
+        # c, latest_listings = db_query.get_loan_listings(page_no=1, docs_per_page=20, zerp_name=item)
+        latest_listings, extra = db_query.get_loaned(str(interaction.user.id))
+        latest_listings.extend(extra)
+    else:
+        latest_listings, _ = db_query.get_loaned(str(interaction.user.id))
+    choices = {}
+    for item in latest_listings:
+        if len(choices) >= 24:
+            break
+        choices[item['zerpmon_name']] = item['zerpmon_name']
+
+    await interaction.response.send_autocomplete(choices)

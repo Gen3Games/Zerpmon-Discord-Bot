@@ -581,9 +581,8 @@ def update_battle_deck(deck_no, new_deck, eqs, user_id):
     #
     # arr[deck_no][str(place - 1)] = zerpmon_id
     arr[deck_no] = new_deck
-    equipments = {str(i): eq for i, eq in enumerate(eqs)}
     r = users_collection.update_one({'discord_id': str(user_id)},
-                                    {"$set": {f'equipment_decks.battle_deck.{deck_no}': equipments,
+                                    {"$set": {f'equipment_decks.battle_deck.{deck_no}': eqs,
                                               'battle_deck': arr}})
 
     if r.acknowledged:
@@ -622,9 +621,8 @@ def update_gym_deck(deck_no, new_deck, eqs, user_id):
     #
     # arr[deck_no][str(place - 1)] = zerpmon_id
     arr[deck_no] = new_deck
-    equipments = {str(i): eq for i, eq in enumerate(eqs)}
     r = users_collection.update_one({'discord_id': str(user_id)},
-                                    {"$set": {f'equipment_decks.gym_deck.{deck_no}': equipments,
+                                    {"$set": {f'equipment_decks.gym_deck.{deck_no}': eqs,
                                               'gym_deck': arr}})
 
     if r.acknowledged:
@@ -690,7 +688,7 @@ def revive_zerpmon(user_id):
         old['zerpmons'][k]['active_t'] = 0
 
     r = users_collection.update_one({'discord_id': str(user_id)},
-                                    {'$set': old}, )
+                                    {'$set': {'zerpmons': old['zerpmons']}}, )
     add_revive_potion(addr, -1)
 
     if r.acknowledged:
@@ -1242,6 +1240,22 @@ def get_zrp_stats():
     return obj
 
 
+def inc_loan_burn(inc):
+    stats_col = db['stats_log']
+
+    stats_col.update_one({
+        'name': 'zrp_stats'
+    },
+        {'$inc': {'loan_burn_amount': inc}}, upsert=True
+    )
+
+
+def get_loan_burn():
+    stats_col = db['stats_log']
+    burn_amount = stats_col.find_one({'name': 'zrp_stats'}).get('loan_burn_amount', 0)
+    return burn_amount
+
+
 def get_gym_reset():
     stats_col = db['stats_log']
     reset_t = stats_col.find_one({'name': 'zrp_stats'}).get('gym_reset_t', 0)
@@ -1367,48 +1381,152 @@ def get_all_eqs():
 """LOAN"""
 
 
-def list_for_loan(zerp, user_id, username, price, active_for, xrp=True):
+def list_for_loan(zerp, sr, offer, user_id, username, addr, price, active_for, max_days=99999, min_days=3, xrp=True):
     loan_col = db['loan']
-    found_in_listing = loan_col.find_one({'zerpmon_name': zerp['name']})
-    if found_in_listing:
+    found_in_listing = loan_col.find_one({'zerpmon_name': zerp['name'], 'offer': {'$ne': None}})
+    if found_in_listing is not None:
         return False
     listing_obj = {
+        'serial': sr,
         'zerp_data': zerp,
+        'offer': offer,
+        'zerp_type': ', '.join([i['value'] for i in zerp['attributes'] if i['trait_type'] == 'Type']),
         'zerpmon_name': zerp['name'],
         'token_id': zerp['token_id'],
-        'listed_by': {'id': user_id, 'username': username},
-        'listed_at': time.time()//1,
+        'listed_by': {'id': user_id, 'username': username, 'address': addr},
+        'listed_at': time.time() // 1,
         'per_day_cost': price,
         'active_for': active_for,
+        'max_days': max_days,
+        'min_days': min_days,
         'expires_at': get_next_ts(active_for),
         'xrp': xrp,
-        'accepted_by': {'id': None, 'username': None},
+        'accepted_by': {'id': None, 'username': None, 'address': None},
         'accepted_on': None,
-        'accepted_days': 0
+        'accepted_days': 0,
+        'amount_pending': 0,
+        'loan_expires_at': None
     }
 
     res = loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': listing_obj}, upsert=True)
     return res.acknowledged
 
 
-def remove_listed_loan(zerp_name, user_id):
+def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False):
     loan_col = db['loan']
-    r = loan_col.delete_one({'zerpmon_name': zerp_name})
+    if not is_id:
+        query = {'zerpmon_name': zerp_name_or_id}
+    else:
+        query = {'token_id': zerp_name_or_id}
+    r = loan_col.delete_one(query)
     return r.acknowledged
 
 
-def update_loanee(zerp, loanee, days):
+def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, discord_id=''):
     loan_col = db['loan']
-    res = loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': {
+    query = {
         'accepted_by': loanee,
-        'accepted_on': time.time() // 1,
-        'accepted_days': days
-    }}, upsert=True)
+        'accepted_on': time.time() // 1 if not loan_ended else None,
+        'accepted_days': days,
+        'amount_pending': amount_total,
+        'loan_expires_at': get_next_ts(days) if days is not None else None
+    }
+    if loan_ended:
+        query['offer'] = None
+    res = loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': query}, upsert=True)
+    if loan_ended:
+        remove_user_nft(discord_id, sr, )
+    else:
+        zerp['loaned'] = True
+        add_user_nft(loanee['id'], sr, zerp)
     return res.acknowledged
 
 
-def get_loaned(user_id):
+def decrease_loan_pending(zerp_name, dec):
     loan_col = db['loan']
-    listings = loan_col.find({'listed_by.id': user_id})
-    loanee_list = loan_col.find({'accepted_by.id': user_id})
-    return [i for i in listings] if listings is not None else [], [i for i in loanee_list] if loanee_list is not None else []
+    res = loan_col.update_one({'zerpmon_name': zerp_name}, {'$inc': {'amount_pending': -dec}})
+    return res.acknowledged
+
+
+def cancel_loan(zerp_name):
+    loan_col = db['loan']
+    res = loan_col.update_one({'zerpmon_name': zerp_name}, {'$set': {'loan_expires_at': 0}})
+    return res.acknowledged
+
+
+def get_loaned(user_id=None, zerp_name=None):
+    loan_col = db['loan']
+    if user_id is not None:
+        listings = loan_col.find({'listed_by.id': user_id})
+        loanee_list = loan_col.find({'accepted_by.id': user_id})
+        return [i for i in listings] if listings is not None else [], [i for i in
+                                                                       loanee_list] if loanee_list is not None else []
+    else:
+        listed = loan_col.find_one({'zerpmon_name': zerp_name})
+        return listed
+
+
+def get_loan_listings(page_no, docs_per_page=10, search_type='', xrp=None, listed_by='', price=None, zerp_name=''):
+    loan_col = db['loan']
+    skip_count = (page_no - 1) * docs_per_page
+    query = {'offer': {'$ne': None}}
+    if search_type:
+        query['zerp_type'] = {'$regex': f'.*{search_type}.*', '$options': 'i'}
+    if listed_by:
+        query['listed_by.id'] = {'$regex': f'.*{listed_by}.*', '$options': 'i'}
+    if search_type:
+        query['zerpmon_name'] = {'$regex': f'.*{zerp_name}.*', '$options': 'i'}
+    if xrp is not None:
+        query['xrp'] = xrp
+    if price is not None:
+        query['per_day_cost'] = {'$lte': price}
+
+    listings = loan_col.find(query).sort("listed_at", pymongo.DESCENDING).skip(skip_count).limit(docs_per_page)
+    count = loan_col.count_documents(query)
+    listings = [i for i in listings]
+    for document in listings:
+        print(document)
+    return count, listings
+
+
+def set_loaners():
+    loan_col = db['loan']
+    projection = {
+        '_id': 0,  # Exclude the MongoDB document ID
+        'listed_by': 1,
+        'offer': 1,
+        'token_id': 1,
+    }
+    all_listings = loan_col.find(projection=projection)
+    for listing in all_listings:
+        if listing['offer'] is None:
+            continue
+        if listing['listed_by']['address'] not in config.loaners:
+            config.loaners[listing['listed_by']['address']] = [listing['token_id']]
+        else:
+            config.loaners[listing['listed_by']['address']].append(listing['token_id'])
+    print(config.loaners)
+
+
+def get_active_loans():
+    loan_col = db['loan']
+    all_listings = loan_col.find()
+    active = []
+    expired = []
+    for listing in all_listings:
+        if listing['accepted_by']['id'] is not None:
+            active.append(listing)
+        elif listing['offer'] is None:
+            expired.append(listing)
+    return active, expired
+
+
+"""Backlogging"""
+
+
+def save_error_txn(user_address, amount, nft_id):
+    col = db['back_log']
+    query = {'$inc': {'amount': amount}}
+    if nft_id is not None:
+        query['$push'] = {'nft_id': nft_id}
+    col.update_one({'address': user_address}, query, upsert=True)

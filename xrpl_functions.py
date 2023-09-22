@@ -289,4 +289,21 @@ async def get_sell_offers(client, nft_id):
             await asyncio.sleep(1)
     return None
 
+
+async def get_offer_by_id(offerId, user_addr):
+    for i in range(3):
+        try:
+            r_url = f'https://bithomp.com/api/cors/v2/nft/offer/{offerId}?offersValidate=true'
+            res = requests.get(r_url)
+            data = res.json()
+            if 'canceledAt' in data:
+                return False
+            # print(data, data.get('acceptedAccount', user_addr))
+            return data.get('acceptedAccount', user_addr) == user_addr
+        except Exception as e:
+            print(e)
+            await asyncio.sleep(2)
+    return None
 # asyncio.run(get_tx('D2968E78B65ED83C7247EFBCF38C57C84C81A329B24706EDF71872E077B14D39'))
+# asyncio.run(get_offer_by_id('5F5C18C00FDAE5DB80FC559DF6471E01C9825057E1ED2F1B90B1CA24E8E0D89A', 'x'))
+# asyncio.run(get_offer_by_id('66ABD237A7799D385CB1680E924EDC0405DDF0753ABC264B1E99A7E74CAB7725', 'x'))

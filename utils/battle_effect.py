@@ -83,15 +83,23 @@ def update_purple_stars(total, status_affect_solo):
 def update_array(arr, index, value, own=False):
     caller_name = inspect.currentframe().f_back.f_code.co_name
     print("Caller function:", caller_name)
-    print('ARR RECV: ', arr)
+    print('ARR RECV: ', arr, value)
 
     if arr[index] is None:
         return arr
+    if arr[-1] >= 0:
+        buffer_miss = 0
+    else:
+        buffer_miss = -arr[-1]
+        arr[-1] = 0
     # Distribute the value change among the other elements
     remaining_value = -value
 
     if value < 0 and abs(value) > arr[index]:
+        if own and index == len(arr) - 1:
+            buffer_miss = remaining_value - arr[index]
         remaining_value = arr[index]
+    print(f'here: {remaining_value, value, buffer_miss, arr}')
     if value < 0 and arr[-1] is not None and not own:
         arr[index] -= remaining_value
         arr[-1] += remaining_value
@@ -117,22 +125,24 @@ def update_array(arr, index, value, own=False):
     arr[index] += value
     if arr[index] >= 100:
         arr = [0 if (i != index and i is not None) else (100 if i == index else arr[i]) for i in range(len(arr))]
-        print('ARR RET: ', arr)
-        return arr
-    # Check if any values are out of bounds (i.e. negative or greater than 100)
-    for i in range(len(arr)):
-        if arr[i] is None:
-            continue
-        if arr[i] < 0:
-            arr[i] = 0
-        elif arr[i] > 100:
-            arr[i] = 100
+    else:
+        # Check if any values are out of bounds (i.e. negative or greater than 100)
+        for i in range(len(arr)):
+            if arr[i] is None:
+                continue
+            if arr[i] < 0:
+                arr[i] = 0
+            elif arr[i] > 100:
+                arr[i] = 100
+    if buffer_miss > 0:
+        arr[-1] -= buffer_miss
     print('ARR RET: ', arr)
     return arr
 
 
 def apply_status_effects(p1, p2, status_e):
     print(f'old: {p1, p2}, {status_e}')
+    old_miss1, old_miss2 = p1[-1], p2[-1]
 
     p1_atk = [i for i in p1[:4] if i is not None]
     low_index1 = p1.index(min(p1_atk))
@@ -322,6 +332,19 @@ def apply_status_effects(p1, p2, status_e):
 
     print(f'new: {p1, p2} after {status_e}')
     print(m1, m2)
+    # Miss chance equipment buffer miss addition
+    # if p1[-1] > old_miss1 and buffer_miss[0] > 0:
+    #     if p1[-1] > buffer_miss[0]:
+    #         p1[-1] -= buffer_miss[0]
+    #     else:
+    #         p1[-1] = 0
+    #         buffer_miss[0] -= p1[-1]
+    # if p2[-1] > old_miss2 and buffer_miss[1] > 0:
+    #     if p2[-1] > buffer_miss[1]:
+    #         p2[-1] -= buffer_miss[1]
+    #     else:
+    #         p2[-1] = 0
+    #         buffer_miss[1] -= p2[-1]
     return p1, p2, m1, m2
 
 # print(apply_status_effects([21.0, 18.0, 21.0, 19.0, 11.0, None, None, 10.0], [10.0, None, 24.0, 15.0, 16.0, 16.0, 9.0, 10.0], [['Increases own highest percentage Gold by 10%'], []]))

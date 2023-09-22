@@ -6,7 +6,7 @@ import nextcord
 import config
 import db_query
 from utils.checks import get_next_ts, get_time_left_utc
-from utils.xrpl_ws import get_balance, send_zrp
+from utils.xrpl_ws import get_balance, send_zrp, send_txn, send_nft
 from xrpl_functions import get_zrp_balance
 
 
@@ -26,7 +26,8 @@ async def send_reset_message(client: nextcord.Client):
     db_query.choose_gym_zerp()
     while True:
         await asyncio.sleep(20)
-        reset_time = get_next_ts() - time.time()
+        next_day_ts = get_next_ts()
+        reset_time = next_day_ts - time.time()
         # print(reset_time)
         if reset_time < 60:
             await asyncio.sleep(60)
@@ -36,10 +37,12 @@ async def send_reset_message(client: nextcord.Client):
                 gym_str += '**Cleared Gyms** have been refreshed and progressed to next Stage as well!'
                 db_query.set_gym_reset()
             guilds = client.guilds
+            main_channel = None
             for guild in guilds:
                 try:
                     channel = nextcord.utils.get(guild.channels, name="🌐│zerpmon-center")
                     await channel.send('@everyone, Global Missions, Zerpmon, Store prices restored.' + gym_str)
+                    main_channel = channel
                 except Exception as e:
                     logging.error(f'ERROR: {traceback.format_exc()}')
                 await asyncio.sleep(5)
@@ -57,6 +60,31 @@ async def send_reset_message(client: nextcord.Client):
                     decay_tiers = config.TIERS[-2:]
                     if user['rank']['last_battle_t'] < time.time() - 86400 and rnk in decay_tiers:
                         db_query.update_rank(user['discord_id'], win=False, decay=True)
+            active_loans, expired_loans = db_query.get_active_loans()
+            offer_expired = [f"<@{_i['listed_by']['id']}> your loan listing for {_i['zerpmon_name']} has been deactivated\n" for _i in expired_loans]
+            for loan in active_loans:
+                """less than 5 seconds left to loan end"""
+                if loan['loan_expires_at'] <= time.time():
+                    db_query.remove_user_nft(loan['accepted_by']['id'], loan['serial'], )
+                    ack = db_query.update_loanee(loan['zerp_data'], loan['serial'], {'id': None, 'username': None, 'address': None}, days=0, amount_total=0, loan_ended=True, discord_id=loan['accepted_by']['id'])
+                    if ack:
+                        if loan['loan_expires_at'] != 0:
+                            await send_nft('loan', loan['listed_by']['address'], loan['token_id'])
+                        if loan['expires_at'] <= time.time() or loan['loan_expires_at'] == 0:
+                            db_query.remove_listed_loan(loan['zerpmon_name'], loan['listed_by']['id'])
+                        else:
+                            offer_expired.append(f"<@{loan['listed_by']['id']}> your loan listing for {loan['zerpmon_name']} has been deactivated\n")
+                elif loan['expires_at'] <= time.time() and loan['accepted_by']['id'] is None:
+                    db_query.remove_listed_loan(loan['zerpmon_name'], loan['listed_by']['id'])
+                else:
+                    if loan['xrp']:
+                        await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan')
+                    else:
+                        await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan')
+                    db_query.decrease_loan_pending(loan['zerpmon_name'], loan['per_day_cost'])
+            if len(offer_expired) > 0:
+                expiry_msg = f'{", ".join(offer_expired)}Please use: `/loan relist` command to reactivate your Loan listing'
+                await main_channel.send(content=f'**📢 Loan Announcement (Sell offer not active) 📢**\n{expiry_msg}',)
         print('here')
         if next_run < time.time():
             guilds = client.guilds
@@ -182,6 +210,12 @@ async def send_reset_message(client: nextcord.Client):
                 store_bal = round(float(store_bal), 2)
                 if store_bal > 500:
                     await send_zrp(config.ISSUER['ZRP'], store_bal, 'store')
+                loan_bal = db_query.get_loan_burn()
+                loan_bal = round(float(loan_bal), 2)
+                if loan_bal > 20:
+                    sent_z = await send_zrp(config.ISSUER['ZRP'], loan_bal, 'loan')
+                    if sent_z:
+                        db_query.inc_loan_burn(-loan_bal)
             except Exception as e:
                 logging.error(f'ERROR while burning ZRP: {traceback.format_exc()}')
             next_run = time.time() + 300

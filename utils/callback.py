@@ -5,7 +5,7 @@ import random
 import time
 import traceback
 from collections import Counter
-
+from functools import partial
 import nextcord
 from nextcord import ButtonStyle
 from nextcord.ui import Button, View
@@ -15,7 +15,8 @@ import db_query
 import xrpl_functions
 import xumm_functions
 from utils import checks, battle_function
-from utils.xrpl_ws import send_random_zerpmon, send_zrp, get_balance, send_equipment, check_eq_in_wallet, send_nft_with_amt, cancel_offer
+from utils.xrpl_ws import send_random_zerpmon, send_zrp, get_balance, send_equipment, check_eq_in_wallet, \
+    send_nft_with_amt, cancel_offer, accept_nft, send_txn, send_nft, get_ws_client
 
 
 class CustomEmbed(nextcord.Embed):
@@ -27,20 +28,19 @@ class CustomEmbed(nextcord.Embed):
 
 button_cache = {'revive': [], 'mission': []}
 SAFARI_REWARD_CHANCES = {
-    "zrp": 87.5833,
+    "zrp": 88.4166,
     "battle_zone": 0.8667,
     "name_flair": 0.1667,
     "candy_white": 2.1667,
     "candy_gold": 2.1667,
     "candy_level_up": 0.8333,
-    "equipment": 0.7000,
+    "equipment": 0, # 0.7000,
     "jackpot": 0.1833,
     "gym_refill": 2.6667,
     "revive_potion": 1.2667,
     "mission_refill": 1.2667,
-    "zerpmon": 0.1333
+    "zerpmon": 0 # 0.1333
 }
-
 
 # print(sum(list(SAFARI_REWARD_CHANCES.values())))
 
@@ -70,28 +70,36 @@ async def wager_battle_r_callback(_i: nextcord.Interaction, amount, user_address
         await _i.edit_original_message(content='', embed=embed)
 
 
-async def purchase_callback(_i: nextcord.Interaction, amount, qty=1, double_xp=False):
+async def purchase_callback(_i: nextcord.Interaction, amount, qty=1, double_xp=False, loan=False):
     user_owned_nfts = db_query.get_owned(_i.user.id)
-    await _i.response.defer(ephemeral=True)
+    try:
+        await _i.response.defer(ephemeral=True)
+    except:
+        pass
     # Sanity checks
 
-    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
-        await _i.edit_original_message(content="Sorry you can't make store purchases, as you don't hold a Zerpmon NFT",
-                                       embeds=[], view=View())
+    if user_owned_nfts is None or (len(user_owned_nfts['zerpmons']) == 0 and not loan):
+        await _i.edit_original_message(
+            content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
+            embeds=[], view=View())
         return
-    await _i.edit_original_message(content="Generating transaction QR code...", embeds=[], view=View())
+    await _i.edit_original_message(
+        content="Generating transaction QR code " + ('(**loan payment transaction**)' if loan else ''), embeds=[],
+        view=View())
     user_id = str(_i.user.id)
-    if amount == config.POTION[0]:
-        config.revive_potion_buyers[user_id] = qty
-    elif amount == config.MISSION_REFILL[0]:
-        config.mission_potion_buyers[user_id] = qty
+    if not loan:
+        if amount == config.POTION[0]:
+            config.revive_potion_buyers[user_id] = qty
+        elif amount == config.MISSION_REFILL[0]:
+            config.mission_potion_buyers[user_id] = qty
 
-    if double_xp:
+    if double_xp or loan:
         send_amt = (amount * qty)
     else:
         send_amt = (amount * qty) if str(user_id) in config.store_24_hr_buyers else (amount * (qty - 1 / 2))
-    user_address = db_query.get_owned(_i.user.id)['address']
-    uuid, url, href = await xumm_functions.gen_txn_url(config.STORE_ADDR, user_address, send_amt * 10 ** 6)
+    user_address = user_owned_nfts['address']
+    uuid, url, href = await xumm_functions.gen_txn_url(config.STORE_ADDR if not loan else config.LOAN_ADDR,
+                                                       user_address, send_amt * 10 ** 6)
     embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here.",
                         url=href)
 
@@ -100,12 +108,16 @@ async def purchase_callback(_i: nextcord.Interaction, amount, qty=1, double_xp=F
     await _i.edit_original_message(content='', embed=embed)
 
     for i in range(18):
-        print(config.latest_purchases)
-        if user_id in config.latest_purchases and config.latest_purchases[user_id] == send_amt:
+        if loan:
+            track_list = config.loan_payers
+        else:
+            track_list = config.latest_purchases
+        print(track_list)
+        if user_id in track_list and track_list[user_id] == send_amt:
             print('Purchased')
-            del config.latest_purchases[user_id]
+            del track_list[user_id]
             await _i.edit_original_message(embed=CustomEmbed(title="**Success**",
-                                                             description=f"Bought **{qty}** {'Revive All Potion' if amount in [8.99, 4.495] else ('Double XP Potion' if amount == config.DOUBLE_XP_POTION else 'Mission Refill Potion')}",
+                                                             description=f'Loan payment done!' if loan else f"Bought **{qty}** {'Revive All Potion' if amount in [8.99, 4.495] else ('Double XP Potion' if amount == config.DOUBLE_XP_POTION else 'Mission Refill Potion')}",
                                                              ), content='')
             return True
         await asyncio.sleep(10)
@@ -263,7 +275,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     mission_deck_zerpmons = [] if 'mission_deck' not in _user_owned_nfts['data'] else \
         [_i for k, _i in sorted(_user_owned_nfts['data']['mission_deck'].items(), key=lambda x: int(x[0]))]
     alive_deck = [_i for _i in mission_deck_zerpmons if _i in [ke[0] for ke in _active_zerpmons]]
-    
+
     # print(active_zerpmons[0])
     r_button = Button(label="Revive Zerpmon", style=ButtonStyle.green)
     r_view = View()
@@ -352,7 +364,8 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
             reset_str = f' reset time **{_hours}**h **{_minutes}**m'
 
     sr, nft = _battle_z[0]
-    lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'], in_mission=True if loser == 2 else False, double_xp=_user_owned_nfts['data'].get('double_xp', 0) > time.time())
+    lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'], in_mission=True if loser == 2 else False,
+                                                  double_xp=_user_owned_nfts['data'].get('double_xp', 0) > time.time())
     embed = CustomEmbed(title=f"Level Up ⬆{lvl}" if xp == 0 else f"\u200B",
                         color=0xff5252,
                         )
@@ -644,39 +657,49 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     await interaction.edit_original_message(embeds=[main_embed, sec_embed], view=view)
 
 
-async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=False, buy_offer=False, offerId='', token_id='', fee=False):
+async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=False, buy_offer=False, offerId='',
+                                token_id='', fee=False, loan=False):
     user_owned_nfts = db_query.get_owned(_i.user.id)
 
     # Sanity checks
 
-    if user_owned_nfts is None or len(user_owned_nfts['zerpmons']) == 0:
-        await _i.edit_original_message(content="Sorry you can't make store purchases, as you don't hold a Zerpmon NFT",
-                                       embeds=[], view=View())
+    if user_owned_nfts is None or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
+        await _i.edit_original_message(
+            content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
+            embeds=[], view=View())
         return
-    await _i.edit_original_message(content="Generating transaction QR code...", embeds=[], view=View())
+    await _i.edit_original_message(content="Generating transaction QR code..." + (
+        '\n(**loan fee transaction**)' if fee else ('(**loan payment + fee transaction**)' if loan else '')), embeds=[],
+                                   view=View())
     user_id = str(_i.user.id)
     user_address = user_owned_nfts['address']
     if not buy_offer:
-        uuid, url, href = await xumm_functions.gen_zrp_txn_url(config.ISSUER['ZRP'] if not safari else config.SAFARI_ADDR,
-                                                           user_address, amount)
+        uuid, url, href = await xumm_functions.gen_zrp_txn_url(
+            config.LOAN_ADDR if fee or loan else (config.ISSUER['ZRP'] if not safari else config.SAFARI_ADDR),
+            user_address, amount)
     else:
         uuid, url, href = await xumm_functions.gen_nft_accept_txn(
             user_address,
             offerId, token_id)
-    embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here." + ('\n(**listing fee transaction**)' if fee else ''),
+    embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here.",
                         url=href)
 
     embed.set_image(url=url)
 
     await _i.edit_original_message(embed=embed, view=View())
     for i in range(18):
-        if user_id in config.zrp_purchases and config.zrp_purchases[user_id] == amount or (buy_offer and config.eq_ongoing_purchasers[user_address]['accepted'] == True):
+        track_list = config.zrp_purchases
+        if fee or loan:
+            track_list = config.loan_payers_zrp
+        if user_id in track_list and track_list[user_id] == amount or (
+                buy_offer and config.eq_ongoing_purchasers[user_address]['accepted'] == True):
             try:
                 if not buy_offer:
-                    del config.zrp_purchases[user_id]
+                    del track_list[user_id]
                     await _i.edit_original_message(embed=CustomEmbed(title="**Success**",
-                                                                     description='Listing fee paid' if fee else (f"Bought {item}." if 'Equipment' not in item else f'Sent `{amount} ZRP`\nCreating Sell Offer...')
-                                                                     ))
+                                                                     description=item if fee or loan else (
+                                                                         f"Bought {item}." if 'Equipment' not in item else f'Sent `{amount} ZRP`\nCreating Sell Offer...'))
+                                                   )
                 else:
                     return user_address, True
             except Exception as e:
@@ -718,7 +741,7 @@ async def use_gym_refill_callback(interaction: nextcord.Interaction):
         await interaction.send("**SUCCESS**", ephemeral=True)
 
 
-async def use_candy_callback(interaction: nextcord.Interaction, label):
+async def use_candy_callback(interaction: nextcord.Interaction, label, next_page=0):
     owned_nfts = db_query.get_owned(interaction.user.id)
     if owned_nfts is None:
         await interaction.send(
@@ -756,17 +779,28 @@ async def use_candy_callback(interaction: nextcord.Interaction, label):
             await _i.edit_original_message(content="**Success**!", view=View())
 
     user_owned = owned_nfts
+    # zerps = {str(k + 100): v for k, v in enumerate(db_query.get_all_z())}
     view = View()
     cards = {k: v for k, v in user_owned['zerpmons'].items()} if user_owned is not None else {}
-    key_list = [k for k, v in user_owned['zerpmons'].items()]
-    for num in range(math.ceil(len(cards) / 25)):
+    # cards = {k: v for k, v in zerps.items()} if user_owned is not None else {}
+    key_list = [k for k, v in cards.items()]
+    key_list = key_list[next_page * 80:]
+    # print(key_list)
+    for num in range(math.ceil(len(key_list) / 25)):
+        if len(view.children) == 4:
+            break
         select_menu = nextcord.ui.StringSelect(placeholder="Which Zerpmon to use it on")
-        card_obj = key_list[num * 25:(num + 1) * 25] if num != math.ceil(len(cards) / 25) - 1 else key_list[
-                                                                                                   num * 25:len(cards)]
+        card_obj = key_list[num * 25:(num + 1) * 25] if num != math.ceil(len(key_list) / 25) - 1 else key_list[
+                                                                                                      num * 25:len(
+                                                                                                          cards)]
         for i in card_obj:
             select_menu.add_option(label=cards[i]['name'], value=cards[i]['name'])
         view.add_item(select_menu)
         select_menu.callback = handle_select_menu
+    if len(key_list) > 80:
+        b1 = Button(label='Show more', style=ButtonStyle.green)
+        view.add_item(b1)
+        b1.callback = lambda _i: use_candy_callback(_i, label, next_page=next_page + 1)
     await interaction.edit_original_message(content="Choose one **zerpmon**:", view=view)
 
 
@@ -790,7 +824,8 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             found, stored_nfts = await xrpl_functions.get_nfts(config.STORE_ADDR)
             stored_eqs = [nft for nft in stored_nfts if nft["Issuer"] == config.ISSUER["Equipment"]]
             if not found:
-                await interaction.edit_original_message(content="**Error** in getting Store Equipment NFTs from XRPL server", embeds=[])
+                await interaction.edit_original_message(
+                    content="**Error** in getting Store Equipment NFTs from XRPL server", embeds=[])
                 return
             holdings = []
             nft_data = xrpl_functions.get_nft_metadata([nft['URI'] for nft in stored_eqs], multi=True)
@@ -811,7 +846,8 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 await _i.response.defer(ephemeral=True)
                 proceed = check_eq_in_wallet(selected_option, holdings.get(selected_option, 0))
                 if not proceed:
-                    await _i.edit_original_message(content="Sorry, this equipment have been sold out", embeds=[], view=View())
+                    await _i.edit_original_message(content="Sorry, this equipment have been sold out", embeds=[],
+                                                   view=View())
                     return
                 if addr in config.eq_ongoing_purchasers:
                     await interaction.edit_original_message(
@@ -820,22 +856,28 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                     return
                 config.eq_ongoing_purchasers[addr] = {'offer': None, 'accepted': False}
                 try:
-                    await _i.edit_original_message(content=f"Please wait (Timer: <t:{int(time.time() + 60)}:R>)\n**Creating** sell offer for **{selected_option}** and **confirming** OfferId...", embeds=[],
-                                                   view=View())
-                    created, data = await send_equipment(user_id, addr, selected_option, safari=False, random_eq=False, price=amount)
+                    await _i.edit_original_message(
+                        content=f"Please wait (Timer: <t:{int(time.time() + 60)}:R>)\n**Creating** sell offer for **{selected_option}** and **confirming** OfferId...",
+                        embeds=[],
+                        view=View())
+                    created, data = await send_equipment(user_id, addr, selected_option, safari=False, random_eq=False,
+                                                         price=amount)
                     config.eq_ongoing_purchasers[addr]['offer'] = data[-1]
                     if created:
                         # Make 0 XRP sell offer of equipment NFT
                         # XUMM txn for buying the NFT using ZRP
-                        addr, success = await zrp_purchase_callback(_i, amount=amount, item=label, buy_offer=True, offerId=data[-1], token_id=data[-2])
+                        addr, success = await zrp_purchase_callback(_i, amount=amount, item=label, buy_offer=True,
+                                                                    offerId=data[-1], token_id=data[-2])
                         if success:
                             db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
-                            await _i.edit_original_message(content=f"Transaction **Successful**, sent {selected_option}\n"
-                                                                   f"https://xrp.cafe/nft/{data[-2]}", embeds=[],
-                                                           view=View())
+                            await _i.edit_original_message(
+                                content=f"Transaction **Successful**, sent {selected_option}\n"
+                                        f"https://xrp.cafe/nft/{data[-2]}", embeds=[],
+                                view=View())
                         else:
                             await _i.edit_original_message(
-                                content="Failed, please make sure to sign the **TXN** within a few minutes", embeds=[], view=View())
+                                content="Failed, please make sure to sign the **TXN** within a few minutes", embeds=[],
+                                view=View())
                             await cancel_offer('store', data[-1])
                     else:
                         await _i.edit_original_message(content="Failed, Something went wrong", embeds=[], view=View())
@@ -902,9 +944,11 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             select_menu.callback = handle_select_menu
 
         case "Buy Safari Trip":
-            addr, purchased = await zrp_purchase_callback(interaction, amount * qty, label.replace('Buy ', '' if qty == 1 else f'{qty} '), safari=True)
+            addr, purchased = await zrp_purchase_callback(interaction, amount * qty,
+                                                          label.replace('Buy ', '' if qty == 1 else f'{qty} '),
+                                                          safari=True)
             if purchased:
-                j_amount = round(amount * 0.2, 2)
+                j_amount = round(amount * qty * 0.2, 2)
                 await send_zrp(config.JACKPOT_ADDR, j_amount, 'safari')
                 # Run 3 raffles
                 rewards = [
@@ -936,8 +980,9 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                     await send_general_message(guild=interaction.guild, text=description,
                                                                image='')
                                 else:
-                                    rewards.append("Gained 1 Equipment\nFailed, Something went wrong while sending the Sell offer\n"
-                                                "Please contact an admin")
+                                    rewards.append(
+                                        "Gained 1 Equipment\nFailed, Something went wrong while sending the Sell offer\n"
+                                        "Please contact an admin")
 
                             case "battle_zone" | "name_flair":
                                 user_obj = db_query.get_owned(user_id)
@@ -1051,7 +1096,8 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             select_menu2.callback = handle_select_menu
 
 
-async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextcord.Member, potion_key, potion, fn, item=False):
+async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextcord.Member, potion_key, potion, fn,
+                        item=False):
     user_id = user.id
 
     user_owned_nfts = {'data': db_query.get_owned(user_id), 'user': user.name}
@@ -1083,8 +1129,9 @@ async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextc
             else:
                 fn(sender['discord_id'], item, -qty)
                 fn(user_id, item, qty)
-            await interaction.send(f"Successfully gifted {f'**{item}**' if item else f'**{qty}**'} {potion} to **{user.name}**!",
-                                   ephemeral=False)
+            await interaction.send(
+                f"Successfully gifted {f'**{item}**' if item else f'**{qty}**'} {potion} to **{user.name}**!",
+                ephemeral=False)
             return
 
     for owned_nfts in [user_owned_nfts]:
@@ -1100,3 +1147,322 @@ async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextc
     await interaction.send(
         f"**Success!**",
         ephemeral=True)
+
+
+"""LOAN"""
+
+
+async def loan_listing(interaction: nextcord.Interaction, zerpmon, price, in_xrp, max_days, active_for, min_days, ):
+    user = interaction.user
+    user_obj = db_query.get_owned(user.id)
+    if user_obj is None or zerpmon not in user_obj['zerpmons']:
+        await interaction.edit_original_message(
+            content=f"**Failed**\nMake sure you hold this Zerpmon and have verified your wallet", view=View())
+        return False
+    if max_days < min_days:
+        await interaction.edit_original_message(
+            content=f"**Failed**\nPlease enter valid values (max_days should be greater than min_days)", view=View())
+        return False
+    zerp = user_obj["zerpmons"][zerpmon]
+    nft_id = zerp['token_id']
+    xrpl_client = await get_ws_client()
+    has_sell_offers = await xrpl_functions.get_sell_offers(client=xrpl_client, nft_id=nft_id)
+    if has_sell_offers:
+        await interaction.edit_original_message(
+            content=f"**Failed**\nMake sure your {zerp['name']} isn't listed on marketplaces or have any open sell offers",
+            view=View())
+        return False
+    # Proceed
+    await interaction.edit_original_message(content="Generating transaction QR code for NFT offer...", embeds=[],
+                                            view=View())
+    user_address = user_obj['address']
+    uuid, url, href = await xumm_functions.gen_nft_txn_url(user_address, nft_id, destination=config.LOAN_ADDR)
+    embed = CustomEmbed(color=0x01f39d,
+                        title=f"Please sign the transaction using this QR code or click here.",
+                        url=href)
+
+    embed.set_image(url=url)
+
+    await interaction.edit_original_message(content='', embed=embed, view=View())
+    sent = False
+    for i in range(18):
+        if user_address in config.loan_listings and config.loan_listings[user_address]['tokenId'] == nft_id:
+            sent = True
+            break
+        await asyncio.sleep(10)
+    if not sent:
+        await interaction.edit_original_message(content='**Failed**, transaction not signed', embeds=[], view=View())
+        return
+    else:
+        user_d = config.loan_listings[user_address].copy()
+        del config.loan_listings[user_address]
+        zrp_value = round(price if not in_xrp else price / (await xrpl_functions.get_zrp_price_api()), 2)
+        addr, status = await zrp_purchase_callback(interaction, zrp_value, item='', fee=True)
+        if not status:
+            await interaction.edit_original_message(
+                content=f"**Failed**\nListing fee transaction not signed", embeds=[],
+                view=View())
+            return
+        listed = db_query.list_for_loan(zerp, zerpmon, user_d['offer'], str(user.id),
+                                        user.name, addr, price, active_for, max_days=max_days, min_days=min_days,
+                                        xrp=in_xrp)
+        if listed:
+            db_query.inc_loan_burn(zrp_value)
+            if addr not in config.loaners:
+                config.loaners[addr] = [nft_id]
+            else:
+                config.loaners[addr].append(nft_id)
+            await interaction.edit_original_message(
+                embed=CustomEmbed(title=f'**Success**!', description=f'{zerp["name"]} listed on Loan marketplace',
+                                  color=0xe0ffcd),
+                content='', view=View())
+        else:
+            await interaction.edit_original_message(
+                content=f'**Failed**, this could happen when the Zerpmon is already listed\nReverting Fee Txn...',
+                embeds=[], view=View())
+            await send_zrp(user_address, zrp_value, 'loan')
+
+
+async def loan_marketplace_callback(interaction: nextcord.Interaction, page=1, filters=None):
+    user = interaction.user
+    filters = {} if filters is None else filters
+    count, listings = db_query.get_loan_listings(page_no=page, search_type=filters.get('search_type', ''),
+                                                 xrp=filters.get('xrp', None), listed_by=filters.get('listed_by', ''),
+                                                 price=filters.get('price', None))
+    embed = CustomEmbed(title='Loan Marketplace', description=f'Total listings **{count}**',
+                        color=0xe0ffcd)
+    view = View(timeout=180, auto_defer=True)
+
+    for idx, listing in enumerate(listings):
+        if len(embed.fields) == 24:
+            break
+        if time.time() > listing['expires_at']:
+            db_query.remove_listed_loan(listing['zerpmon_name'], str(user.id))
+            continue
+        my_button = f"https://xrp.cafe/nft/{listing['token_id']}"
+        nft_type = ', '.join([i['value'] for i in listing['zerp_data']['attributes'] if i['trait_type'] == 'Type'])
+        active = "🟢" if listing['accepted_by']['id'] is not None else "🔴"
+        embed.add_field(name=f"#{(page - 1) * 10 + idx + 1} {active} {listing['zerpmon_name']} ({nft_type})",
+                        value=f"> Loanee: {listing['accepted_by']['username']} (for {listing['accepted_days']} days)\n"
+                              f"> Listed: <t:{int(listing['listed_at'])}:R>\n" +
+                              (f"> Per day cost: {listing['per_day_cost']} " + (
+                                  'XRP\n' if listing['xrp'] else 'ZRP\n')) +
+                              (f"> Available again : <t:{int(listing['loan_expires_at'])}:R>\n" if listing[
+                                                                                                       'loan_expires_at'] is not None else '') +
+                              f"> Listing Expires: <t:{int(listing['expires_at'])}:R>\n"
+                              f"> Max Loan period: {listing['max_days']} days\n"
+                              f"> Min Loan Period: {listing['min_days']} days\n"
+                              f"> [view]({my_button})")
+        zerp_button = Button(style=ButtonStyle.secondary, label=listing['zerpmon_name'], row=math.ceil(idx / 5))
+        zerp_button.callback = lambda i, listing=listing: show_zerp_callback(interaction, zerpmon_name=listing['zerpmon_name'],
+                                                            listing_obj=listing)
+
+        view.add_item(zerp_button)
+    is_last_page = (page - 1) * 10 + len(listings) == count
+    next_button = Button(style=ButtonStyle.blurple, label='Next page', emoji='⏭️',
+                         disabled=True if is_last_page else False, row=3)
+    filter_button = Button(style=ButtonStyle.blurple, label='Add filter', emoji='🧰', row=3)
+    next_button.callback = lambda i: loan_marketplace_callback(interaction, page + 1, filters=filters)
+    filter_button.callback = lambda i: loan_marketplace_filter(interaction)
+
+    view.add_item(next_button)
+    view.add_item(filter_button)
+    await interaction.edit_original_message(embed=embed, view=view)
+
+
+async def show_zerp_callback(interaction: nextcord.Interaction, zerpmon_name, listing_obj):
+    zerpmon = db_query.get_zerpmon(zerpmon_name.lower().title())
+    embed = checks.get_show_zerp_embed(zerpmon, interaction, )
+    view = View(timeout=120)
+    loan_b = Button(label='Loan Zerpmon', style=ButtonStyle.green, )
+    loan_b.callback = lambda i: initiate_loan(i, listing_obj)
+    view.add_item(loan_b)
+    await interaction.edit_original_message(embed=embed, view=view)
+
+
+async def initiate_loan(interaction: nextcord.Interaction, listing):
+    print(listing)
+    if listing['accepted_by']['id'] is not None:
+        await interaction.send('**Failed**, someone already took this loan', ephemeral=True)
+        return
+    if listing['offer'] is None:
+        await interaction.edit_original_message(
+            content="**Failed**, sorry this listing is inactive as the offer expired")
+        return
+    modal = nextcord.ui.Modal(title=f"Loan Info ({listing['zerpmon_name']})")
+    days = nextcord.ui.TextInput(label='Length of Loan Period (Days)', required=True)
+    modal.add_item(days)
+    await interaction.response.send_modal(modal)
+
+    async def proceed_loan(i: nextcord.Interaction, ):
+        days = int(i.data['components'][0]['components'][0]['value'])
+        print(days)
+        # if db_query.get_next_ts(days) > listing['expires_at']:
+        #     await i.send(
+        #         content=f"**Failed**, loan listing expires {listing['expires_at']}\nYou can't loan it for more than that!",
+        #         ephemeral=True)
+        #     return
+        if days < listing['min_days']:
+            await i.send(
+                content=f"**Failed**, minimum loan period is of {listing['min_days']} days!", ephemeral=True)
+            return
+        if days > listing['max_days']:
+            await i.send(
+                content=f"**Failed**, maximum loan period is of {listing['max_days']} days!", ephemeral=True)
+            return
+        loaner_obj = db_query.get_owned(listing['listed_by']['id'])
+        user_obj = db_query.get_owned(interaction.user.id)
+        await i.send(content='**Validating NFT offer**!', ephemeral=True)
+        offer_valid = await xrpl_functions.get_offer_by_id(listing['offer'], loaner_obj['address'])
+        await asyncio.sleep(1)
+        # accepted = True
+        if not offer_valid:
+            await i.edit_original_message(
+                content='**Failed**, probably because the Owner has cancelled the sell offer to Bot wallet')
+        else:
+            await i.edit_original_message(content='**Offer Validated**!')
+            await asyncio.sleep(1)
+            amount = round(listing['per_day_cost'] * days, 2)
+            if listing['xrp']:
+                zrp_p = await xrpl_functions.get_zrp_price_api()
+                fee_amount = round(listing['per_day_cost'] / zrp_p, 2)
+                addr, status = await zrp_purchase_callback(i, item='Loan fee paid', amount=fee_amount, fee=True)
+                if not status:
+                    await i.edit_original_message(
+                        content=f"**Failed**\nLoan fee transaction not signed", embeds=[],
+                        view=View())
+                    return
+                else:
+                    db_query.inc_loan_burn(fee_amount)
+                    await asyncio.sleep(1)
+                    paid = await purchase_callback(interaction, amount, loan=True)
+                    if not paid:
+                        await i.edit_original_message(
+                            content=f"**Failed**\nLoan payment transaction not signed\nReverting fee Txn", embeds=[],
+                            view=View())
+                        await send_zrp(addr, fee_amount, 'loan')
+                        db_query.inc_loan_burn(-fee_amount)
+                        return
+            else:
+                addr, status = await zrp_purchase_callback(i, item='Loan payment + fee paid',
+                                                           amount=amount + listing['per_day_cost'], loan=True)
+                if not status:
+                    await i.edit_original_message(
+                        content=f"**Failed**\nLoan payment + fee transaction not signed", embeds=[],
+                        view=View())
+                    return
+                db_query.inc_loan_burn(amount / days)
+            accepted = await accept_nft('loan', listing['offer'], sender=loaner_obj['address'],
+                                        token=listing['token_id'])
+            if accepted:
+                loaned = db_query.update_loanee(listing['zerp_data'], listing['serial'],
+                                                {'id': user_obj['discord_id'], 'username': i.user.name,
+                                                 'address': addr}, days, amount_total=amount - listing['per_day_cost'])
+                if loaned:
+                    if listing['xrp']:
+                        await send_txn(loaner_obj['address'], amount / days, 'loan')
+                    else:
+                        await send_zrp(loaner_obj['address'], round(amount / days, 2), 'loan')
+                    await i.edit_original_message(content='', embeds=[CustomEmbed(title='Success',
+                                                                                  description=f'**Loaned** {listing["zerpmon_name"]} for **{days}** Days!\nYou can now add it to your Deck')],
+                                                  view=View())
+            else:
+                await i.send(
+                    content='Something went wrong while **transferring** this NFT to Bot wallet, please contact an Admin.',
+                    ephemeral=True)
+
+    modal.callback = lambda i: proceed_loan(i)
+
+
+async def loan_marketplace_filter(interaction: nextcord.Interaction):
+    filters = {'search_type': '', 'listed_by': '', 'xrp': None, 'price': 10}
+    search_type = nextcord.ui.StringSelect(placeholder="Zerpmon Type", custom_id='search_type')
+    for i, t in config.TYPE_MAPPING.items():
+        if i != '':
+            search_type.add_option(label=f'{i} {t}', value=i)
+    listed_by = nextcord.ui.UserSelect(placeholder='Listed by', custom_id='listed_by')
+    xrp = nextcord.ui.StringSelect(placeholder="Currency", custom_id='xrp')
+    xrp.add_option(label='XRP', value='1')
+    xrp.add_option(label='ZRP', value='0')
+    price = nextcord.ui.StringSelect(placeholder="Max per day cost", custom_id='price')
+    for i in range(25):
+        price.add_option(label=f'{(i + 1) / 2}')
+    submit_button = Button(label='Search', style=ButtonStyle.blurple)
+    view = View(timeout=120, auto_defer=True)
+    view.add_item(search_type)
+    view.add_item(listed_by)
+    view.add_item(xrp)
+    view.add_item(price)
+    view.add_item(submit_button)
+    await interaction.edit_original_message(content="Choose **filters**:", embeds=[], view=view)
+
+    async def handle_select(_i: nextcord.Interaction):
+        id_ = _i.data['custom_id']
+        selected_option = _i.data["values"][0]  # Get the selected option
+        try:
+            if len(selected_option) < 6:
+                selected_option = float(selected_option)
+        except:
+            pass
+        filters[id_] = selected_option
+
+    async def handle_submit(_i: nextcord.Interaction):
+        print(f'Filters: {filters}')
+        await loan_marketplace_callback(interaction, page=1, filters=filters)
+
+    search_type.callback = handle_select
+    listed_by.callback = handle_select
+    xrp.callback = handle_select
+    price.callback = handle_select
+    submit_button.callback = lambda i: handle_submit(i)
+
+
+async def cancel_loan(interaction: nextcord.Interaction, listing: dict, is_listing: bool):
+    amount = round(listing['per_day_cost'] * 5 if not listing['xrp'] else listing['per_day_cost'] * 5 / (await xrpl_functions.get_zrp_price_api()), 2)
+    await interaction.followup.send(
+        content=f"You will need to pay 5 day fee (`{amount:.2f}`) for an early cancellation of a loan" + (
+            ' listing' if is_listing else ''))
+    await asyncio.sleep(1)
+    addr, success = await zrp_purchase_callback(interaction, amount, 'Loan cancellation fee paid', fee=True)
+    sent, addr = False, None
+    send_fn = send_txn if listing['xrp'] else send_zrp
+    if success:
+        await asyncio.sleep(1)
+        if is_listing:
+            addr = listing['listed_by']['address']
+            await interaction.edit_original_message(
+                content=f"Sending NFT offer to your wallet...")
+            sent = await send_nft('loan', addr, listing['token_id'])
+            if sent:
+                # db_query.remove_listed_loan(listing['zerpmon_name'], listing['listed_by']['id'])
+
+                if listing['accepted_by']['id'] is not None:
+                    if not listing['xrp']:
+                        await send_fn(listing['accepted_by']['address'], listing['amount_pending'] + amount, 'loan')
+                    else:
+                        await send_fn(listing['accepted_by']['address'], listing['amount_pending'], 'loan')
+                        await send_zrp(listing['accepted_by']['address'], amount, 'loan')
+                    db_query.cancel_loan(listing['zerpmon_name'], )
+                    await interaction.edit_original_message(
+                        content=f"Sending pending **${'XRP' if listing['xrp'] else 'ZRP'} (`{listing['amount_pending']}`)** to **{listing['accepted_by']['username']}**")
+                else:
+                    db_query.remove_listed_loan(listing['zerpmon_name'], listing['listed_by']['id'])
+        else:
+            addr = listing['accepted_by']['address']
+            await interaction.edit_original_message(
+                content=f"Sending pending **${'XRP' if listing['xrp'] else 'ZRP'} (`{listing['amount_pending']}`)** to your wallet...")
+
+            sent = await send_fn(addr, listing['amount_pending'], 'loan')
+            if sent:
+                ack = db_query.update_loanee(listing['zerp_data'], listing['serial'],
+                                             {'id': None, 'username': None, 'address': None}, days=0, amount_total=0,
+                                             loan_ended=True, discord_id=listing['accepted_by']['id'])
+                if ack:
+                    await send_nft('loan', listing['listed_by']['address'], listing['token_id'])
+                    await send_zrp(listing['listed_by']['address'], amount, 'loan')
+                    await interaction.edit_original_message(
+                        content=f"Sending NFT offer back to {listing['listed_by']['username']}")
+        if not sent:
+            await send_zrp(addr, amount, 'loan')
+            await interaction.edit_original_message(
+                content=f"**Failed**, sending **fee ZRP** back\nPlease try cancelling loan/listing again")

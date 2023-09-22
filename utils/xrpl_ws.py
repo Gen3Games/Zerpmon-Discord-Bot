@@ -7,6 +7,8 @@ import httpx
 import requests
 from xrpl.models.requests import AccountInfo, AccountLines
 from xrpl.asyncio.transaction import safe_sign_and_submit_transaction, get_transaction_from_hash
+from xrpl.utils import xrp_to_drops
+
 import config
 from xrpl.asyncio.clients import AsyncWebsocketClient, AsyncJsonRpcClient
 from xrpl.clients import JsonRpcClient
@@ -40,9 +42,9 @@ async def get_ws_client():
     return ws_client
 
 
-async def get_seq(from_):
+async def get_seq(from_, amount=None):
     client = await get_ws_client()
-    global wager_seq, reward_seq
+    global wager_seq, reward_seq, active_zrp_addr, active_zrp_seed
     if from_ == 'reward':
         acc_info = AccountInfo(
             account=Reward_address
@@ -53,7 +55,7 @@ async def get_seq(from_):
         sending_wallet = Wallet(seed=config.REWARDS_SEED, sequence=sequence)
         sending_address = Reward_address
         return sequence, sending_address, sending_wallet
-    if from_ == "store":
+    elif from_ == "store":
         acc_info = AccountInfo(
             account=Address
         )
@@ -73,6 +75,33 @@ async def get_seq(from_):
         sending_wallet = Wallet(seed=config.WAGER_SEED, sequence=sequence)
         sending_address = config.WAGER_ADDR
         return sequence, sending_address, sending_wallet
+    elif from_ == "block":
+        bal = float(await xrpl_functions.get_zrp_balance(active_zrp_addr))
+        db_query.update_zrp_stats(burn_amount=0, distributed_amount=amount,
+                                  left_amount=((bal - amount) if bal is not None else None))
+        if bal is not None and bal < 5:
+            if active_zrp_addr == config.B1_ADDR:
+                active_zrp_addr, active_zrp_seed = config.B2_ADDR, config.B2_SEED
+            else:
+                active_zrp_addr, active_zrp_seed = config.B3_ADDR, config.B3_SEED
+        acc_info = AccountInfo(
+            account=active_zrp_addr
+        )
+        account_info = await client.request(acc_info)
+        sequence = account_info.result["account_data"]["Sequence"] if zrp_reward_seq is None else zrp_reward_seq
+        sending_wallet = Wallet(seed=active_zrp_seed, sequence=sequence)
+        sending_address = active_zrp_addr
+        return sequence, sending_address, sending_wallet
+    elif from_ == "jackpot":
+        db_query.update_zrp_stats(burn_amount=0, distributed_amount=0, jackpot_amount=amount)
+        acc_info = AccountInfo(
+            account=config.JACKPOT_ADDR
+        )
+        account_info = await client.request(acc_info)
+        sequence = account_info.result["account_data"]["Sequence"]
+        sending_wallet = Wallet(seed=config.JACKPOT_SEED, sequence=sequence)
+        sending_address = config.JACKPOT_ADDR
+        return sequence, sending_address, sending_wallet
     elif from_ == 'safari':
         acc_info = AccountInfo(
             account=config.SAFARI_ADDR
@@ -82,6 +111,15 @@ async def get_seq(from_):
         # Load the sending account's secret and address from a wallet
         sending_wallet = Wallet(seed=config.SAFARI_SEED, sequence=sequence)
         sending_address = config.SAFARI_ADDR
+        return sequence, sending_address, sending_wallet
+    elif from_ == 'loan':
+        acc_info = AccountInfo(
+            account=config.LOAN_ADDR
+        )
+        account_info = await client.request(acc_info)
+        sequence = account_info.result["account_data"]["Sequence"]
+        sending_wallet = Wallet(seed=config.LOAN_SEED, sequence=sequence)
+        sending_address = config.LOAN_ADDR
         return sequence, sending_address, sending_wallet
     else:
         return None, None, None
@@ -130,6 +168,7 @@ async def send_txn(to: str, amount: float, sender):
         except Exception as e:
             logging.error(f"XRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
+    db_query.save_error_txn(to, amount, None)
     return False
 
 
@@ -147,7 +186,7 @@ async def listener(client, store_address, wager_address):
                 if 'TransactionType' in message and message['TransactionType'] == "Payment" and \
                         'Destination' in message and (
                         message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR,
-                                                   config.ISSUER['ZRP']] or message['Destination'] in [i['to'] for i in
+                                                   config.ISSUER['ZRP'], config.LOAN_ADDR] or message['Destination'] in [i['to'] for i in
                                                                                                        config.track_zrp_txn.values()]):
 
                     if len(hashes) > 1000:
@@ -169,6 +208,10 @@ async def listener(client, store_address, wager_address):
                                 user = db_query.get_user(message['Account'])
                                 user_id = user['discord_id']
                                 config.zrp_purchases[user_id] = amount
+                            elif message['Destination'] == config.LOAN_ADDR:
+                                user = db_query.get_user(message['Account'])
+                                user_id = user['discord_id']
+                                config.loan_payers_zrp[user_id] = amount
                             elif message['Destination'] == wager_address:
                                 config.wager_zrp_senders[message['Account']] = amount
 
@@ -216,32 +259,42 @@ async def listener(client, store_address, wager_address):
                                         # Check wager addresses and add them to global var wager_senders
                                         user_id = user['discord_id']
                                         config.wager_senders[message['Account']] = amount
+                                    elif message['Destination'] == config.LOAN_ADDR:
+                                        # Check wager addresses and add them to global var wager_senders
+                                        user_id = user['discord_id']
+                                        config.loan_payers[user_id] = amount
 
                             except:
                                 print("Not XRP")
                 elif 'TransactionType' in message and message['TransactionType'] == "NFTokenCreateOffer" and \
-                        'Destination' in message and message['Destination'] in [wager_address, config.LOAN_ADDR]:
-                    if len(hashes) > 1000:
-                        hashes = hashes[900:]
-                    if message['hash'] not in hashes:
-                        hashes.append(message['hash'])
-                        logging.error(f'NFT create offer: {msg}')
-                        try:
-                            global wager_seq
-                            if message['Amount'] == '0':
-                                nodes = msg['meta']['AffectedNodes']
-                                node = [i for i in nodes if
-                                        'CreatedNode' in i and i['CreatedNode']['LedgerEntryType'] == 'NFTokenOffer']
-                                offer = node[0]['CreatedNode']['LedgerIndex']
-                                logging.error(f'OFFER: {offer}')
-                                if message['Destination'] == wager_address:
-                                    # Accept SEll offer here
-                                    await accept_nft("wager", offer, sender=message['Account'], token=message['NFTokenID'])
-                                else:
-                                    config.loan_listings[message['Account']] = None
+                        'Destination' in message:
+                    if message['Destination'] in [wager_address, config.LOAN_ADDR]:
+                        if len(hashes) > 1000:
+                            hashes = hashes[900:]
+                        if message['hash'] not in hashes:
+                            hashes.append(message['hash'])
+                            logging.error(f'NFT create offer: {msg}')
+                            try:
+                                global wager_seq
+                                if message['Amount'] == '0':
+                                    nodes = msg['meta']['AffectedNodes']
+                                    node = [i for i in nodes if
+                                            'CreatedNode' in i and i['CreatedNode']['LedgerEntryType'] == 'NFTokenOffer']
+                                    offer = node[0]['CreatedNode']['LedgerIndex']
+                                    logging.error(f'OFFER: {offer}')
+                                    if message['Destination'] == wager_address:
+                                        # Accept SEll offer here
+                                        await accept_nft("wager", offer, sender=message['Account'], token=message['NFTokenID'])
+                                    else:
+                                        config.loan_listings[message['Account']] = {'offer': offer, 'tokenId': message['NFTokenID']}
 
-                        except Exception as e:
-                            logging.error(f"Error detecting NFT txn {e} \nDATA: {message}")
+                            except Exception as e:
+                                logging.error(f"Error detecting NFT txn {e} \nDATA: {message}")
+                    else:
+                        if message.get('Flags', 0) == 1 and message['Account'] in config.loaners and message['NFTokenID'] in config.loaners[message['Account']]:
+                            db_query.remove_listed_loan(message['NFTokenID'], message['Account'], is_id=True)
+                            config.loaners[message['Account']] = [i for i in config.loaners[message['Account']] if i != message['NFTokenID']]
+
                 elif 'TransactionType' in message and message['TransactionType'] == "NFTokenAcceptOffer" and \
                         'Account' in message and message['Account'] in config.eq_ongoing_purchasers:
                     if len(hashes) > 1000:
@@ -374,43 +427,8 @@ async def send_nft(from_, to_address, token_id):
     client = await get_ws_client()
     global wager_seq, reward_seq
     try:
-        for i in range(3):
-            if from_ == 'reward':
-                acc_info = AccountInfo(
-                    account=Reward_address
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"] if reward_seq is None else reward_seq
-                # Load the sending account's secret and address from a wallet
-                sending_wallet = Wallet(seed=config.REWARDS_SEED, sequence=sequence)
-                sending_address = Reward_address
-            if from_ == "store":
-                acc_info = AccountInfo(
-                    account=Address
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"]
-                # Load the sending account's secret and address from a wallet
-                sending_wallet = Wallet(seed=config.STORE_SEED, sequence=sequence)
-                sending_address = Address
-            elif from_ == 'wager':
-                acc_info = AccountInfo(
-                    account=config.WAGER_ADDR
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"] if wager_seq is None else wager_seq
-                # Load the sending account's secret and address from a wallet
-                sending_wallet = Wallet(seed=config.WAGER_SEED, sequence=sequence)
-                sending_address = config.WAGER_ADDR
-            elif from_ == 'safari':
-                acc_info = AccountInfo(
-                    account=config.SAFARI_ADDR
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"]
-                # Load the sending account's secret and address from a wallet
-                sending_wallet = Wallet(seed=config.SAFARI_SEED, sequence=sequence)
-                sending_address = config.SAFARI_ADDR
+        for i in range(5):
+            sequence, sending_address, sending_wallet = await get_seq(from_)
 
             tx = NFTokenCreateOffer(
                 account=sending_address,
@@ -447,6 +465,7 @@ async def send_nft(from_, to_address, token_id):
                 break
     except Exception as e:
         logging.error(f"Something went wrong while sending NFT outside loop: {e}")
+    db_query.save_error_txn(to_address, 0, token_id)
     return False
 
 
@@ -455,42 +474,7 @@ async def accept_nft(wallet, offer, sender='0', token='0'):
     client = await get_ws_client()
     global wager_seq, reward_seq
     for i in range(3):
-        if wallet == 'reward':
-            acc_info = AccountInfo(
-                account=Reward_address
-            )
-            account_info = await client.request(acc_info)
-            sequence = account_info.result["account_data"]["Sequence"] if reward_seq is None else reward_seq
-            # Load the sending account's secret and address from a wallet
-            sending_wallet = Wallet(seed=config.REWARDS_SEED, sequence=sequence)
-            sending_address = Reward_address
-        if wallet == "store":
-            acc_info = AccountInfo(
-                account=Address
-            )
-            account_info = await client.request(acc_info)
-            sequence = account_info.result["account_data"]["Sequence"]
-            # Load the sending account's secret and address from a wallet
-            sending_wallet = Wallet(seed=config.STORE_SEED, sequence=sequence)
-            sending_address = Address
-        elif wallet == 'wager':
-            acc_info = AccountInfo(
-                account=config.WAGER_ADDR
-            )
-            account_info = await client.request(acc_info)
-            sequence = account_info.result["account_data"]["Sequence"] if wager_seq is None else wager_seq
-            # Load the sending account's secret and address from a wallet
-            sending_wallet = Wallet(seed=config.WAGER_SEED, sequence=sequence)
-            sending_address = config.WAGER_ADDR
-        elif wallet == 'safari':
-            acc_info = AccountInfo(
-                account=config.SAFARI_ADDR
-            )
-            account_info = await client.request(acc_info)
-            sequence = account_info.result["account_data"]["Sequence"]
-            # Load the sending account's secret and address from a wallet
-            sending_wallet = Wallet(seed=config.SAFARI_SEED, sequence=sequence)
-            sending_address = config.SAFARI_ADDR
+        sequence, sending_address, sending_wallet = await get_seq(wallet)
 
         tx = NFTokenAcceptOffer(
             account=sending_address,
@@ -508,7 +492,7 @@ async def accept_nft(wallet, offer, sender='0', token='0'):
                 config.wager_senders[sender] = token
             elif wallet == 'reward':
                 reward_seq = response.result['account_sequence_next']
-            break
+            return True
         elif response.result['engine_result'] in ["tefPAST_SEQ"]:
             if wallet == 'wager':
                 wager_seq = response.result['account_sequence_next']
@@ -517,7 +501,7 @@ async def accept_nft(wallet, offer, sender='0', token='0'):
             await asyncio.sleep(2)
         else:
             logging.error(f"NFT txn failed {response.result}\nDATA: {sender}")
-            break
+            return False
 
 
 async def check_amount_sent(amount, user1, user2, reward='XRP'):
@@ -558,58 +542,7 @@ async def send_zrp(to: str, amount: float, sender):
     global wager_seq, zrp_reward_seq, active_zrp_seed, active_zrp_addr, safari_seq
     for i in range(5):
         try:
-            if sender == "store":
-                acc_info = AccountInfo(
-                    account=Address
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"]
-                # Load the sending account's secret and address from a wallet
-                sending_wallet = Wallet(seed=config.STORE_SEED, sequence=sequence)
-                sending_address = Address
-            elif sender == "block":
-                bal = float(await xrpl_functions.get_zrp_balance(active_zrp_addr))
-                db_query.update_zrp_stats(burn_amount=0, distributed_amount=amount,
-                                          left_amount=((bal - amount) if bal is not None else None))
-                if bal is not None and bal < 5:
-                    if active_zrp_addr == config.B1_ADDR:
-                        active_zrp_addr, active_zrp_seed = config.B2_ADDR, config.B2_SEED
-                    else:
-                        active_zrp_addr, active_zrp_seed = config.B3_ADDR, config.B3_SEED
-                acc_info = AccountInfo(
-                    account=active_zrp_addr
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"] if zrp_reward_seq is None else zrp_reward_seq
-                # Load the sending account's secret and address from a wallet
-                sending_wallet = Wallet(seed=active_zrp_seed, sequence=sequence)
-                sending_address = active_zrp_addr
-            elif sender == "safari":
-                acc_info = AccountInfo(
-                    account=config.SAFARI_ADDR
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"] if safari_seq is None else safari_seq
-                # Load the sending account's secret and address from a wallet
-                sending_wallet = Wallet(seed=config.SAFARI_SEED, sequence=sequence)
-                sending_address = config.SAFARI_ADDR
-            elif sender == "jackpot":
-                db_query.update_zrp_stats(burn_amount=0, distributed_amount=0, jackpot_amount=amount)
-                acc_info = AccountInfo(
-                    account=config.JACKPOT_ADDR
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"]
-                sending_wallet = Wallet(seed=config.JACKPOT_SEED, sequence=sequence)
-                sending_address = config.JACKPOT_ADDR
-            elif sender == "wager":
-                acc_info = AccountInfo(
-                    account=config.WAGER_ADDR
-                )
-                account_info = await client.request(acc_info)
-                sequence = account_info.result["account_data"]["Sequence"] if wager_seq is None else wager_seq
-                sending_wallet = Wallet(seed=config.WAGER_SEED, sequence=sequence)
-                sending_address = config.WAGER_ADDR
+            sequence, sending_address, sending_wallet = await get_seq(sender, amount)
             # Set the receiving address
             receiving_address = to
 
@@ -654,6 +587,7 @@ async def send_zrp(to: str, amount: float, sender):
         except Exception as e:
             logging.error(f"ZRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
+    db_query.save_error_txn(to, amount, None)
     return False
 
 
@@ -971,6 +905,8 @@ async def get_latest_nft_offers(address):
         print(e)
         return 0
 
+
+
 # asyncio.run(cancel_offer('store', '44B4CD0ABE8F437E5F315B3FA42BF32C7C0DFCAC64034871E1A5E10B6039D012'))
 # res, offer = asyncio.run(
 #     send_nft_with_amt('store', config.JACKPOT_ADDR, '000800009DFF301D909E72368E61B385BDE81008B1875053C81A10F200000057',
@@ -979,13 +915,13 @@ async def get_latest_nft_offers(address):
 # asyncio.run(get_latest_nft_offers(config.STORE_ADDR))
 # asyncio.run(accept_nft('reward', offer='22FC29F159F14A9672D5E231EFEB6DB9E0FE5483A7CCE1E1C122BEC2FF79E1FD', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
 #                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E549986260000018B'))
-# asyncio.run(send_nft('store', to_address=config.SAFARI_ADDR, token_id='000800009DFF301D909E72368E61B385BDE81008B187505316E5DA9C00000001'))
+# asyncio.run(send_nft('auction', to_address='r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7ED29FD31400000079'))
 # asyncio.run(send_nft('store', to_address=config.SAFARI_ADDR, token_id='000800009DFF301D909E72368E61B385BDE81008B18750532DCBAB9D00000002'))
-# asyncio.run(send_nft('store', to_address=config.SAFARI_ADDR, token_id='000800009DFF301D909E72368E61B385BDE81008B187505344B17C9E00000003'))
+# asyncio.run(send_nft('reward', to_address='rGNAoM3punrrP5rPc94EqYvzD67Sedopuo', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E6A1075E50000024A'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.ISSUER['Zerpmon']))
-
-# asyncio.run(send_txn(config.STORE_ADDR, 0.1, 'wager'))
-# asyncio.run(send_zrp('rUpucKVa5Rvjmn8nL5aTKpEaBQUbXrZAcV', 66, 'safari'))
+# asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
+# asyncio.run(send_txn('rJRzprxRHSR6uQ8JfngtK1AbDfQWiRSdCE', 5, 'loan'))
+# asyncio.run(send_zrp('rJRzprxRHSR6uQ8JfngtK1AbDfQWiRSdCE', 0.43, 'loan'))
 
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))
