@@ -20,7 +20,7 @@ import xrpl_functions
 import db_query
 from db_query import add_bg, add_flair
 from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, checks, callback, reset_alert, \
-    auction_functions
+    auction_functions, post_rank_fn
 from xrpl.utils import xrp_to_drops
 from utils.trade import trade_item
 from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete, \
@@ -153,6 +153,9 @@ async def on_close():
 async def on_ready():
     print('Bot connected to Discord!')
     for guild in client.guilds:
+        if guild.id == config.MAIN_GUILD[0]:
+            for r, v in config.RANKS.items():
+                config.RANKS[r]['role'] = nextcord.utils.get(guild.roles, name=r)
         print(guild.name)
     config.gym_main_reset = db_query.get_gym_reset()
     if not check_auction.is_running():
@@ -230,6 +233,7 @@ async def wallet(interaction: nextcord.Interaction):
                 "trainer_cards": {},
                 "equipments": {},
                 "battle_deck": {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}},
+                "gym_deck": {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}},
             }
 
             if not good_status:
@@ -437,7 +441,7 @@ async def battle(interaction: nextcord.Interaction, opponent: Optional[nextcord.
     oppo_mention = opponent.mention + o_flair
 
     proceed = await checks.check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction,
-                                        battle_nickname='friendly')
+                                        battle_nickname='friendly', battle_type=type)
     if not proceed:
         return
         #  Proceed with the challenge if check success
@@ -679,36 +683,36 @@ async def set_flair(interaction: nextcord.Interaction, flair: str = SlashOption(
 
 @add.subcommand(name='mission_equipment', description="Set Zerpmon Equipment for Solo Missions")
 async def mission_equipment(interaction: nextcord.Interaction,
-                            eq1: str = SlashOption("equipment_1st", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq2: str = SlashOption("equipment_2nd", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq3: str = SlashOption("equipment_3rd", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq4: str = SlashOption("equipment_4th", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq5: str = SlashOption("equipment_5th", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq6: str = SlashOption("equipment_6th", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq7: str = SlashOption("equipment_7th", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq8: str = SlashOption("equipment_8th", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq9: str = SlashOption("equipment_9th", autocomplete_callback=equipment_autocomplete, required=False),
-                            eq10: str = SlashOption("equipment_10th", autocomplete_callback=equipment_autocomplete,
+                            eq1: str = SlashOption("equipment_1", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq2: str = SlashOption("equipment_2", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq3: str = SlashOption("equipment_3", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq4: str = SlashOption("equipment_4", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq5: str = SlashOption("equipment_5", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq6: str = SlashOption("equipment_6", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq7: str = SlashOption("equipment_7", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq8: str = SlashOption("equipment_8", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq9: str = SlashOption("equipment_9", autocomplete_callback=equipment_autocomplete, required=False),
+                            eq10: str = SlashOption("equipment_10", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq11: str = SlashOption("equipment_11th", autocomplete_callback=equipment_autocomplete,
+                            eq11: str = SlashOption("equipment_11", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq12: str = SlashOption("equipment_12th", autocomplete_callback=equipment_autocomplete,
+                            eq12: str = SlashOption("equipment_12", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq13: str = SlashOption("equipment_13th", autocomplete_callback=equipment_autocomplete,
+                            eq13: str = SlashOption("equipment_13", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq14: str = SlashOption("equipment_14th", autocomplete_callback=equipment_autocomplete,
+                            eq14: str = SlashOption("equipment_14", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq15: str = SlashOption("equipment_15th", autocomplete_callback=equipment_autocomplete,
+                            eq15: str = SlashOption("equipment_15", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq16: str = SlashOption("equipment_16th", autocomplete_callback=equipment_autocomplete,
+                            eq16: str = SlashOption("equipment_16", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq17: str = SlashOption("equipment_17th", autocomplete_callback=equipment_autocomplete,
+                            eq17: str = SlashOption("equipment_17", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq18: str = SlashOption("equipment_18th", autocomplete_callback=equipment_autocomplete,
+                            eq18: str = SlashOption("equipment_18", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq19: str = SlashOption("equipment_19th", autocomplete_callback=equipment_autocomplete,
+                            eq19: str = SlashOption("equipment_19", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
-                            eq20: str = SlashOption("equipment_20th", autocomplete_callback=equipment_autocomplete,
+                            eq20: str = SlashOption("equipment_20", autocomplete_callback=equipment_autocomplete,
                                                     required=False),
                             ):
     execute_before_command(interaction)
@@ -758,7 +762,7 @@ async def mission_equipment(interaction: nextcord.Interaction,
             zerp_types = all_types[eq_i]
             for item in user_obj['equipments'][equipment]['attributes']:
                 if item['trait_type'] == 'Type':
-                    if item['value'] not in zerp_types:
+                    if item['value'] not in zerp_types and item['value'] != 'Omni':
                         fail_msg += f"Sorry, **{user_obj['equipments'][equipment]['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
                         eqs[eq_i] = None
         db_query.set_equipment_on(user_obj['discord_id'], eqs, 'mission_deck', None)
@@ -846,14 +850,14 @@ async def mission_deck(interaction: nextcord.Interaction,
                     f"**Failed**, please recheck the ID/Name or make sure you hold this Zerpmon",
                     ephemeral=True)
                 return
-    old_deck = user_owned_nfts['data']['mission_deck']
+    old_deck = user_owned_nfts['data'].get('mission_deck', {})
     new_deck = {}
     for i, zerpmon_name in enumerate(zerpmon_options):
         if zerpmon_name != '' and zerpmon_name is not None and zerpmon_name not in list(new_deck.values()):
             new_deck[str(i)] = zerpmon_name
     vals = list(new_deck.values())
     if is_new == 'Edit':
-        for k, v in old_deck.items():
+        for k, v in old_deck.copy().items():
             if v in vals:
                 del old_deck[k]
         for k, v in new_deck.items():
@@ -1012,7 +1016,7 @@ async def battle_deck(interaction: nextcord.Interaction,
             zerp_types = all_types[eq_i]
             for item in user_obj['equipments'][equipment]['attributes']:
                 if item['trait_type'] == 'Type':
-                    if item['value'] not in zerp_types:
+                    if item['value'] not in zerp_types and item['value'] != 'Omni':
                         fail_msg += f"Sorry, **{user_obj['equipments'][equipment]['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
                         eqs[eq_i] = None
     # print(new_deck)
@@ -2692,9 +2696,10 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
 # RANKED COMMANDS
 
 # @client.slash_command(name="ranked_battle",
-#                       description="3v3 Ranked battle among Trainers (require: 3 Zerpmon and 1 Trainer card)",
+#                       description="3v3/5v5 Ranked battle among Trainers (require: 3-5 Zerpmon and 1 Trainer card)",
 #                       )
 # async def ranked_battle(interaction: nextcord.Interaction,
+#                         b_type: int = SlashOption(required=True, name='battle_type', choices={'3v3': 3, '5v5': 5}),
 #                         opponent: Optional[nextcord.Member] = SlashOption(required=True), ):
 #     execute_before_command(interaction)
 #     # msg = await interaction.send(f"Searching...")
@@ -2715,7 +2720,7 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
 #     opponent_owned_nfts['user'] += o_flair
 #     oppo_mention = opponent.mention + o_flair
 #     proceed = await checks.check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction,
-#                                         battle_nickname='Ranked')
+#                                         battle_nickname='Ranked', battle_type=b_type)
 #     if not proceed:
 #         return
 #         #  Proceed with the challenge if check success
@@ -2725,18 +2730,21 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
 #     config.ongoing_battles.append(opponent.id)
 #     try:
 #         msg = await interaction.channel.send(
-#             f"**3v3** Ranked **battle** challenge to {oppo_mention} by {user_mention}. Click the **swords** to accept!")
+#             f"**{b_type}v{b_type}** Ranked **battle** challenge to {oppo_mention} by {user_mention}. Click the **swords** to accept!")
 #         await msg.add_reaction("⚔")
 #         config.battle_dict[msg.id] = {
 #             "type": 'ranked',
 #             "challenger": user_id,
+#             "p1_deck": user_owned_nfts['data']['battle_deck']['0'],
 #             "username1": user_mention,
 #             "challenged": opponent.id,
+#             "p2_deck": opponent_owned_nfts['data']['battle_deck']['0'],
 #             "username2": oppo_mention,
+#             "oppo_obj": opponent,
 #             "active": False,
 #             "channel_id": interaction.channel_id,
 #             "timeout": time.time() + 60,
-#             'battle_type': 3,
+#             'battle_type': b_type,
 #         }
 #
 #         # Sleep for a while and notify timeout
@@ -2752,6 +2760,80 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
 #         logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
 #         config.ongoing_battles.remove(user_id)
 #         config.ongoing_battles.remove(opponent.id)
+#
+#
+# @client.slash_command(name="ranked_battle_instant",
+#                       description="Instant 3v3/5v5 Ranked battle among Trainers (require: 3-5 Zerpmon and 1 Trainer card)",
+#                       )
+# async def ranked_battle(interaction: nextcord.Interaction,
+#                         b_type: int = SlashOption(required=True, name='battle_type', choices={'3v3': 3, '5v5': 5}),
+#                         ):
+#     execute_before_command(interaction)
+#     user_id = interaction.user.id
+#     # Sanity checks
+#     if interaction.guild_id not in config.MAIN_GUILD:
+#         await interaction.send("Sorry, you can do Ranked Battles only in Official Server.")
+#         return
+#     msg = await interaction.send(f"Searching Opponent...", ephemeral=True)
+#     user_owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
+#     user_d = user_owned_nfts['data']
+#     u_flair = f' | {user_d.get("flair", [])[0]}' if len(
+#         user_d.get("flair", [])) > 0 else ''
+#     user_owned_nfts['user'] += u_flair
+#     user_mention = interaction.user.mention + u_flair
+#     r_key = 'rank5' if b_type == 5 else 'rank'
+#     opponents = db_query.get_same_ranked_p(str(user_id), user_d.get(r_key, {'tier': 'Unranked'})['tier'], field=r_key)
+#     if len(opponents) == 0:
+#         await interaction.send("Sorry, can't find anyone with the same Rank.")
+#         return
+#     valid_opponents = [i for i in opponents if len(i.get('recent_deck', i.get('battle_deck', {'0': {}}).get('0', {}))) > b_type + 1]
+#     if len(valid_opponents) == 0:
+#         valid_opponents = opponents
+#     real_oppo = random.choice(valid_opponents)
+#     # opponent = interaction.guild.get_member(int(real_oppo['discord_id']))
+#     opponent = client.get_user(int(real_oppo['discord_id']))
+#     opponent_owned_nfts = {'data': opponents[0], 'user': opponent.name}
+#     oppo_d = opponent_owned_nfts['data']
+#     o_flair = f' | {oppo_d.get("flair", [])[0]}' if len(
+#         oppo_d.get("flair", [])) > 0 else ''
+#     opponent_owned_nfts['user'] += o_flair
+#     oppo_mention = opponent.mention + o_flair
+#     proceed = await checks.check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction,
+#                                         battle_nickname='Instant Ranked', battle_type=b_type)
+#     if not proceed:
+#         return
+#         #  Proceed with the challenge if check success
+#     config.ongoing_battles.append(user_id)
+#     config.ongoing_battles.append(opponent.id)
+#     try:
+#         msg = await interaction.channel.send(content="Ranked Battle **beginning**")
+#         battle_instance = {
+#             "type": 'ranked',
+#             "challenger": user_id,
+#             "username1": user_mention,
+#             "challenged": int(oppo_d['discord_id']),
+#             "username2": oppo_mention,
+#             "active": False,
+#             "channel_id": interaction.channel_id,
+#             "timeout": time.time() + 60,
+#             'battle_type': b_type,
+#         }
+#         config.battle_dict[msg.id] = battle_instance
+#
+#         # Sleep for a while and notify timeout
+#         bt_deck = oppo_d.get('battle_deck', {'0': {}})['0']
+#         winner = await battle_function.proceed_battle(msg, battle_instance,
+#                                                       battle_instance['battle_type'],
+#                                                       battle_name='Instant Ranked Battle',
+#                                                       p1_deck=user_d['battle_deck']['0'],
+#                                                       p2_deck=oppo_d.get('recent_deck', bt_deck))
+#         await post_rank_fn.send_last_embed(interaction.user, opponent, msg, battle_instance, winner, b_type, mode='rank5')
+#     except Exception as e:
+#         logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
+#     finally:
+#         del config.battle_dict[msg.id]
+#         config.ongoing_battles.remove(user_id)
+#         # config.ongoing_battles.remove(battle_instance["challenged"])
 
 
 @client.slash_command(name="equipment",
@@ -2780,7 +2862,7 @@ async def show_equipments(interaction: nextcord.Interaction):
 
         embed3.add_field(
             name=f" **{nft['name']}** ({nft_type})",
-            value=f'> **Effect**: `{nft["notes"]}`',
+            value=f'> **Effect**: \n' + '\n'.join([f'> `{i}`' for i in nft['notes']]),
             inline=False)
     await interaction.edit_original_message(embeds=[embed3])
 
@@ -3459,7 +3541,7 @@ async def loan_dashboard(interaction: nextcord.Interaction, ):
     for listing in loaned_zerp_list:
         if len(embed.fields) == 24:
             break
-        if time.time() > listing['expires_at']:
+        if listing['expires_at'] <= time.time() and listing['accepted_by']['id'] is None:
             db_query.remove_listed_loan(listing['zerpmon_name'], str(user.id))
             continue
         my_button = f"https://xrp.cafe/nft/{listing['token_id']}"
@@ -3477,7 +3559,7 @@ async def loan_dashboard(interaction: nextcord.Interaction, ):
     for listing in loanee_list:
         if len(embed2.fields) == 24:
             break
-        if time.time() > listing['expires_at']:
+        if listing['expires_at'] <= time.time() and listing['accepted_by']['id'] is None:
             db_query.remove_listed_loan(listing['zerpmon_name'], str(user.id))
             continue
         my_button = f"https://xrp.cafe/nft/{listing['token_id']}"
@@ -3596,7 +3678,7 @@ async def on_raw_reaction_add(reaction: nextcord.RawReactionActionEvent):
 
 
 @client.event
-async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
+async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.Member):
     # user = reaction.member
     print(f'{user.name} reacted with {reaction.emoji}.')
     r_msg_id = reaction.message.id
@@ -3616,36 +3698,10 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.User):
                         await reaction.message.edit(content="Ranked Battle **beginning**")
                         winner = await battle_function.proceed_battle(reaction.message, battle_instance,
                                                                       battle_instance['battle_type'],
-                                                                      battle_name='Ranked Battle')
-                        points1, t1, new_rank1 = db_query.update_rank(battle_instance["challenger"],
-                                                                      True if winner == 1 else False)
-                        points2, t2, new_rank2 = db_query.update_rank(battle_instance["challenged"],
-                                                                      True if winner == 2 else False)
-                        embed = CustomEmbed(title="Match Result", colour=0xfacf5a,
-                                            description=f"{battle_instance['username1']}vs{battle_instance['username2']}")
-                        embed.add_field(name='\u200B', value='\u200B')
-                        embed.add_field(name='🏆 WINNER 🏆',
-                                        value=battle_instance['username1'] if winner == 1 else battle_instance[
-                                            'username2'],
-                                        inline=False)
-                        embed.add_field(
-                            name=f"{t1['tier'] if winner == 1 else t2['tier']} {'⭐ Rank Up `⬆` ⭐' if (new_rank1 if winner == 1 else new_rank2) is not None else ''}",
-                            value=f"{t1['points'] if winner == 1 else t2['points']}  ⬆",
-                            inline=False)
-                        embed.add_field(name=f'ZP:\t+{points1 if winner == 1 else points2}', value='\u200B',
-                                        inline=False)
-                        embed.add_field(name='\u200B', value='\u200B')
-                        embed.add_field(name='💀 LOSER 💀',
-                                        value=battle_instance['username1'] if winner == 2 else battle_instance[
-                                            'username2'], inline=False)
-                        loser_p = points1 if winner == 2 else points2
-                        embed.add_field(
-                            name=f"{t1['tier'] if winner == 2 else t2['tier']} {('🤡 Rank Down `⬇` 🤡' if loser_p > 0 else '⭐ Rank Up `⬆` ⭐') if (new_rank1 if winner == 2 else new_rank2) is not None else ''}",
-                            value=f"{t1['points'] if winner == 2 else t2['points']} {'⬇' if loser_p > 0 else '⬆'}",
-                            inline=False)
-                        embed.add_field(name=f'ZP:\t{"-" if loser_p > 0 else "+"}{abs(loser_p)}', value='\u200B',
-                                        inline=False)
-                        await reaction.message.reply(embed=embed)
+                                                                      battle_name='Ranked Battle',
+                                                                      p1_deck=battle_instance['p1_deck'],
+                                                                      p2_deck=battle_instance['p2_deck'])
+                        await post_rank_fn.send_last_embed(user, battle_instance['oppo_obj'], reaction.message, battle_instance, winner, battle_instance['battle_type'])
                 except Exception as e:
                     logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
                 finally:

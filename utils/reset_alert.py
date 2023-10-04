@@ -5,7 +5,7 @@ import traceback
 import nextcord
 import config
 import db_query
-from utils.checks import get_next_ts, get_time_left_utc
+from utils.checks import get_next_ts, get_time_left_utc, get_days_left
 from utils.xrpl_ws import get_balance, send_zrp, send_txn, send_nft
 from xrpl_functions import get_zrp_balance
 
@@ -18,7 +18,7 @@ class CustomEmbed(nextcord.Embed):
 
 
 next_run = time.time() - 300
-last_cache_embed = None
+last_cache_embed = {'3v3': None, '5v5': None}
 
 
 async def send_reset_message(client: nextcord.Client):
@@ -49,7 +49,7 @@ async def send_reset_message(client: nextcord.Client):
             all_users = db_query.get_all_users()
             for user in all_users:
                 if 'gym' in user:
-                    won_gyms = user['gym']['won']
+                    won_gyms = user['gym'].get('won', {})
                     for gym, obj in won_gyms.items():
                         if obj['next_battle_t'] < time.time() - 86300:
                             db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True)
@@ -60,6 +60,11 @@ async def send_reset_message(client: nextcord.Client):
                     decay_tiers = config.TIERS[-2:]
                     if user['rank']['last_battle_t'] < time.time() - 86400 and rnk in decay_tiers:
                         db_query.update_rank(user['discord_id'], win=False, decay=True)
+                if 'rank5' in user:
+                    rnk = user['rank5']['tier']
+                    decay_tiers = config.TIERS[-2:]
+                    if user['rank5']['last_battle_t'] < time.time() - 86400 and rnk in decay_tiers:
+                        db_query.update_rank(user['discord_id'], win=False, decay=True, field='rank5')
             active_loans, expired_loans = db_query.get_active_loans()
             offer_expired = [f"<@{_i['listed_by']['id']}> your loan listing for {_i['zerpmon_name']} has been deactivated\n" for _i in expired_loans]
             for loan in active_loans:
@@ -92,55 +97,60 @@ async def send_reset_message(client: nextcord.Client):
             for guild in guilds:
                 try:
                     if guild.id in config.MAIN_GUILD:
-                        # RANKED EMBED
-                        top_players = db_query.get_ranked_players(0)
-                        embed = CustomEmbed(color=0x8f71ff,
-                                            title=f"👑 TRAINER RANKINGS LEADERBOARD 👑")
-                        embed.add_field(name='\u200B', value=f"\u200B", inline=False)
-                        for i, user in enumerate(top_players):
-                            battle_deck = user['battle_deck']['0']
-                            zerp_msg = ('> Battle Zerpmons:\n'
-                                        f'> \n') if len(battle_deck) > 0 else '> Battle Zerpmons:\n'
-                            for index, v in battle_deck.items():
-                                if index == "trainer":
-                                    attrs = user['trainer_cards'][v]['attributes']
-                                    emj = '🧙'
-                                    for attr in attrs:
-                                        if 'Trainer Number' in attr['trait_type']:
-                                            emj = '⭐'
-                                            break
-                                        if attr['value'] == 'Legendary':
-                                            emj = '🌟'
-                                            break
-                                    zerp_msg = f'> Main Trainer:\n' \
-                                               f'> \n' \
-                                               f'> {emj} {user["trainer_cards"][v]["name"]} {emj}\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
-                                               f'> \n' + zerp_msg
-                                else:
-                                    zerp_msg += f'> ⭐ {user["zerpmons"][v]["name"]} ⭐\t[view](https://xrp.cafe/nft/{user["zerpmons"][v]["token_id"]})\n'
-                            msg = '#{0:<4} {1:<25}'.format(user['ranked'], user['username'])
-
-                            embed.add_field(name=f'{msg}', value=f"{zerp_msg}", inline=True)
-                            embed.add_field(name=f"Tier: {user['rank']['tier']}",
-                                            value=f"Points: `{user['rank']['points']}`", inline=True)
-                            embed.add_field(name='\u200B', value=f"\u200B", inline=False)
-                        if last_cache_embed != embed.fields:
-                            last_cache_embed = embed.fields
-                            channel = [i for i in guild.channels if 'trainer-rankings' in i.name]
-                            if len(channel) > 0:
-                                channel = channel[0]
-                                if config.RANK_MSG_ID is not None:
-                                    try:
-                                        msg_ = await channel.fetch_message(config.RANK_MSG_ID)
-                                        await msg_.edit(embed=embed)
-                                    except Exception as e:
-                                        logging.error(f"ERROR in sending Rankings message: {traceback.format_exc()}")
-                                        r_msg = await channel.send(embed=embed)
-                                        config.RANK_MSG_ID = r_msg.id
-
-                                else:
-                                    r_msg = await channel.send(embed=embed)
-                                    config.RANK_MSG_ID = r_msg.id
+                        # # RANKED EMBED
+                        # top_players_3 = db_query.get_ranked_players(0)
+                        # top_players_5 = db_query.get_ranked_players(0, field='rank5')
+                        # ranking_obj = {'3v3': top_players_3, '5v5': top_players_5}
+                        # for leaderboard in ranking_obj:
+                        #     embed = CustomEmbed(color=0x8f71ff,
+                        #                         title=f"👑 TRAINER RANKINGS LEADERBOARD {leaderboard} 👑")
+                        #     embed.add_field(name='\u200B', value=f"\u200B", inline=False)
+                        #     for i, user in enumerate(ranking_obj[leaderboard]):
+                        #         # print(user)
+                        #         battle_deck = user.get('battle_deck', {'0': {}}).get('0', {})
+                        #         zerp_msg = ('> Battle Zerpmons:\n'
+                        #                     f'> \n') if len(battle_deck) > 0 else '> Battle Zerpmons:\n'
+                        #         for index, v in battle_deck.items():
+                        #             if index == "trainer":
+                        #                 attrs = user['trainer_cards'][v]['attributes']
+                        #                 emj = '🧙'
+                        #                 for attr in attrs:
+                        #                     if 'Trainer Number' in attr['trait_type']:
+                        #                         emj = '⭐'
+                        #                         break
+                        #                     if attr['value'] == 'Legendary':
+                        #                         emj = '🌟'
+                        #                         break
+                        #                 zerp_msg = f'> Main Trainer:\n' \
+                        #                            f'> \n' \
+                        #                            f'> {emj} {user["trainer_cards"][v]["name"]} {emj}\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
+                        #                            f'> \n' + zerp_msg
+                        #             else:
+                        #                 zerp_msg += f'> ⭐ {user["zerpmons"][v]["name"]} ⭐\t[view](https://xrp.cafe/nft/{user["zerpmons"][v]["token_id"]})\n'
+                        #         msg = '#{0:<4} {1:<25}'.format(user['ranked'], user['username'])
+                        #
+                        #         embed.add_field(name=f'{msg}', value=f"{zerp_msg}", inline=True)
+                        #         user_r_d = user['rank' if leaderboard == '3v3' else 'rank5']
+                        #         embed.add_field(name=f"Tier: {user_r_d['tier']}",
+                        #                         value=f"Points: `{user_r_d['points']}`", inline=True)
+                        #         embed.add_field(name='\u200B', value=f"\u200B", inline=False)
+                        #     if last_cache_embed[leaderboard] != embed.fields:
+                        #         last_cache_embed[leaderboard] = embed.fields
+                        #         channel = [i for i in guild.channels if f'trainer-rankings-{leaderboard}' in i.name]
+                        #         if len(channel) > 0:
+                        #             channel = channel[0]
+                        #             if config.RANK_MSG_ID[leaderboard] is not None:
+                        #                 try:
+                        #                     msg_ = await channel.fetch_message(config.RANK_MSG_ID[leaderboard])
+                        #                     await msg_.edit(embed=embed)
+                        #                 except Exception as e:
+                        #                     logging.error(f"ERROR in sending Rankings message: {traceback.format_exc()}")
+                        #                     r_msg = await channel.send(embed=embed)
+                        #                     config.RANK_MSG_ID[leaderboard] = r_msg.id
+                        #
+                        #             else:
+                        #                 r_msg = await channel.send(embed=embed)
+                        #                 config.RANK_MSG_ID[leaderboard] = r_msg.id
                         # GYM EMBED
                         top_players = db_query.get_gym_leaderboard(0)
                         embed = CustomEmbed(color=0x8f71ff,
@@ -202,6 +212,11 @@ async def send_reset_message(client: nextcord.Client):
                     if len(channel) > 0:
                         channel = channel[0]
                         await channel.edit(name=f"💰 Mission XRP: {amount_to_send:.4f}")
+                        # await asyncio.sleep(5)
+                    channel = [i for i in guild.channels if 'Season Ends' in i.name]
+                    if len(channel) > 0:
+                        channel = channel[0]
+                        await channel.edit(name=f"Season Ends in {get_days_left(config.SEASON_END_TS)} days")
                         # await asyncio.sleep(5)
                 except Exception as e:
                     logging.error(f'ERROR: {traceback.format_exc()}')

@@ -14,7 +14,7 @@ import config
 import db_query
 import xrpl_functions
 import xumm_functions
-from utils import checks, battle_function
+from utils import checks, battle_function, statements
 from utils.xrpl_ws import send_random_zerpmon, send_zrp, get_balance, send_equipment, check_eq_in_wallet, \
     send_nft_with_amt, cancel_offer, accept_nft, send_txn, send_nft, get_ws_client
 
@@ -34,13 +34,14 @@ SAFARI_REWARD_CHANCES = {
     "candy_white": 2.1667,
     "candy_gold": 2.1667,
     "candy_level_up": 0.8333,
-    "equipment": 0, # 0.7000,
+    "equipment": 0,  # 0.7000,
     "jackpot": 0.1833,
     "gym_refill": 2.6667,
     "revive_potion": 1.2667,
     "mission_refill": 1.2667,
-    "zerpmon": 0 # 0.1333
+    "zerpmon": 0  # 0.1333
 }
+
 
 # print(sum(list(SAFARI_REWARD_CHANCES.values())))
 
@@ -638,9 +639,27 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     b5 = Button(label="Buy Battle Zones", style=ButtonStyle.green, emoji='🏟️', row=1)
     b6 = Button(label="Buy Name Flair", style=ButtonStyle.green, emoji='💠', row=1)
     b7 = Button(label="Buy Safari Trip", style=ButtonStyle.green, emoji='🎰', row=1)
-
+    user_d = db_query.get_owned(str(user_id))
+    zrp_gift_box, xblade_gift_box = db_query.get_boxes(user_d['address'])
+    all_btns = [b0, b1, b2, b3, b4, b5, b6, b7]
+    if zrp_gift_box > 0:
+        b8 = Button(label="Open Zerpmon Gift Box", style=ButtonStyle.success, emoji='🎁', row=2)
+        all_btns.append(b8)
+        b8.callback = lambda i: on_button_click(i, label=b8.label, amount=zrp_gift_box)
+    if xblade_gift_box > 0:
+        b9 = Button(label="Open Xscape Gift Box", style=ButtonStyle.success, emoji='💝', row=2)
+        all_btns.append(b9)
+        b9.callback = lambda i: on_button_click(i, label=b9.label, amount=xblade_gift_box)
+    sec_embed.add_field(name="Zerpmon Gift Box:",
+                         value=f"**{zrp_gift_box}**"
+                               + '\t🎁',
+                         inline=False)
+    sec_embed.add_field(name="Xscape Gift Box:",
+                        value=f"**{xblade_gift_box}**"
+                              + '\t💝',
+                        inline=False)
     view = View()
-    for item in [b0, b1, b2, b3, b4, b5, b6, b7]:
+    for item in all_btns:
         view.add_item(item)
     view.timeout = 120  # Set a timeout of 60 seconds for the view to automatically remove it after the time is up
 
@@ -1062,6 +1081,115 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
 
                     await interaction.send(embed=embed, file=file, view=view, ephemeral=True)
                     # await interaction.send(view=view, ephemeral=True)
+        case "Open Zerpmon Gift Box":
+            # Run 1 raffle
+            amount, _ = db_query.get_boxes(addr)
+            if amount <= 0:
+                return
+            await interaction.send(content='**Gift Box Opening...**', ephemeral=True)
+            db_query.dec_box(addr, True)
+            reward = random.choices(list(config.GIFT_BOX_CHANCES.keys()),
+                                    list(config.GIFT_BOX_CHANCES.values()))[0]
+            embed = CustomEmbed(title=f"Zerpmon Gift Box", colour=0xff5722)
+            img = None
+            match reward:
+                case "zrp":
+                    s_amount = 5
+                    status = await send_zrp(addr, s_amount, 'gift')
+                    msg = random.choice(
+                        statements.ZRP_GIFT_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction Successful`" if status else ""}!'
+                case "equipment":
+                    res, token_id = await send_random_zerpmon(addr, gift_box=True, issuer=config.ISSUER['Equipment'])
+                    msg = random.choice(
+                        statements.ZRP_GIFT_STATEMENTS) + f'\nCongrats, Won `{token_id[0]}`!'
+                    if res:
+                        my_button = f"https://xrp.cafe/nft/{token_id[-1]}"
+                        msg += f'\n[view]({my_button})'
+                        img = token_id[1]
+                        description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{token_id[0]}**\n{token_id[1]} ! 🔥 🔥\n@everyone'
+                        await send_general_message(guild=interaction.guild, text=description,
+                                                   image='')
+                    else:
+                        msg += f"\nFailed, Something went wrong while sending the Sell offer\n"\
+                            "Please contact an admin"
+                case "zerpmon":
+                    res, token_id = await send_random_zerpmon(addr, gift_box=True)
+                    my_button = f"https://xrp.cafe/nft/{token_id[-1]}"
+                    msg = random.choice(
+                        statements.ZRP_GIFT_STATEMENTS) + f'\nCongrats, Won `{token_id[0]}`!'
+                    msg += f'\n[view]({my_button})'
+                    img = token_id[1]
+                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just caught **{token_id[0]}** !! 🔥 🔥\n@everyone'
+                    await send_general_message(guild=interaction.guild, text=description,
+                                               image=token_id[1])
+                case _:
+                    msg = random.choice(config.NOTHING_MSG)
+            embed.description = msg
+            view = View()
+            view.timeout = 120
+            amount, _ = db_query.get_boxes(addr)
+            if amount > 0:
+                b_s = Button(label="Open Zerpmon Gift Box", style=ButtonStyle.success, emoji='🎁', row=2)
+                b_s.callback = lambda i: on_button_click(i, label=b_s.label, amount=amount)
+                view.add_item(b_s)
+            if img is None:
+                path = f'./static/safari/Success {random.randint(1, 14)}.png'
+                file = nextcord.File(path, filename="image.png")
+                embed.set_image(url=f'attachment://image.png')
+                await interaction.send(embed=embed, ephemeral=True, view=view, file=file)
+            else:
+                embed.set_image(url=img)
+                await interaction.send(embed=embed, view=view, ephemeral=True)
+        case "Open Xscape Gift Box":
+            _, amount = db_query.get_boxes(addr)
+            if amount <= 0:
+                return
+            await interaction.send(content='**Gift Box Opening...**', ephemeral=True)
+            db_query.dec_box(addr, False)
+            # Run 1 raffle
+            reward = random.choices(list(config.XSCAPE_GIFT_CHANCES.keys()),
+                                    list(config.XSCAPE_GIFT_CHANCES.values()))[0]
+            embed = CustomEmbed(title=f"Xscape Gift Box", colour=0xc3195d)
+            img = None
+            match reward:
+                case "stx":
+                    s_amount = 5000
+                    status = await send_zrp(addr, s_amount, 'gift', issuer='STX')
+                    msg = random.choice(statements.XSCAPE_GIFT_STATEMENTS) + f'\nCongrats, Won `{s_amount} $STX`!\n{"`Transaction Successful`" if status else ""}!'
+                case "xblade":
+                    res, token_id = await send_random_zerpmon(addr, gift_box=True, issuer=config.ISSUER['Xblade'])
+                    my_button = f"https://xrp.cafe/nft/{token_id[-1]}"
+                    msg = random.choice(statements.XSCAPE_GIFT_STATEMENTS) + f'\nCongrats, Won `{token_id[0]}`\n[view]({my_button})!'
+                    img = token_id[1]
+                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{token_id[0]}** !! 🔥 🔥\n@everyone'
+                    await send_general_message(guild=interaction.guild, text=description,
+                                               image=token_id[1])
+                case "legend":
+                    res, token_id = await send_random_zerpmon(addr, gift_box=True, issuer=config.ISSUER['Legend'])
+                    my_button = f"https://xrp.cafe/nft/{token_id[-1]}"
+                    msg = random.choice(statements.XSCAPE_GIFT_STATEMENTS) + f'\nCongrats, Won `{token_id[0]}`\n[view]({my_button})!'
+                    img = token_id[1]
+                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{token_id[0]}** !! 🔥 🔥\n@everyone'
+                    await send_general_message(guild=interaction.guild, text=description,
+                                               image=token_id[1])
+                case _:
+                    msg = random.choice(config.NOTHING_MSG)
+            embed.description = msg
+            view = View()
+            view.timeout = 120
+            _, amount = db_query.get_boxes(addr)
+            if amount > 0:
+                b_s = Button(label="Open Xscape Gift Box", style=ButtonStyle.success, emoji='💝', row=2)
+                b_s.callback = lambda i: on_button_click(i, label=b_s.label, amount=amount)
+                view.add_item(b_s)
+            if img is None:
+                path = f'./static/safari/Success {random.randint(1, 14)}.png'
+                file = nextcord.File(path, filename="image.png")
+                embed.set_image(url=f'attachment://image.png')
+                await interaction.send(embed=embed, ephemeral=True, view=view, file=file)
+            else:
+                embed.set_image(url=img)
+                await interaction.send(embed=embed, view=view, ephemeral=True)
         case "Buy Name Flair":
             # Create a select menu with the dropdown options
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
@@ -1236,7 +1364,7 @@ async def loan_marketplace_callback(interaction: nextcord.Interaction, page=1, f
     for idx, listing in enumerate(listings):
         if len(embed.fields) == 24:
             break
-        if time.time() > listing['expires_at']:
+        if listing['expires_at'] <= time.time() and listing['accepted_by']['id'] is None:
             db_query.remove_listed_loan(listing['zerpmon_name'], str(user.id))
             continue
         my_button = f"https://xrp.cafe/nft/{listing['token_id']}"
@@ -1254,8 +1382,9 @@ async def loan_marketplace_callback(interaction: nextcord.Interaction, page=1, f
                               f"> Min Loan Period: {listing['min_days']} days\n"
                               f"> [view]({my_button})")
         zerp_button = Button(style=ButtonStyle.secondary, label=listing['zerpmon_name'], row=math.ceil(idx / 5))
-        zerp_button.callback = lambda i, listing=listing: show_zerp_callback(interaction, zerpmon_name=listing['zerpmon_name'],
-                                                            listing_obj=listing)
+        zerp_button.callback = lambda i, listing=listing: show_zerp_callback(interaction,
+                                                                             zerpmon_name=listing['zerpmon_name'],
+                                                                             listing_obj=listing)
 
         view.add_item(zerp_button)
     is_last_page = (page - 1) * 10 + len(listings) == count
@@ -1418,7 +1547,8 @@ async def loan_marketplace_filter(interaction: nextcord.Interaction):
 
 
 async def cancel_loan(interaction: nextcord.Interaction, listing: dict, is_listing: bool):
-    amount = round(listing['per_day_cost'] * 5 if not listing['xrp'] else listing['per_day_cost'] * 5 / (await xrpl_functions.get_zrp_price_api()), 2)
+    amount = round(listing['per_day_cost'] * 5 if not listing['xrp'] else listing['per_day_cost'] * 5 / (
+        await xrpl_functions.get_zrp_price_api()), 2)
     await interaction.followup.send(
         content=f"You will need to pay 5 day fee (`{amount:.2f}`) for an early cancellation of a loan" + (
             ' listing' if is_listing else ''))

@@ -309,18 +309,16 @@ def update_user_wr(user_id, win):
         return False
 
 
-def update_pvp_user_wr(user_id, win):
+def update_pvp_user_wr(user_id, win, recent_deck=None):
     users_collection = db['users']
 
     r = None
-    if win == 1:
-        r = users_collection.update_one({'discord_id': str(user_id)},
-                                        {'$inc': {'pvp_win': 1, 'pvp_loss': 0}},
-                                        upsert=True)
-    elif win == 0:
-        r = users_collection.update_one({'discord_id': str(user_id)},
-                                        {'$inc': {'pvp_loss': 1, 'pvp_win': 0}},
-                                        upsert=True)
+    query = {'$inc': {'pvp_win': win, 'pvp_loss': abs(1 - win)}}
+    if recent_deck is not None:
+        query['$set'] = {'recent_deck': recent_deck}
+    r = users_collection.update_one({'discord_id': str(user_id)},
+                                    query,
+                                    upsert=True)
 
     if r.acknowledged:
         return True
@@ -396,15 +394,16 @@ def get_top_purchasers(user_id):
     return [i for i in top_users]
 
 
-def get_ranked_players(user_id):
+def get_ranked_players(user_id, field='rank'):
     users_collection = db['users']
     user_id = str(user_id)
-    query = {'rank': {'$exists': True}}
-    top_users = users_collection.find(query).sort('rank.points', DESCENDING)
+    query = {field: {'$exists': True}}
+    top_users = users_collection.find(query).sort(f'{field}.points', DESCENDING)
     curr_user = users_collection.find_one({'discord_id': user_id})
     if curr_user:
-        curr_user_rank = users_collection.count_documents({'rank.points': {'$gt': curr_user['rank']['points'] if 'rank'
-                                                                                                                 in curr_user else 0}})
+        curr_user_rank = users_collection.count_documents(
+            {f'{field}.points': {'$gt': curr_user[field]['points'] if field
+                                                                      in curr_user else 0}})
         curr_user['ranked'] = curr_user_rank + 1
         top_users_count = users_collection.count_documents(query)
 
@@ -418,8 +417,8 @@ def get_ranked_players(user_id):
             rank_above += 1
 
         if curr_user['discord_id'] not in [i['discord_id'] for i in top_users]:
-            if 'rank' not in curr_user:
-                curr_user['rank'] = {'tier': 'Unranked', 'points': 0}
+            if field not in curr_user:
+                curr_user[field] = {'tier': 'Unranked', 'points': 0}
             top_users.append(curr_user)
         return top_users
     else:
@@ -427,6 +426,21 @@ def get_ranked_players(user_id):
         for i, user in enumerate(users):
             users[i]['ranked'] = i + 1
         return users
+
+
+def get_same_ranked_p(user_id, rank_tier, field='rank'):
+    users_collection = db['users']
+    if rank_tier == 'Unranked':
+        query = {
+            '$or': [
+                {f'{field}.tier': rank_tier},  # Check if the field is equal to 'Unranked'
+                {field: {'$exists': False}}  # Check if the field doesn't exist
+            ]
+        }
+    else:
+        query = {f'{field}.tier': rank_tier}
+    top_users = users_collection.find(query).sort(f'{field}.points', DESCENDING)
+    return [i for i in top_users if i['discord_id'] != user_id]
 
 
 def add_revive_potion(address, inc_by, purchased=False, amount=0):
@@ -808,12 +822,12 @@ def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=Fals
 
 # RANK QUERY
 
-def update_rank(user_id, win, decay=False):
+def update_rank(user_id, win, decay=False, field='rank'):
     users_collection = db['users']
     usr = get_owned(user_id)
     next_rank = None
-    if 'rank' in usr:
-        rank = usr['rank']
+    if field in usr:
+        rank = usr[field]
     else:
         rank = {
             'tier': 'Unranked',
@@ -823,6 +837,8 @@ def update_rank(user_id, win, decay=False):
     if decay:
         decay_tiers = config.TIERS[-2:]
         rank['points'] -= 50 if rank['tier'] == decay_tiers[0] else 100
+    elif win is None:
+        pass
     elif win:
         rank['points'] += user_rank_d['win']
     else:
@@ -838,9 +854,9 @@ def update_rank(user_id, win, decay=False):
     if not decay:
         rank['last_battle_t'] = time.time()
     users_collection.update_one({'discord_id': str(user_id)},
-                                {'$set': {'rank': rank}}
+                                {'$set': {field: rank}}
                                 )
-    return user_rank_d['win'] if win else user_rank_d['loss'], rank, next_rank
+    return 0 if win is None else (user_rank_d['win'] if win else user_rank_d['loss']), rank, next_rank
     # print(r)
 
 
@@ -1530,3 +1546,24 @@ def save_error_txn(user_address, amount, nft_id):
     if nft_id is not None:
         query['$push'] = {'nft_id': nft_id}
     col.update_one({'address': user_address}, query, upsert=True)
+
+
+"""GIFT BOXES"""
+
+
+def get_boxes(addr):
+    col = db['gift']
+    obj = col.find_one({'address': addr})
+    if obj is None:
+        return 0, 0
+    return obj.get('zerpmon_box', 0), obj.get('xscape_box', 0)
+
+
+def dec_box(addr, zerpmon_box: bool, amt=1):
+    col = db['gift']
+    query = {'$inc': {}}
+    if zerpmon_box:
+        query['$inc']['zerpmon_box'] = -amt
+    else:
+        query['$inc']['xscape_box'] = -amt
+    col.update_one({'address': addr}, query)

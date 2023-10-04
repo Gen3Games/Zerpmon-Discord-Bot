@@ -447,12 +447,12 @@
 #447,Awaken,Normal,****,Purple,Knock Out Opposing Zerpmon against Gold Attack,#447
 #448,Sucker Punch,Normal,***,Purple,Knock Out Opposing Zerpmon against White Attack,#448
 #449,Counter Attack,Normal,***,Purple,Knock Out Opposing Zerpmon against White Attack,#449
-#450,Knacker,Normal,**,Purple,Reduce Opposing Zerpmon stars by 1 for the rest of combat,#450
-#451,Blinding Light,Normal,**,Purple,Reduce Opposing Zerpmon stars by 1 for the rest of combat,#451
+#450,Knacker,Normal,**,Purple,Reduces Opponents Purple stars to 0,#450
+#451,Blinding Light,Normal,**,Purple,Reduces Opponents Purple stars to 0,#451
 #452,Soothing Voice,Fairy,***,Purple,Makes Enemy Attack 0 Damage next round,#452
 #453,Deafening Scream,Dragon,***,Purple,Makes Enemy Attack 0 Damage next round,#453
 #454,Hellfire,Fire,*****,Purple,Knocks Out Opposing Zerpmon,#454
-#455,Oceanic Domain,Water,*****,Purple,Increase Own Highest percentage Gold Attack by 24%,#455
+#455,Oceanic Domain,Water,*****,Purple,Increase Own Highest percentage Gold Attack by 20%,#455
 #456,Sacred Garden,Grass,*****,Purple,Decrease Own Red by 25%,#456
 #457,Eye of the Storm,Electric,*****,Purple,Decrease Opposing Zerpmon Gold Attack by 45%,#457
 #458,Sub Zero,Ice,*****,Purple,Increase Opposing Zerpmons Red by 25%,#458
@@ -466,7 +466,7 @@
 #466,Eerie Mist,Ghost,*****,Purple,Increase Opposing Zerpmons Red by 25%,#466
 #467,Dragonfire Cloak,Dragon,****,Purple,Increase Own Next Attack Damage by 100%,#467
 #468,Total Darkness,Dark,*****,Purple,Increase Opposing Zerpmons Red by 25%,#468
-#469,Overdrive,Steel,*****,Purple,Increase Own Highest percentage Gold Attack by 24%,#469
+#469,Overdrive,Steel,*****,Purple,Increase Own Highest percentage Gold Attack by 20%,#469
 #470,Wonderland,Fairy,****,Purple,Decrease Opposing Next Attack Damage by 100%,#470
 #471,Lucky Comet,Cosmic,****,Purple,Increase Own Next Attack Damage by 100%,#471
 #472,Eternal Graveyard,Undead,*****,Purple,Increase Opposing Zerpmons Red by 25%,#472
@@ -490,4 +490,34 @@
 #490,Flying Strike,Flying,75,Gold,,#490
 #491,Bug Strike,Bug,75,Gold,,#491
 #492,Steel Strike,Steel,75,Gold,,#492
+#493,Blaze Up,Grass,*****,Purple,Makes Enemy Attack 0 Damage next 2 rounds,#493
+#494,Blow Smoke,Flying,50,White,,#494
+#495,Blunt Trauma,Normal,50,White,,#495
+#496,Apple Toss,Normal,100,White,,#496
+#497,Eat Apple,Normal,***,Purple,Decrease Own Red by 15%,#497
+#498,Cuteness Overload,Normal,*****,Purple,Makes Enemy Attack 0 Damage next 2 rounds,#498
+#499,Quack Attack,Water,85,Gold,,#499
+#500,Build Sandcastle,Ground,*****,Purple,Increase Opposing Zerpmons Red by 25%,#500
+#501,Sword Slash,Steel,85,White,,#501
+#502,Shield Bash,Steel,60,White,,#502
+#503,Shield Deflect,-,-,Blue,,#503
+#504,Armour Up,Steel,****,Purple,Decrease Opposing Next Attack Damage by 100%,#504
+#505,Overhead Slash,Steel,70,Gold,,#505
+#506,Javelin Shot,Steel,70,Gold,,#506
+#507,Protective Barrier,Cosmic,****,Purple,Decrease Opposing Next Attack Damage by 100%,#507
+#508,Health Potion,Normal,****,Purple,Decrease Own Red by 20%,#508
+#509,Magic Missle Attack,Cosmic,85,White,,#509
+#510,Chain Lightning,Electric,100,White,,#510
+#511,Frost Cone,Ice,85,White,,#511
+#512,Arcane Missle,Cosmic,70,Gold,,#512
+#513,Slow Spell,Cosmic,****,Purple,Increase Opposing Zerpmons Red by 20%,#513
+#514,Fatigue Spell,Psychic,****,Purple,Decrease Opposing Next Attack Damage by 100%,#514
+#515,Divine Justice,Fairy,150,Gold,,#515
+#516,Retribution,Electric,75,Gold,,#516
+#517,Ice Lance,Ice,75,Gold,,#517
+#518,Backstab,Dark,75,Gold,,#518
+#519,Hex,Psychic,**,Purple,Reduces Opponents Purple stars to 0,#519
+#520,Polymorph,Psychic,*****,Purple,Makes Enemy Attack 0 Damage next 2 rounds,#520
+#521,Heavy Cleave,Steel,100,White,,#521
+#522,Lava Plume,Fire,85,Gold,,#522
 Move ID,Move Name,Type,Damage,Colour,Notes,Move ID

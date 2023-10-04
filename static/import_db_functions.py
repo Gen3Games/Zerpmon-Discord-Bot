@@ -30,8 +30,33 @@ def update_type(name, attrs):
     zerpmon_collection.find_one_and_update({'name': name}, {'$set': {'attributes': attrs}})
 
 
+def import_boxes():
+    collection = db['gift']
+    with open('Zerpmon_Gift_Box.csv', 'r') as csvfile:
+
+        csvreader = csv.reader(csvfile)
+        for row in csvreader:
+            if "Row Labels" in row[0]:
+                continue
+            # Insert the row data to MongoDB
+            collection.update_one({'address': row[0]}, {'$set': {
+                'address': row[0],
+                'zerpmon_box': int(row[1])
+            }}, upsert=True)
+    with open('Xscape_Gift_Box.csv', 'r') as csvfile:
+        csvreader = csv.reader(csvfile)
+        for row in csvreader:
+            if "Row Labels" in row[0]:
+                continue
+            # Insert the row data to MongoDB
+            collection.update_one({'address': row[0]}, {'$set': {
+                'address': row[0],
+                'xscape_box': int(row[1])
+            }}, upsert=True)
+
+
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_270923.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -166,6 +191,7 @@ def import_attrs_img():
         rr2 = requests.get(
             f"https://bithomp.com/api/cors/v2/nft/{id}?uri=true&metadata=true&history=true&sellOffers=true&buyOffers=true&offersValidate=true&offersHistory=true")
         res = rr2.json()
+        print(i, res)
         meta = res['metadata']['attributes']
         url = res['metadata']['image']
         print(url)
@@ -335,7 +361,7 @@ def reset_all_gyms():
 
 
 def import_equipments():
-    with open('Equipment2.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Equipment.csv', 'r') as csvfile:
         collection = db['Equipment']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -344,18 +370,20 @@ def import_equipments():
                 continue
             # Insert the row data to MongoDB
             collection.insert_one({
-                'type': row[0],
-                'name': row[1],
-                'notes': row[2]
+                'type': row[0].lower().title(),
+                'name': row[-1],
+                'notes': [i for i in row[1:-1] if i != ""]
             })
 
 
+import_boxes()
 import_moves()
 import_movesets()
-# # import_level()
+import_level()
 import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
 cache_data()
 import_equipments()
+
 # reset_all_gyms()

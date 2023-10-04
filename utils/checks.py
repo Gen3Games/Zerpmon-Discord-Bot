@@ -50,8 +50,18 @@ def get_next_ts():
     return target_time.timestamp()
 
 
+def get_days_left(ts):
+    current_time = int(time.time())
+    time_difference = ts - current_time
+    if time_difference < 0:
+        return None  # Timestamp is in the past
+    days = time_difference // 86400
+    return days
+
+
 def get_type_emoji(attrs, emoji=True):
-    emj_list = [(config.TYPE_MAPPING[i['value']] if emoji else i['value']) for i in attrs if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
+    emj_list = [(config.TYPE_MAPPING[i['value']] if emoji else i['value']) for i in attrs if
+                i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
     return ', '.join(emj_list)
 
 
@@ -87,17 +97,20 @@ async def check_wager_entry(interaction: nextcord.Interaction, users):
     for owned_nfts in users:
         if owned_nfts['data'] is None:
             await interaction.edit_original_message(
-                content="Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", view=View())
+                content="Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet",
+                view=View())
             return False
 
         if len(owned_nfts['data']['zerpmons']) == 0:
             await interaction.edit_original_message(
-                content=f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing wager battles", view=View())
+                content=f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing wager battles",
+                view=View())
             return False
 
         if len(owned_nfts['data']['trainer_cards']) == 0:
             await interaction.edit_original_message(
-                content=f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing wager battles", view=View())
+                content=f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing wager battles",
+                view=View())
             return False
     return True
 
@@ -112,7 +125,8 @@ def get_deck_embed(deck_type, owned_nfts):
         print(v)
         found = True
         nfts = {}
-        embed2.add_field(name=f"__{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}__:\n", value='\u200B',
+        embed2.add_field(name=f"__{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}__:\n",
+                         value='\u200B',
                          inline=False)
         # embed2.add_field(name='\u200b', value='\u200B', inline=False)
         new_v = v
@@ -123,14 +137,16 @@ def get_deck_embed(deck_type, owned_nfts):
             nfts[str(pos)] = owned_nfts['zerpmons'][sr]
 
         if len(nfts) == 0:
-            embed2.add_field(name=f"Sorry looks like you haven't selected any Zerpmon for {deck_type.title()} deck #{int(k) + 1}",
-                             value='\u200B',
-                             inline=False)
+            embed2.add_field(
+                name=f"Sorry looks like you haven't selected any Zerpmon for {deck_type.title()} deck #{int(k) + 1}",
+                value='\u200B',
+                inline=False)
 
         else:
             msg_str = '> __**Battle Zerpmon**__:\n' \
                       f'> \n'
-            sorted_keys = sorted(nfts.keys(), key=lambda _k: (_k != "trainer", int(_k) if _k.isdigit() else float('inf')))
+            sorted_keys = sorted(nfts.keys(),
+                                 key=lambda _k: (_k != "trainer", int(_k) if _k.isdigit() else float('inf')))
             print(sorted_keys)
             sorted_data = {_k: nfts[_k] for _k in sorted_keys}
             print(sorted_data)
@@ -151,7 +167,8 @@ def get_deck_embed(deck_type, owned_nfts):
                               f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
                               f"> \n" + msg_str
                 else:
-                    eq_name = owned_nfts['equipments'][eqs[k][serial]]['name'] if eqs[k][serial] in owned_nfts['equipments'] else None
+                    eq_name = owned_nfts['equipments'][eqs[k][serial]]['name'] if eqs[k][serial] in owned_nfts[
+                        'equipments'] else None
                     msg_str += f'> #{int(serial) + 1} ⭐ {nft["name"]} ⭐ {" - " + eq_name if eq_name is not None else ""}\n'
             embed2.add_field(name='\u200B', value=msg_str, inline=False)
             embed2.add_field(name='\u200b', value='\u200B', inline=False)
@@ -186,7 +203,8 @@ async def check_trainer_cards(interaction, user, trainer_name):
     return True
 
 
-async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction, battle_nickname):
+async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction, battle_nickname,
+                       battle_type=3):
     if user_id in config.ongoing_battles or opponent.id in config.ongoing_battles:
         await interaction.send(f"Please wait, one battle is already taking place for either you or your Opponent.",
                                ephemeral=True)
@@ -222,7 +240,8 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
             await interaction.send(
                 f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing {battle_nickname} battles")
             return False
-        if battle_nickname == 'Ranked' and 'battle_deck' in user_d and len(user_d['battle_deck']) > 0 and len(user_d['battle_deck']['0']) < 4:
+        if (battle_nickname == 'Ranked' or user_d['discord_id'] == str(user_id)) and 'battle_deck' in user_d and len(
+                user_d['battle_deck']) > 0 and len(user_d['battle_deck']['0']) < battle_type + 1:
             def_deck = user_d['battle_deck']['0']
             if 'trainer' not in def_deck:
                 await interaction.send(
@@ -232,16 +251,30 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
             else:
                 await interaction.send(
                     f"**{owned_nfts['user']}** your default deck contains {len(def_deck) - 1} Zerpmon, "
-                    f"need 3 to do {battle_nickname} battles.")
+                    f"need {battle_type} to do {battle_nickname} battles.")
+                return False
+        elif battle_nickname == 'Instant Ranked' and user_d['discord_id'] != str(user_id) and len(
+                user_d.get('recent_deck', user_d['battle_deck'].get('0', {}))) < battle_type + 1:
+            def_deck = user_d.get('recent_deck', user_d['battle_deck'].get('0', {}))
+            if 'trainer' not in def_deck:
+                await interaction.send(
+                    f"**{owned_nfts['user']}** haven't set their Trainer in default deck.")
+                return False
+            else:
+                await interaction.send(
+                    f"**{owned_nfts['user']}**'s default deck contains {len(def_deck) - 1} Zerpmon, "
+                    f"need {battle_type} to do {battle_nickname} battles.")
                 return False
 
-    if battle_nickname == 'Ranked':
+    if 'Ranked' in battle_nickname:
         user_rank = user_owned_nfts['data']['rank']['tier'] if 'rank' in user_owned_nfts['data'] else 'Unranked'
         user_rank_tier = config.TIERS.index(user_rank)
-        opponent_rank = opponent_owned_nfts['data']['rank']['tier'] if 'rank' in opponent_owned_nfts['data'] else 'Unranked'
+        opponent_rank = opponent_owned_nfts['data']['rank']['tier'] if 'rank' in opponent_owned_nfts[
+            'data'] else 'Unranked'
         oppo_rank_tier = config.TIERS.index(opponent_rank)
         # print(user_rank_tier, [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1])
-        if user_rank_tier not in [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1, oppo_rank_tier - 2, oppo_rank_tier + 2]:
+        if user_rank_tier not in [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1, oppo_rank_tier - 2,
+                                  oppo_rank_tier + 2]:
             await interaction.send(
                 f"Sorry you can't battle **{opponent_rank}** with your current {user_rank} Rank.")
             return False
@@ -261,12 +294,14 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
 
     if len(user_d['zerpmons']) == 0:
         await interaction.send(
-            f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing Gym battles", ephemeral=True)
+            f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing Gym battles",
+            ephemeral=True)
         return False
 
     if len(user_d['trainer_cards']) == 0:
         await interaction.send(
-            f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing Gym battles", ephemeral=True)
+            f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing Gym battles",
+            ephemeral=True)
         return False
     if 'gym_deck' in user_d and len(user_d['gym_deck']) > 0 and len(user_d['gym_deck']['0']) < 2:
         def_deck = user_d['gym_deck']['0']
@@ -287,7 +322,7 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
         #         f"Sorry please wait **{_hours}**h **{_minutes}**m for your next Gym Battle.", ephemeral=True)
         #     return False
         exclude = [i for i in user_d['gym']['won'] if
-                       user_d['gym']['won'][i]['next_battle_t'] > time.time()]
+                   user_d['gym']['won'][i]['next_battle_t'] > time.time()]
         type_ = gym_type.lower().title()
         print(type_)
         if type_ in exclude or type_ not in config.GYMS:

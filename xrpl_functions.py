@@ -255,7 +255,7 @@ async def get_zrp_balance(address, issuer=False):
             return balance if not issuer else abs(total)
     except Exception as e:
         print(e)
-        return 0
+        return None
 
 
 async def get_tx(client, hash_):
