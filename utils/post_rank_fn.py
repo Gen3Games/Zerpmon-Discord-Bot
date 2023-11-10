@@ -44,27 +44,28 @@ def gen_image(_id, path1, path3, path2='./static/rank_images/arrow.png'):
     combined_img.save(f'{_id}.png', quality=50)
 
 
-async def send_last_embed(user: nextcord.Member, oppo: nextcord.Member, msg: Message, battle_instance, winner, b_type, mode='rank'):
+async def send_last_embed(user: nextcord.Member, oppo: nextcord.Member, msg: Message, battle_instance, winner, b_type, mode='rank', hidden=False, view=None):
     points1, t1, new_rank1 = db_query.update_rank(battle_instance["challenger"],
                                                   True if winner == 1 else False,
-                                                  field='rank5' if b_type == 5 else 'rank')
+                                                  field=config.RANK_MODES[b_type])
     points2, t2, new_rank2 = db_query.update_rank(battle_instance["challenged"],
                                                   None if mode == 'rank5' else (True if winner == 2 else False),
-                                                  field='rank5' if b_type == 5 else 'rank')
+                                                  field=config.RANK_MODES[b_type])
     embed = CustomEmbed(title="Match Result", colour=0xfacf5a,
-                        description=f"{battle_instance['username1']}vs{battle_instance['username2']}")
-    if new_rank1 is not None:
-        await user.add_roles(config.RANKS[new_rank1]['role'])
-        rm_role = [v for r, v in config.RANKS.items() if v['h'] > abs(t1['points'] - 1000) >= v['l']]
-        if len(rm_role) > 0:
-            await user.remove_roles(rm_role[0]['role'])
-    if new_rank2 is not None:
-        if oppo is None:
-            oppo = await msg.guild.fetch_member(battle_instance['challenged'])
-        await oppo.add_roles(config.RANKS[new_rank2]['role'])
-        rm_role = [v for r, v in config.RANKS.items() if v['h'] > abs(t2['points'] - 1000) >= v['l']]
-        if len(rm_role) > 0:
-            await oppo.remove_roles(rm_role[0]['role'])
+                        description=f"{battle_instance['username1']} vs {battle_instance['username2']}")
+    if b_type == 3:
+        if new_rank1 is not None:
+            await user.add_roles(config.RANKS[new_rank1]['role'])
+            rm_role = [v for r, v in config.RANKS.items() if v['h'] > abs(t1['points'] - 1000) >= v['l']]
+            if len(rm_role) > 0:
+                await user.remove_roles(rm_role[0]['role'])
+        if new_rank2 is not None:
+            if oppo is None:
+                oppo = await msg.guild.fetch_member(battle_instance['challenged'])
+            await oppo.add_roles(config.RANKS[new_rank2]['role'])
+            rm_role = [v for r, v in config.RANKS.items() if v['h'] > abs(t2['points'] - 1000) >= v['l']]
+            if len(rm_role) > 0:
+                await oppo.remove_roles(rm_role[0]['role'])
     img_rf, rf = new_rank1 if new_rank1 is not None else new_rank2, t1 if new_rank1 is not None else t2
     img_ri = [r for r, v in config.RANKS.items() if v['h'] > abs(rf['points'] - 1000) >= v['l']][0]
     if img_rf is not None:
@@ -78,7 +79,7 @@ async def send_last_embed(user: nextcord.Member, oppo: nextcord.Member, msg: Mes
         name=f"{t1['tier'] if winner == 1 else t2['tier']} {'⭐ Rank Up `⬆` ⭐' if (new_rank1 if winner == 1 else new_rank2) is not None else ''}",
         value=f"{t1['points'] if winner == 1 else t2['points']}  {'⬆' if winner == 1 or mode =='rank' else ''}",
         inline=False)
-    embed.add_field(name=f'ZP:\t+{points1 if winner == 1 else points2}', value='\u200B',
+    embed.add_field(name=f'ZP:\t+{points1 if winner == 1 else points2} {"Ghost Battle" if mode == "rank5" and winner == 2 else ""}', value='\u200B',
                     inline=False)
     embed.add_field(name='\u200B', value='\u200B')
     embed.add_field(name='💀 LOSER 💀',
@@ -89,13 +90,17 @@ async def send_last_embed(user: nextcord.Member, oppo: nextcord.Member, msg: Mes
         name=f"{t1['tier'] if winner == 2 else t2['tier']} {('🤡 Rank Down `⬇` 🤡' if loser_p > 0 else '⭐ Rank Up `⬆` ⭐') if (new_rank1 if winner == 2 else new_rank2) is not None else ''}",
         value=f"{t1['points'] if winner == 2 else t2['points']} {'' if mode == 'rank5' and winner == 1 else ('⬇' if loser_p > 0 else '⬆')}",
         inline=False)
-    embed.add_field(name=f'ZP:\t{"-" if loser_p > 0 else "+"}{abs(loser_p)} {"Ghost Battle" if mode == "rank5" else ""}', value='\u200B',
+    embed.add_field(name=f'ZP:\t{"-" if loser_p > 0 else "+"}{abs(loser_p)} {"Ghost Battle" if mode == "rank5" and winner == 1 else ""}', value='\u200B',
                     inline=False)
-    file = None
+    files = []
     if img_rf is not None:
         file = File(f"{msg.id}.png", filename="image.png")
         embed.set_image(url=f'attachment://image.png')
-    await msg.reply(embed=embed, file=file)
+        files.append(file)
+    if hidden:
+        await msg.send(embed=embed, files=files, ephemeral=True, view=view)
+    else:
+        await msg.reply(embed=embed, files=files)
     if img_rf is not None:
         file.close()
         for i in range(3):

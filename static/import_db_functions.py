@@ -5,9 +5,12 @@ import csv
 import requests
 from pymongo import ReturnDocument
 
+import config
 
-client = pymongo.MongoClient('mongodb://localhost:27017/')
+client = pymongo.MongoClient(config.MONGO_URL)
+# client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
 db = client['Zerpmon']
+
 
 
 # users_c = db['users']
@@ -56,7 +59,7 @@ def import_boxes():
 
 
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List_270923.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_091123.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -75,7 +78,7 @@ def import_moves():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_091123_For_Glad.csv', 'r') as csvfile:
         collection = db['MoveSets']
         # c2 = db['MoveSets2']
         # c2.drop()
@@ -253,13 +256,13 @@ def update_all_zerp_moves():
             if percent_change == 9.99:
                 percent_change = 10
             percent_change = percent_change if percent_change < miss_percent else miss_percent
-            count = len([i for i in document['moves'] if i['name'] != ""]) - 1
+            count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
             print(document)
             for i, move in enumerate(document['moves']):
                 if move['color'] == 'miss':
                     move['percent'] = str(round(float(move['percent']) - percent_change, 2))
                     document['moves'][i] = move
-                elif move['name'] != "" and float(move['percent']) > 0:
+                elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
                     move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
                     document['moves'][i] = move
             save_new_zerpmon(document)
@@ -376,14 +379,14 @@ def import_equipments():
             })
 
 
-import_boxes()
+# import_boxes()
 import_moves()
 import_movesets()
-import_level()
+# import_level()
 import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
 cache_data()
-import_equipments()
+# import_equipments()
 
 # reset_all_gyms()

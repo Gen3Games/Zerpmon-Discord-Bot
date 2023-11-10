@@ -24,7 +24,7 @@ Address = config.STORE_ADDR
 Reward_address = config.REWARDS_ADDR
 
 hashes = []
-tokens_sent = []
+tokens_sent = db_query.get_all_tokens_sent()
 
 active_zrp_addr = config.B1_ADDR
 active_zrp_seed = config.B1_SEED
@@ -34,12 +34,29 @@ zrp_reward_seq = None
 safari_seq = None
 ws_client = AsyncWebsocketClient(URL)
 
+xp_chances = {10: 68, 20: 19, 30: 9, 40: 3, 50: 1}
+
 
 async def get_ws_client():
     global ws_client
     if not ws_client.is_open():
         await ws_client.open()
     return ws_client
+
+
+async def get_nft_metadata_safe(uri, token_id):
+    try:
+        data = xrpl_functions.get_nft_metadata(uri)
+        img = ('https://ipfs.io/ipfs/' + data['image'].replace("ipfs://",
+                                                               "")) if 'image' in data else ''
+        data['image'] = img
+    except:
+        url, name = await get_nft_data_wager(token_id)
+        data = {
+            'name': name,
+            'image': url
+        }
+    return data
 
 
 async def get_seq(from_, amount=None):
@@ -195,8 +212,9 @@ async def listener(client, store_address, wager_address):
                 if 'TransactionType' in message and message['TransactionType'] == "Payment" and \
                         'Destination' in message and (
                         message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR,
-                                                   config.ISSUER['ZRP'], config.LOAN_ADDR] or message['Destination'] in [i['to'] for i in
-                                                                                                       config.track_zrp_txn.values()]):
+                                                   config.ISSUER['ZRP'], config.LOAN_ADDR] or message[
+                            'Destination'] in [i['to'] for i in
+                                               config.track_zrp_txn.values()]):
 
                     if len(hashes) > 1000:
                         hashes = hashes[900:]
@@ -288,21 +306,26 @@ async def listener(client, store_address, wager_address):
                                 if message['Amount'] == '0':
                                     nodes = msg['meta']['AffectedNodes']
                                     node = [i for i in nodes if
-                                            'CreatedNode' in i and i['CreatedNode']['LedgerEntryType'] == 'NFTokenOffer']
+                                            'CreatedNode' in i and i['CreatedNode'][
+                                                'LedgerEntryType'] == 'NFTokenOffer']
                                     offer = node[0]['CreatedNode']['LedgerIndex']
                                     logging.error(f'OFFER: {offer}')
                                     if message['Destination'] == wager_address:
                                         # Accept SEll offer here
-                                        await accept_nft("wager", offer, sender=message['Account'], token=message['NFTokenID'])
+                                        await accept_nft("wager", offer, sender=message['Account'],
+                                                         token=message['NFTokenID'])
                                     else:
-                                        config.loan_listings[message['Account']] = {'offer': offer, 'tokenId': message['NFTokenID']}
+                                        config.loan_listings[message['Account']] = {'offer': offer,
+                                                                                    'tokenId': message['NFTokenID']}
 
                             except Exception as e:
                                 logging.error(f"Error detecting NFT txn {e} \nDATA: {message}")
                     else:
-                        if message.get('Flags', 0) == 1 and message['Account'] in config.loaners and message['NFTokenID'] in config.loaners[message['Account']]:
+                        if message.get('Flags', 0) == 1 and message['Account'] in config.loaners and message[
+                            'NFTokenID'] in config.loaners[message['Account']]:
                             db_query.remove_listed_loan(message['NFTokenID'], message['Account'], is_id=True)
-                            config.loaners[message['Account']] = [i for i in config.loaners[message['Account']] if i != message['NFTokenID']]
+                            config.loaners[message['Account']] = [i for i in config.loaners[message['Account']] if
+                                                                  i != message['NFTokenID']]
 
                 elif 'TransactionType' in message and message['TransactionType'] == "NFTokenAcceptOffer" and \
                         'Account' in message and message['Account'] in config.eq_ongoing_purchasers:
@@ -335,7 +358,7 @@ async def listener(client, store_address, wager_address):
 async def main():
     while True:
         try:
-            async with AsyncWebsocketClient('wss://xrpl.ws/') as client:
+            async with AsyncWebsocketClient(config.NODE_URL) as client:
                 # set up the `listener` function as a Task
                 asyncio.create_task(listener(client, Address, config.WAGER_ADDR))
 
@@ -388,17 +411,26 @@ async def get_balance(address):
     return bal
 
 
-async def reward_user(user_id, zerpmon_name, double_xp=False):
+async def reward_user(user_id, zerpmon_name, double_xp=False, lvl=1, xp_mode=None):
     reward = random.choices(list(config.MISSION_REWARD_CHANCES.keys()), list(config.MISSION_REWARD_CHANCES.values()))[0]
     user_address = db_query.get_owned(user_id)['address']
-    db_query.add_xp(zerpmon_name, user_address, double_xp=double_xp)
+    xp_gain = 10
+    responses = []
+    if (lvl > 10 and xp_mode is None) or xp_mode:
+        xp_gain = random.choices(list(xp_chances.keys()), list(xp_chances.values()))[0]
+    if double_xp:
+        xp_gain = 2 * xp_gain
+    success, lvl_up, got_potion = db_query.add_xp(zerpmon_name, user_address, xp_gain, double_xp=double_xp)
+    responses.append([success, lvl_up, got_potion, xp_gain])
     if len(user_address) < 5:
         return
-    bal = await get_balance(Reward_address)
-    amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
-    print(bal, amount_to_send)
-    # add xrp and xp
-    res1 = (await send_txn(user_address, amount_to_send, 'reward')), "XRP", amount_to_send, 0
+    if (lvl < 10 and xp_mode is None) or xp_mode == False:
+        bal = await get_balance(Reward_address)
+        amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
+        print(bal, amount_to_send)
+        # add xrp and xp
+        res1 = (await send_txn(user_address, amount_to_send, 'reward')), "XRP", amount_to_send, 0
+        responses.append(res1)
     # return None, "XRP", amount_to_send, 0
     res2 = "", None, 0, 0
     if reward == "revive_potion":
@@ -406,10 +438,16 @@ async def reward_user(user_id, zerpmon_name, double_xp=False):
     elif reward == "mission_refill":
         res2 = db_query.add_mission_potion(user_address, 1), "Mission Potion", 1, 0
     elif reward == "zerpmon":
-        res, token_id = await send_random_zerpmon(user_address)
-        res2 = res, 'NFT', 1, token_id
-
-    return [res1, res2]
+        if (lvl > 10 and xp_mode is None) or xp_mode:
+            try:
+                res, token_id, empty = await send_random_zerpmon(user_address)
+                if empty:
+                    config.MISSION_REWARD_CHANCES['zerpmon'] = 0
+                res2 = res, 'NFT', 1, token_id
+            except Exception as e:
+                logging.error(f'Unable to send Zerpmon {traceback.format_exc()}')
+    responses.append(res2)
+    return responses
 
 
 async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=config.ISSUER["Zerpmon"]):
@@ -420,31 +458,33 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
             status, stored_nfts = await xrpl_functions.get_nfts(Reward_address)
     else:
         status, stored_nfts = await xrpl_functions.get_nfts(config.SAFARI_ADDR)
-    stored_zerpmons = [nft for nft in stored_nfts if nft["Issuer"] == issuer]
+    wallet_empty = False
+    stored_zerpmons = [nft for nft in stored_nfts if nft["Issuer"] == issuer and nft['NFTokenID'] not in tokens_sent]
+    logging.error(f'Found Zerpmons {issuer} {len(stored_zerpmons)}')
+    if len(stored_zerpmons) == 0:
+        return
+    if len(stored_zerpmons) <= 1:
+        wallet_empty = True
     if status:
         new_token = True
         while new_token:
             random_zerpmon = random.choice(stored_zerpmons)
             token_id = random_zerpmon['NFTokenID']
             if token_id in tokens_sent:
-                continue
+                return
             res = await send_nft('safari' if safari else ('gift' if gift_box else 'reward'), to_address, token_id)
             tokens_sent.append(token_id)
+            db_query.save_token_sent(token_id, to_address)
             if issuer == config.ISSUER['Zerpmon']:
-                nft_data = xrpl_functions.get_nft_metadata(random_zerpmon['URI'])
-                img = ('https://ipfs.io/ipfs/' + nft_data['image'].replace("ipfs://",
-                                                                           "")) if 'image' in nft_data else ''
+                nft_data = await get_nft_metadata_safe(random_zerpmon['URI'], token_id)
+
             else:
-                url, name = await get_nft_data_wager(token_id)
-                nft_data = {
-                    'name': name,
-                    'image': url
-                }
-                img = url
+                nft_data = await get_nft_metadata_safe(random_zerpmon['URI'], token_id)
+            img = nft_data['image']
             if not gift_box:
-                return res, [(nft_data['name'] if 'name' in nft_data else token_id), img]
+                return res, [(nft_data['name'] if 'name' in nft_data else token_id), img], wallet_empty
             else:
-                return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id]
+                return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id], wallet_empty
 
 
 async def send_nft(from_, to_address, token_id):
@@ -727,20 +767,28 @@ def check_eq_in_wallet(name, count):
 
 
 async def send_equipment(user_id, to_address, eq_name, safari=False, random_eq=False, price=0):
+    logging.error(f'Sending eq {user_id, to_address, eq_name, safari, random_eq}')
     if not safari:
         status, stored_nfts = await xrpl_functions.get_nfts(config.STORE_ADDR)
     else:
         status, stored_nfts = await xrpl_functions.get_nfts(config.SAFARI_ADDR)
-    stored_eqs = [nft for nft in stored_nfts if nft["Issuer"] == config.ISSUER["Equipment"]]
+    stored_eqs = [nft for nft in stored_nfts if
+                  ((nft["Issuer"] == config.ISSUER["Equipment"] or nft["Issuer"] == config.ISSUER["Xblade"] or nft[
+                      "Issuer"] == config.ISSUER["Legend"]))
+                  and nft['NFTokenID'] not in tokens_sent]
+    logging.error(f'Found {len(stored_eqs)}')
+    wallet_empty = False
+    if len(stored_eqs) <= 1:
+        wallet_empty = True
     if status:
         token_id, nft_data = '', {}
         if random_eq:
             random_eq = random.choice(stored_eqs)
-            nft_data = xrpl_functions.get_nft_metadata(random_eq['URI'])
+            nft_data = await get_nft_metadata_safe(random_eq['URI'], random_eq['NFTokenID'])
             token_id = random_eq['NFTokenID']
         else:
             for nft in stored_eqs:
-                nft_data = xrpl_functions.get_nft_metadata(nft['URI'])
+                nft_data = await get_nft_metadata_safe(nft['URI'], nft['NFTokenID'])
                 print(nft_data['name'], eq_name)
                 if nft_data['name'] == eq_name:
                     if nft['NFTokenID'] not in tokens_sent:
@@ -753,10 +801,11 @@ async def send_equipment(user_id, to_address, eq_name, safari=False, random_eq=F
         else:
             print('Sending Eq...')
             tokens_sent.append(token_id)
-            img = ('https://ipfs.io/ipfs/' + nft_data['image'].replace("ipfs://", "")) if 'image' in nft_data else ''
+            db_query.save_token_sent(token_id, to_address)
+            img = nft_data['image']
             if random_eq:
                 res = await send_nft('safari' if safari else 'store', to_address, token_id)
-                return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id]
+                return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id], wallet_empty
             else:
                 res, offer = await send_nft_with_amt('store', to_address, token_id, str(price))
                 return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id, offer]
@@ -863,7 +912,8 @@ async def cancel_offer(from_, offer):
 
 async def get_latest_nft_offers(address):
     try:
-        client = AsyncJsonRpcClient('https://xrpl.ws/')
+        client = AsyncWebsocketClient(config.NODE_URL)
+        await client.open()
         all_txns = []
 
         acct_info = AccountTx(
@@ -876,7 +926,7 @@ async def get_latest_nft_offers(address):
         response = await client.request(acct_info)
         result = response.result
         # all_txns.extend(result['transactions'])
-        while True:
+        for i in range(20):
 
             # print(result)
             if 'transactions' not in result:
@@ -922,16 +972,22 @@ async def get_latest_nft_offers(address):
         print(len(sold_nfts), sold_nfts)
         for tokenId, offerId, sender in open_offers:
             if tokenId not in sold_nfts:
-                await accept_nft('gift', offer=offerId,
+                await accept_nft('reward', offer=offerId,
                                  sender=sender,
                                  token=tokenId)
+        await client.close()
         return
     except Exception as e:
         print(e)
         return 0
 
+# status, nfts = asyncio.run(xrpl_functions.get_nfts(config.GIFT_ADDR))
+# for nft in nfts:
+#     res= asyncio.run(send_nft('gift', to_address=config.SAFARI_ADDR, token_id=nft['NFTokenID']))
+#     if not res:
+#         break
 
-
+# print(f'Tokens sent {tokens_sent}')
 # asyncio.run(cancel_offer('gift', '3816CA33654AD9927F4832259D0254C3BCABC98C512CFA99C9CD208F816E1A50'))
 # asyncio.run(cancel_offer('gift', '3584875BF6F66FD9611ED2A7B497A85FCF2DDA2D5C00BB450F8B98B9719649AC'))
 # asyncio.run(cancel_offer('gift', 'A323AE67B27F1DF5F7487610EA931070E1A09E90A821C3B325A2200AAEED746E'))
@@ -939,16 +995,16 @@ async def get_latest_nft_offers(address):
 #     send_nft_with_amt('store', config.JACKPOT_ADDR, '000800009DFF301D909E72368E61B385BDE81008B1875053C81A10F200000057',
 #                       '50', ))
 # asyncio.run(cancel_offer('store', offer))
-# asyncio.run(get_latest_nft_offers(config.GIFT_ADDR))
+# asyncio.run(get_latest_nft_offers(config.REWARDS_ADDR))
 # asyncio.run(accept_nft('reward', offer='22FC29F159F14A9672D5E231EFEB6DB9E0FE5483A7CCE1E1C122BEC2FF79E1FD', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
 #                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E549986260000018B'))
 # asyncio.run(send_nft('auction', to_address='r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7ED29FD31400000079'))
-# asyncio.run(send_nft('gift', to_address='rsy1xWmAvhCoTjF36KdrjX1FW3xKMDy3j9', token_id='0008271071766A13D8D06D2E6CBD6F621FF27D5E57F0B8A2EB33520100000266'))
+# asyncio.run(send_nft('safari', to_address='r4zLg6wZyXfn1hs92pYxiD4xWaPZADrgMr', token_id='000800009DFF301D909E72368E61B385BDE81008B1875053B76D5E4D000002B2'))
 # asyncio.run(send_nft('reward', to_address='rGNAoM3punrrP5rPc94EqYvzD67Sedopuo', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E6A1075E50000024A'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
-# asyncio.run(xrpl_functions.get_offers(config.ISSUER['Zerpmon']))
+# asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
-# asyncio.run(send_txn('rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', 2, 'loan'))
+# asyncio.run(send_txn('rHKStNq3QQHHRUp3CG6z1riufHWA5VLfY8', 150, 'store'))
 # asyncio.run(send_zrp('r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', 5, 'loan'))
 
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))

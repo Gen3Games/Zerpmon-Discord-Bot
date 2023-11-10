@@ -435,9 +435,9 @@
 #435,Starlight Burst,Cosmic,80,White,,#435
 #436,Necro Blast,Undead,80,White,,#436
 #437,Dead Calm,Normal,*****,Purple,Decrease Own Red by 25%,#437
-#438,Direct Explosion,Normal,*****,Purple,Knock Out Opposing Zerpmon,#438
-#439,Neck Snap,Normal,*****,Purple,Knock Out Opposing Zerpmon,#439
-#440,Pressure Point,Normal,*****,Purple,Knock Out Opposing Zerpmon,#440
+#438,Direct Explosion,Normal,*****,Purple,Knocks Out Opposing Zerpmon,#438
+#439,Neck Snap,Normal,*****,Purple,Knocks Out Opposing Zerpmon,#439
+#440,Pressure Point,Normal,*****,Purple,Knocks Out Opposing Zerpmon,#440
 #441,Disarm,Normal,*****,Purple,Makes Enemy Attack 0 Damage next 2 rounds,#441
 #442,Blind,Normal,*****,Purple,Makes Enemy Attack 0 Damage next 2 rounds,#442
 #443,Leaf Wrap,Grass,*****,Purple,Makes Enemy Attack 0 Damage next 2 rounds,#443
@@ -458,8 +458,8 @@
 #458,Sub Zero,Ice,*****,Purple,Increase Opposing Zerpmons Red by 25%,#458
 #459,Lazer Focus,Fighting,*****,Purple,Decrease Own Red by 25%,#459
 #460,Toxic Wasteland,Poison,*****,Purple,Increase Own Lowest percentage Gold Attack by 25%,#460
-#461,Tectonic Divide,Ground,*****,Purple,Knock Out Opposing Zerpmon,#461
-#462,Strong Winds,Flying,*****,Purple,Knock Out Opposing Zerpmon,#462
+#461,Tectonic Divide,Ground,*****,Purple,Knocks Out Opposing Zerpmon,#461
+#462,Strong Winds,Flying,*****,Purple,Knocks Out Opposing Zerpmon,#462
 #463,Alternate Dimension,Psychic,****,Purple,Increase Own Next Attack Damage by 100%,#463
 #464,Rapid Evolution,Bug,****,Purple,Increase Own Next Attack Damage by 100%,#464
 #465,Impenetrable Armour,Rock,****,Purple,Decrease Opposing Next Attack Damage by 100%,#465
@@ -520,4 +520,24 @@
 #520,Polymorph,Psychic,*****,Purple,Makes Enemy Attack 0 Damage next 2 rounds,#520
 #521,Heavy Cleave,Steel,100,White,,#521
 #522,Lava Plume,Fire,85,Gold,,#522
+#523,Tectonic Suplex,Normal,200,White,,#523
+#524,Inferno Core Blast,Fire,200,White,,#524
+#525,Abyssal Trench,Water,200,White,,#525
+#526,Twisted Forest,Grass,200,White,,#526
+#527,Obliterating Volt,Electric,200,White,,#527
+#528,Liquid Nitrogen Blast,Ice,200,White,,#528
+#529,Serious Punch,Fighting,200,White,,#529
+#530,Max Necrosis,Poison,200,White,,#530
+#531,Depths of Earth,Ground,200,White,,#531
+#532,Tornado Rip,Flying,200,White,,#532
+#533,Brain Explode,Psychic,200,White,,#533
+#534,Hive Mind Swarm,Bug,200,White,,#534
+#535,Marble Minigun,Rock,200,White,,#535
+#536,Sleep Paralysis,Ghost,200,White,,#536
+#537,Primal Fire,Dragon,200,White,,#537
+#538,The Void,Dark,200,White,,#538
+#539,Infinity Slash,Steel,200,White,,#539
+#540,Cannon of Light,Fairy,200,White,,#540
+#541,Nebula Giga Implosion,Cosmic,200,White,,#541
+#542,Torturous Death,Undead,200,White,,#542
 Move ID,Move Name,Type,Damage,Colour,Notes,Move ID

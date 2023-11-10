@@ -28,7 +28,7 @@ async def update_nft_holdings(client: nextcord.Client):
         for old_user in all_users:
             user_obj = old_user
             try:
-                if 'address' not in user_obj or len(user_obj['address']) < 5 or user_obj['address'] == 'rGBBUxfNNrnM58tBtXUc3TqqV3Yus5PKQH':
+                if 'address' not in user_obj or len(user_obj['address']) < 5 or user_obj['address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':
                     continue
                 good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
                 if not good_status:
@@ -99,7 +99,10 @@ async def update_nft_holdings(client: nextcord.Client):
                         await asyncio.sleep(2)
                 for serial in list(old_user['zerpmons'].keys()):
                     if serial not in serials:
-                        if not old_user['zerpmons'][serial].get('loaned', False):
+                        loaned = old_user['zerpmons'][serial].get('loaned', False)
+                        if loaned:
+                            serials.append(serial)
+                        else:
                             db_query.remove_user_nft(user_obj['discord_id'], serial, False)
                 for serial in list(old_user['trainer_cards'].keys()):
                     if serial not in t_serial:

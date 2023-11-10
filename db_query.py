@@ -91,9 +91,14 @@ def remove_user_nft(discord_id, serial, trainer=False, equipment=False):
     users_collection = db['users']
     # Upsert user
     # print(user)
-
+    user_obj = get_owned(str(discord_id))
     update_query = {"$unset": {f"equipments.{serial}": ""}} if equipment else (
         {"$unset": {f"zerpmons.{serial}": ""}} if not trainer else {"$unset": {f"trainer_cards.{serial}": ""}})
+    if not trainer and not equipment:
+        for deck in ['recent_deck', 'recent_deck1', 'recent_deck5']:
+            if serial in list(user_obj.get(deck, {}).values()):
+                update_query["$unset"][deck] = ""
+
     result = users_collection.update_one(
         {'discord_id': discord_id},
         update_query
@@ -309,13 +314,15 @@ def update_user_wr(user_id, win):
         return False
 
 
-def update_pvp_user_wr(user_id, win, recent_deck=None):
+def update_pvp_user_wr(user_id, win, recent_deck=None, b_type=None):
     users_collection = db['users']
 
     r = None
     query = {'$inc': {'pvp_win': win, 'pvp_loss': abs(1 - win)}}
     if recent_deck is not None:
-        query['$set'] = {'recent_deck': recent_deck}
+        z1_deck, eq1_deck = recent_deck.get('z'), recent_deck.get('e')
+        recent_key = 'recent_deck' + (f'{b_type}' if b_type != 3 else '')
+        query['$set'] = {recent_key: z1_deck, recent_key + '_eq': eq1_deck}
     r = users_collection.update_one({'discord_id': str(user_id)},
                                     query,
                                     upsert=True)
@@ -324,6 +331,13 @@ def update_pvp_user_wr(user_id, win, recent_deck=None):
         return True
     else:
         return False
+
+
+def save_mission_mode(user_id, mode):
+    users_collection = db['users']
+    user_id = str(user_id)
+    r = users_collection.update_one({'discord_id': user_id}, {'$set': {'xp_mode': mode}})
+    return r.acknowledged
 
 
 def get_top_players(user_id):
@@ -760,23 +774,43 @@ def add_xrp(user_id, amount):
     # print(r)
 
 
-def add_xp(zerpmon_name, user_address, double_xp=False):
+def add_candy_fragment(addr, qty=1):
+    users_collection = db['users']
+    users_collection.update_one({'address': addr}, {'$inc': {'candy_frag': qty}})
+
+
+def combine_candy_frag(addr, combine_to_key):
+    users_collection = db['users']
+    res = users_collection.update_one({'address': addr}, {'$inc': {'candy_frag': -7, combine_to_key: 1}})
+    return res.acknowledged
+
+
+def add_xp(zerpmon_name, user_address, xp_add, double_xp=False):
     zerpmon_collection = db['MoveSets']
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
-    xp_add = 10
-    if double_xp:
-        xp_add = 20
+    lvl_up, reward_is_potion = False, False
     if old:
         level = old.get('level', 0)
         xp = old.get('xp', 0)
         next_lvl = level_collection.find_one({'level': level + 1}) if level < 30 else None
 
-        if next_lvl and xp + xp_add >= next_lvl['xp_required']:
-            zerpmon_collection.update_one({'name': zerpmon_name}, {
-                '$set': {'level': next_lvl['level'], 'xp': (xp + xp_add) - next_lvl['xp_required']}})
-            add_revive_potion(user_address, next_lvl['revive_potion_reward'])
-            add_mission_potion(user_address, next_lvl['mission_potion_reward'])
+        if next_lvl and xp + xp_add >= next_lvl['xp_required'] and level != 30:
+            doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {
+                '$set': {'level': next_lvl['level'], 'xp': (xp + xp_add) - next_lvl['xp_required']}},
+                                                         return_document=ReturnDocument.AFTER)
+            r_potion = next_lvl['revive_potion_reward']
+            m_potion = next_lvl['mission_potion_reward']
+            lvl_up = True
+            if r_potion + m_potion == 0:
+                add_candy_fragment(user_address)
+            else:
+                add_revive_potion(user_address, r_potion)
+                add_mission_potion(user_address, m_potion)
+                reward_is_potion = r_potion, m_potion
+            if (level + 1) >= 10 and (level + 1) % 10 == 0:
+                update_moves(doc)
+
         else:
             maxed = old.get('maxed_out', 0)
             if level != 30:
@@ -786,10 +820,10 @@ def add_xp(zerpmon_name, user_address, double_xp=False):
     else:
         # Zerpmon not found, handle the case accordingly
         # For example, you can raise an exception or return False
-        return False
+        return False, False, False
 
     # Rest of the code for successful operation
-    return True
+    return True, lvl_up, reward_is_potion
 
 
 def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=False) -> tuple:
@@ -797,10 +831,10 @@ def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=Fals
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
     level = old['level'] + 1 if 'level' in old else 1
-    maxed = old.get('maxed_out', 0)
-    if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (
-            old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
-        update_moves(old)
+    # maxed = old.get('maxed_out', 0)
+    # if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (
+    #         old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
+    #     update_moves(old)
     if level > 30:
         level = 30
     last_lvl = level_collection.find_one({'level': (level - 1) if level > 1 else 1})
@@ -833,7 +867,7 @@ def update_rank(user_id, win, decay=False, field='rank'):
             'tier': 'Unranked',
             'points': 0,
         }
-    user_rank_d = config.RANKS[rank['tier']]
+    user_rank_d = config.RANKS[rank['tier']].copy()
     if decay:
         decay_tiers = config.TIERS[-2:]
         rank['points'] -= 50 if rank['tier'] == decay_tiers[0] else 100
@@ -853,6 +887,9 @@ def update_rank(user_id, win, decay=False, field='rank'):
         rank['tier'] = next_rank
     if not decay:
         rank['last_battle_t'] = time.time()
+    if rank['points'] > 8000:
+        user_rank_d['win'] -= rank['points'] % 8000
+        rank['points'] = 8000
     users_collection.update_one({'discord_id': str(user_id)},
                                 {'$set': {field: rank}}
                                 )
@@ -909,6 +946,8 @@ def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
             'gp': 0
         }
     else:
+        if 'won' not in gym_obj:
+            gym_obj['won'] = {}
         l_streak = 1 if gym_type not in gym_obj['won'] else (gym_obj['won'][gym_type]['lose_streak'] + 1)
         reset_limit = 4
         if skipped:
@@ -941,6 +980,10 @@ def add_gp(discord_id, gym_obj, gym_type, stage):
             'gp': 1
         }
     else:
+        if 'won' not in gym_obj:
+            gym_obj['won'] = {}
+        if 'gp' not in gym_obj:
+            gym_obj['gp'] = 0
         if stage + 1 == 10:
             log_user_gym(discord_id, gym_type)
         gym_obj['won'][gym_type] = {
@@ -1025,9 +1068,12 @@ def add_bg(user_id, gym_type, type_):
         users_collection = db['users']
         user_id = str(user_id)
         bg_value = f'./static/gym/{gym_type}.png'
+        user_obj = users_collection.find_one({'discord_id': user_id}, {'bg': 1})
+        user_obj['bg'].remove(bg_value)
+
         users_collection.update_one(
             {'discord_id': user_id},
-            {'$pull': {'bg': bg_value}}  # Remove the specific 'bg_value' from the 'bg' array
+            {'$set': {'bg': user_obj['bg']}}
         )
     else:
         update_user_bg(user_id, gym_type)
@@ -1106,8 +1152,13 @@ def increase_lvl(user_id, zerpmon_name):
                                                              return_document=ReturnDocument.AFTER)
             if next_lvl['level'] >= 10 and next_lvl['level'] % 10 == 0:
                 update_moves(new_doc)
-            add_revive_potion(user_address, next_lvl['revive_potion_reward'])
-            add_mission_potion(user_address, next_lvl['mission_potion_reward'])
+            r_potion = next_lvl['revive_potion_reward']
+            m_potion = next_lvl['mission_potion_reward']
+            if r_potion + m_potion == 0:
+                add_candy_fragment(user_address)
+            else:
+                add_revive_potion(user_address, r_potion)
+                add_mission_potion(user_address, m_potion)
 
             add_lvl_candy(user_address, -1)
             return True
@@ -1166,43 +1217,47 @@ def add_lvl_candy(address, inc_by, purchased=False, amount=0):
     return True
 
 
-def apply_white_candy(user_id, zerp_name):
+def apply_white_candy(user_id, zerp_name, amt=1):
     z_collection = db['MoveSets']
     users_collection = db['users']
     user = users_collection.find_one({'discord_id': str(user_id)})
     zerp = z_collection.find_one({'name': zerp_name})
-    if zerp.get('white_candy', 0) >= 5:
+    cnt = zerp.get('white_candy', 0)
+    if cnt >= 5 or int(user.get('white_candy', 0)) < amt:
         return False
+    amt = min(amt, 5 - cnt)
 
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'white':
-            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * 0.02), 1)
+            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * (0.02*amt)), 1)
     del zerp['_id']
-    white_candy_usage = zerp.get('white_candy', 0)
-    zerp['white_candy'] = white_candy_usage + 1
+    white_candy_usage = cnt
+    zerp['white_candy'] = white_candy_usage + amt
     save_new_zerpmon(zerp)
-    add_white_candy(user['address'], -1)
+    add_white_candy(user['address'], -amt)
     return True
 
 
-def apply_gold_candy(user_id, zerp_name):
+def apply_gold_candy(user_id, zerp_name, amt=1):
     z_collection = db['MoveSets']
     users_collection = db['users']
     user = users_collection.find_one({'discord_id': str(user_id)})
     zerp = z_collection.find_one({'name': zerp_name})
-    if zerp.get('gold_candy', 0) >= 5:
+    cnt = zerp.get('gold_candy', 0)
+    if cnt >= 5 or int(user.get('gold_candy', 0)) < amt:
         return False
+    amt = min(amt, 5 - cnt)
 
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'gold':
-            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * 0.02, 1)
+            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * (0.02*amt), 1)
     del zerp['_id']
-    gold_candy_usage = zerp.get('gold_candy', 0)
-    zerp['gold_candy'] = gold_candy_usage + 1
+    gold_candy_usage = cnt
+    zerp['gold_candy'] = gold_candy_usage + amt
     save_new_zerpmon(zerp)
-    add_gold_candy(user['address'], -1)
+    add_gold_candy(user['address'], -amt)
     return True
 
 
@@ -1211,13 +1266,13 @@ def update_moves(document, save_z=True):
         miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
         dec_percent = 3.34 if document['level'] >= 30 else 3.33
         percent_change = dec_percent if dec_percent < miss_percent else miss_percent
-        count = len([i for i in document['moves'] if i['name'] != ""]) - 1
+        count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
         print(document)
         for i, move in enumerate(document['moves']):
             if move['color'] == 'miss':
                 move['percent'] = str(round(float(move['percent']) - percent_change, 2))
                 document['moves'][i] = move
-            elif move['name'] != "" and float(move['percent']) > 0:
+            elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
                 move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
                 document['moves'][i] = move
         if save_z:
@@ -1248,6 +1303,14 @@ def update_moves(document, save_z=True):
 # update_all_zerp_moves()
 # print(get_rand_zerpmon(level=1))
 # print(len(get_ranked_players(0)))
+
+
+def get_trainer_buff_dmg(zerp_name):
+    original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
+    extra_dmg_arr = []
+    for i, move in enumerate(original_zerp['moves']):
+        extra_dmg_arr.append(round(move.get('dmg', 0) * 0.1, 2))
+    return extra_dmg_arr
 
 
 def get_zrp_stats():
@@ -1567,3 +1630,18 @@ def dec_box(addr, zerpmon_box: bool, amt=1):
     else:
         query['$inc']['xscape_box'] = -amt
     col.update_one({'address': addr}, query)
+
+
+def save_token_sent(token_id, to):
+    col = db['rewarded_nfts']
+    col.update_one({'nft': token_id}, {'$set': {'nft': token_id, 'to': to}}, upsert=True)
+
+
+def remove_token_sent(token_id):
+    col = db['rewarded_nfts']
+    col.delete_one({'nft': token_id})
+
+
+def get_all_tokens_sent():
+    col = db['rewarded_nfts']
+    return [i['nft'] for i in col.find({})]

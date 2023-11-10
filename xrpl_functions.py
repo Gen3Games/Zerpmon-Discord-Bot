@@ -6,7 +6,7 @@ from statistics import mean
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models import IssuedCurrency, AccountLines, Transaction
 from xrpl.models.requests.account_nfts import AccountNFTs
-from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx, NFTSellOffers
+from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx, NFTSellOffers, request
 from xrpl.transaction import get_transaction_from_hash
 import config
 import json
@@ -85,65 +85,60 @@ async def get_offers(address):
         return False, []
 
 
-async def get_zrp_price():
+async def get_zrp_price_api(total_tokens=50):
     try:
-        if config.zrp_price is None:
-            async with AsyncWebsocketClient(config.NODE_URL) as client:
+        async with AsyncWebsocketClient(config.NODE_URL) as client:
+            marker = True
+            markerVal = None
+            drops = 0
+            while marker:
                 taker_pays = IssuedCurrency(
                     currency="ZRP",
                     issuer=config.ISSUER['ZRP']
                 )
                 req_json = {
+                    "method": 'book_offers',
                     "taker_gets": {
                         "currency": "XRP"
                     },
+                    "ledger_index": "validated",
                     "taker_pays": taker_pays,
-                    "limit": 20
+                    "limit": 400,
+
                 }
 
-                # acct_info = BookOffers.from_dict(req_json)
-                # response = await client.request(acct_info)
-                # result = response.result
+                response = await client.request(request.Request.from_dict(req_json))
+                result = response.result
+                marker = False
+                # if "marker" in result:
+                #     markerVal = result["marker"]
+                # else:
+                #     marker = False
 
-                req_json["taker_gets"], req_json["taker_pays"] = req_json["taker_pays"], req_json["taker_gets"]
-                acct_info = BookOffers.from_dict(req_json)
-                response2 = await client.request(acct_info)
-                result2 = response2.result
-                max_p, min_p = None, None
-                # if 'offers' in result:
-                #     print(result)
-                #     prices = []
-                #     for order in result['offers']:
-                #         xrp = float(order['TakerGets']) / 10 ** 6
-                #         zrp = float(order['TakerPays']['value'])
-                #         price = xrp / zrp
-                #         prices.append(price)
-                #     if len(prices) > 0:
-                #         max_p = max(prices)
-                #         print(max_p, prices)
-                if 'offers' in result2:
-                    print(result2)
-                    prices = []
-                    for order in result2['offers']:
-                        xrp = float(order['TakerPays']) / 10 ** 6
-                        zrp = float(order['TakerGets']['value'])
-                        price = xrp / zrp
-                        prices.append(price)
-                    if len(prices) > 0:
-                        min_p = min(prices)
-                        print(min_p, prices)
-                if max_p is not None and min_p is not None:
-                    last_zrp_p = mean([max_p, min_p])
-                config.zrp_price = max_p if min_p is None else (min_p if max_p is None else last_zrp_p)
-                return True, config.zrp_price
-        else:
-            return True, config.zrp_price
+                for g in result['offers']:
+
+                    if total_tokens == 0:
+                        break
+                    pay = float(g['TakerPays']['value'])
+                    get = float(g['TakerGets'])
+                    if total_tokens >= pay:
+
+                        drops += get
+                        total_tokens -= pay
+                    else:
+
+                        ratio = total_tokens / pay
+                        drops += ratio * get
+                        total_tokens = 0
+            config.zrp_price = round(drops / 10 ** 6, 2)/50
+            return config.zrp_price
     except Exception as e:
         print(traceback.format_exc())
-        return False, config.zrp_price
+        return config.zrp_price
 
 
-async def get_zrp_price_api():
+# print(asyncio.run(get_zrp_price()))
+async def get_zrp_price():
     # req = requests.post('https://api.xrpl.to/api/search', json={'search': 'zrp'})
     try:
         req = requests.get('https://s1.xrplmeta.org/token/ZRP:rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe')

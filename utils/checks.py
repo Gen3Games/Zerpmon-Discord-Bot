@@ -253,23 +253,24 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
                     f"**{owned_nfts['user']}** your default deck contains {len(def_deck) - 1} Zerpmon, "
                     f"need {battle_type} to do {battle_nickname} battles.")
                 return False
-        elif battle_nickname == 'Instant Ranked' and user_d['discord_id'] != str(user_id) and len(
-                user_d.get('recent_deck', user_d['battle_deck'].get('0', {}))) < battle_type + 1:
-            def_deck = user_d.get('recent_deck', user_d['battle_deck'].get('0', {}))
-            if 'trainer' not in def_deck:
-                await interaction.send(
-                    f"**{owned_nfts['user']}** haven't set their Trainer in default deck.")
-                return False
-            else:
-                await interaction.send(
-                    f"**{owned_nfts['user']}**'s default deck contains {len(def_deck) - 1} Zerpmon, "
-                    f"need {battle_type} to do {battle_nickname} battles.")
-                return False
+        elif battle_nickname == 'Instant Ranked' and user_d['discord_id'] != str(user_id):
+            def_deck = user_d.get('recent_deck' + (f'{battle_type}' if battle_type != 3 else ''), user_d['battle_deck'].get('0', {}))
+            if len(def_deck) < battle_type + 1:
+                if 'trainer' not in def_deck:
+                    await interaction.send(
+                        f"**{owned_nfts['user']}** haven't set their Trainer in default deck.")
+                    return False
+                else:
+                    await interaction.send(
+                        f"**{owned_nfts['user']}**'s default deck contains {len(def_deck) - 1} Zerpmon, "
+                        f"need {battle_type} to do {battle_nickname} battles.")
+                    return False
 
     if 'Ranked' in battle_nickname:
-        user_rank = user_owned_nfts['data']['rank']['tier'] if 'rank' in user_owned_nfts['data'] else 'Unranked'
+        r_key = 'rank' + ('' if battle_type == 3 else ('5' if battle_type == 5 else '1'))
+        user_rank = user_owned_nfts['data'][r_key]['tier'] if r_key in user_owned_nfts['data'] else 'Unranked'
         user_rank_tier = config.TIERS.index(user_rank)
-        opponent_rank = opponent_owned_nfts['data']['rank']['tier'] if 'rank' in opponent_owned_nfts[
+        opponent_rank = opponent_owned_nfts['data'][r_key]['tier'] if r_key in opponent_owned_nfts[
             'data'] else 'Unranked'
         oppo_rank_tier = config.TIERS.index(opponent_rank)
         # print(user_rank_tier, [oppo_rank_tier, oppo_rank_tier - 1, oppo_rank_tier + 1])
@@ -321,8 +322,9 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
         #     await interaction.send(
         #         f"Sorry please wait **{_hours}**h **{_minutes}**m for your next Gym Battle.", ephemeral=True)
         #     return False
-        exclude = [i for i in user_d['gym']['won'] if
-                   user_d['gym']['won'][i]['next_battle_t'] > time.time()]
+        won_gyms = user_d['gym'].get('won', {})
+        exclude = [i for i in won_gyms if
+                   won_gyms[i]['next_battle_t'] > time.time()]
         type_ = gym_type.lower().title()
         print(type_)
         if type_ in exclude or type_ not in config.GYMS:
