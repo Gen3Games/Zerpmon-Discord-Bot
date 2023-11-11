@@ -1281,7 +1281,8 @@ async def use_gym_refill(interaction: nextcord.Interaction):
 
 @use.subcommand(name="power_candy_white",
                 description="Use Power Candy (White) to ⬆ damage of White moves by 2% (1 Zerpmon)")
-async def use_power_candy_white(interaction: nextcord.Interaction, qty: int = SlashOption(name='quantity', min_value=1, max_value=5)):
+async def use_power_candy_white(interaction: nextcord.Interaction,
+                                qty: int = SlashOption(name='quantity', min_value=1, max_value=5)):
     execute_before_command(interaction)
     """
             Deal with Power Candy (White)
@@ -1291,7 +1292,8 @@ async def use_power_candy_white(interaction: nextcord.Interaction, qty: int = Sl
 
 @use.subcommand(name="power_candy_gold",
                 description="Use Power Candy (Gold) to ⬆ damage of Gold moves by 2% (1 Zerpmon)")
-async def use_power_candy_gold(interaction: nextcord.Interaction, qty: int = SlashOption(name='quantity', min_value=1, max_value=5)):
+async def use_power_candy_gold(interaction: nextcord.Interaction,
+                               qty: int = SlashOption(name='quantity', min_value=1, max_value=5)):
     execute_before_command(interaction)
     """
             Deal with Power Candy (Gold)
@@ -2774,10 +2776,12 @@ async def ranked_battle(interaction: nextcord.Interaction,
         config.battle_dict[msg.id] = {
             "type": 'ranked',
             "challenger": user_id,
-            "p1_deck": user_owned_nfts['data']['battle_deck']['0'],
+            "p1_deck": {'z': user_owned_nfts['data']['battle_deck']['0'],
+                        'e': user_owned_nfts['data']['equipment_decks']['battle_deck']['0']},
             "username1": user_mention,
             "challenged": opponent.id,
-            "p2_deck": opponent_owned_nfts['data']['battle_deck']['0'],
+            "p2_deck": {'z': opponent_owned_nfts['data']['battle_deck']['0'],
+                        'e': opponent_owned_nfts['data']['equipment_decks']['battle_deck']['0']},
             "username2": oppo_mention,
             "oppo_obj": opponent,
             "active": False,

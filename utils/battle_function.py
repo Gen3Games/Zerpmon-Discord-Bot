@@ -160,7 +160,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
                   (f"> Stars: {(len(move['stars']) + extra_star1) * '★'}\n" if 'stars' in move else "") + \
                   (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                  f"> Percentage: {round(float(move['percent']), 2)}%\n",
+                  f"> Percentage: {move['percent'] if p1[i] is None else round(p1[i], 2)}%\n",
             inline=True)
     main_embed.add_field(name="\u200B", value="\u200B", inline=False)
     main_embed.add_field(name=f"🆚", value="\u200B", inline=False)
@@ -187,7 +187,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
                   (f"> Stars: {(len(move['stars']) + extra_star2) * '★'}\n" if 'stars' in move else "") + \
                   (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                  f"> Percentage: {round(float(move['percent']), 2)}%\n",
+                  f"> Percentage: {move['percent'] if p2[i] is None else round(p2[i], 2)}%\n",
             inline=True)
 
     gen_image(message.id, url1, url2, path1, path2, path3, gym_bg=gym_bg)
@@ -329,16 +329,25 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
     #                                                       status_affect_solo=status_affects[1])
 
     print(p1, p2, p1_temp, p2_temp)
+
     if move1['color'] == 'purple':
         winner['move1']['stars'], status_affects[1] = update_purple_stars(len(move1['stars']), status_affects[1])
         for idx, eq1 in enumerate(eq1_list):
             if 'increase' in eq1 and 'star' in eq1:
                 winner['move1']['stars'] += eq1_vals[idx]
+        z2_blue_percent /= 2
     if move2['color'] == 'purple':
         winner['move2']['stars'], status_affects[0] = update_purple_stars(len(move2['stars']), status_affects[0])
         for idx, eq2 in enumerate(eq2_list):
             if 'increase' in eq2 and 'star' in eq2:
                 winner['move2']['stars'] += eq2_vals[idx]
+        z1_blue_percent /= 2
+
+    # Check if blue triggering before moving further
+    z1_blue_trigger = random.choices([True, False], [z1_blue_percent, 100 - z1_blue_percent])[0]
+
+    z2_blue_trigger = random.choices([True, False], [z2_blue_percent, 100 - z2_blue_percent])[0]
+
     decided = False
     if 'dmg' in move1:
         d1m = 1.0
@@ -351,27 +360,6 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             d1m = int(d1m) if float(d1m).is_integer() else d1m
         # print(d1m)
         d1m_t, status_affects[1] = update_next_dmg(status_affect_solo=status_affects[1])
-        if d1m * d1m_t > 0 and ((move1['color'] == 'white' and move2['color'] in ['blue', 'purple']) or (move1['color'] == 'gold' and move2['color'] == 'blue')):
-            for idx, eq1 in enumerate(eq1_list):
-                if 'pierce opponent' in eq1:
-                    trigger = random.choices([True, False], [eq1_vals[idx], 100 - eq1_vals[idx]])[0]
-                    if trigger:
-                        decided = True
-                        if random.randint(1, 2) == 1:
-                            winner[
-                                'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** has miraculously pierced through {z2['name']}'s {move2['name']}!"
-                            winner['winner'] = '1'
-                        else:
-                            winner[
-                                'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** has successfully nullified {z2['name']}'s {move2['name']}!"
-                            winner['winner'] = '1'
-                        winner['eq1_name'] = buff_eqs[0]
-                        winner['eq_name'] = buff_eqs[0]
-                        winner['z1_blue_void'] = True
-                    else:
-                        winner[
-                            'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** couldn't break through {z2['name']}'s **{move2['name']}**!"
-                        winner['eq1_name'] = buff_eqs[0]
         move1['dmg'] = round(d1m * int(move1['dmg']) * d1m_t)
         winner['move1']['dmg'] = round(move1['dmg'])
         winner['move1']['mul'] = "x½" if d1m == 0.5 else f'x{d1m}'
@@ -385,6 +373,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                     winner['eq2_name'] = buff_eqs[1]
                     winner['eq_name'] = buff_eqs[1]
                     winner['eq2_msg'] = f"✨**{buff_eqs[1]}**✨ ({z2['name']})"
+                    winner['z1_blue_void'] = True
                 move1['dmg'] = new_dmg
                 winner['move1']['dmg'] = new_dmg
         crit = get_crit_chance(eq1_list)
@@ -403,27 +392,6 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             d2m = int(d2m) if float(d2m).is_integer() else d2m
 
         d2m_t, status_affects[0] = update_next_dmg(status_affect_solo=status_affects[0])
-        if d2m * d2m_t > 0 and ((move2['color'] == 'white' and move1['color'] in ['blue', 'purple']) or (move2['color'] == 'gold' and move1['color'] == 'blue')):
-            for idx, eq2 in enumerate(eq2_list):
-                if 'pierce opponent' in eq2:
-                    trigger = random.choices([True, False], [eq2_vals[idx], 100 - eq2_vals[idx]])[0]
-                    if trigger:
-                        decided = True
-                        if random.randint(1, 2) == 1:
-                            winner[
-                                'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** has miraculously pierced through {z1['name']}'s {move1['name']}!"
-                            winner['winner'] = '2'
-                        else:
-                            winner[
-                                'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** has successfully nullified {z1['name']}'s {move1['name']}!"
-                            winner['winner'] = '2'
-                        winner['eq2_name'] = buff_eqs[1]
-                        winner['eq_name'] = buff_eqs[1]
-                        winner['z2_blue_void'] = True
-                    else:
-                        winner[
-                            'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** couldn't break through {z1['name']}'s **{move1['name']}**!"
-                        winner['eq2_name'] = buff_eqs[1]
         # print(d2m)
         move2['dmg'] = round(d2m * int(move2['dmg']) * d2m_t)
         winner['move2']['dmg'] = round(move2['dmg'])
@@ -438,6 +406,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                     winner['eq_name'] = buff_eqs[0]
                     winner['eq1_name'] = buff_eqs[1]
                     winner['eq1_msg'] = f"✨**{buff_eqs[0]}**✨ ({z1['name']})"
+                    winner['z2_blue_void'] = True # if move2['dmg'] > move1.get('dmg', 0) else False
                 move2['dmg'] = new_dmg
                 winner['move2']['dmg'] = new_dmg
         crit = get_crit_chance(eq2_list)
@@ -446,6 +415,52 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             winner['move2']['dmg'] = round(move2['dmg'])
             winner['move2']['mul'] += " 🎯"
 
+        if move2['dmg'] > move1.get('dmg', 0) and ((move2['color'] == 'white' and move1['color'] in ['blue', 'purple']) or (move2['color'] == 'gold' and z1_blue_trigger)):
+            for idx, eq2 in enumerate(eq2_list):
+                if 'pierce opponent' in eq2:
+                    trigger = random.choices([True, False], [eq2_vals[idx], 100 - eq2_vals[idx]])[0]
+                    m_name = move1['name'] if move2['color'] == 'white' else z1['moves'][6]['name']
+                    if trigger:
+                        decided = True
+                        if random.randint(1, 2) == 1:
+                            winner[
+                                'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** has miraculously pierced through {z1['name']}'s {m_name}!"
+                            winner['winner'] = '2'
+                        else:
+                            winner[
+                                'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** has successfully nullified {z1['name']}'s {m_name}!"
+                            winner['winner'] = '2'
+                        winner['eq2_name'] = buff_eqs[1]
+                        winner['eq_name'] = buff_eqs[1]
+                        winner['z2_blue_void'] = True
+                    else:
+                        winner[
+                            'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** couldn't break through {z1['name']}'s **{m_name}**!"
+                        winner['eq2_name'] = buff_eqs[1]
+
+    if 'dmg' in move1:
+        if move1['dmg'] > move2.get('dmg', 0) and ((move1['color'] == 'white' and move2['color'] == 'purple') or (move1['color'] == 'gold' and z2_blue_trigger)):
+            for idx, eq1 in enumerate(eq1_list):
+                if 'pierce opponent' in eq1:
+                    trigger = random.choices([True, False], [eq1_vals[idx], 100 - eq1_vals[idx]])[0]
+                    m_name = move2['name'] if move1['color'] == 'white' else z2['moves'][6]['name']
+                    if trigger:
+                        decided = True
+                        if random.randint(1, 2) == 1:
+                            winner[
+                                'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** has miraculously pierced through {z2['name']}'s {m_name}!"
+                            winner['winner'] = '1'
+                        else:
+                            winner[
+                                'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** has successfully nullified {z2['name']}'s {m_name}!"
+                            winner['winner'] = '1'
+                        winner['eq1_name'] = buff_eqs[0]
+                        winner['eq_name'] = buff_eqs[0]
+                        winner['z1_blue_void'] = True
+                    else:
+                        winner[
+                            'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** couldn't break through {z2['name']}'s **{m_name}**!"
+                        winner['eq1_name'] = buff_eqs[0]
     old_dmg1, old_dmg2 = winner['move1']['dmg'], winner['move2']['dmg']
     winner['move1']['dmg'], winner['move2']['dmg'], status_affects[0] = update_dmg(old_dmg1, old_dmg2,
                                                                                    status_affects[0])
@@ -461,6 +476,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
         winner['dmg_str2'] = f"({old_dmg2} x{n_dmg / old_dmg2:.1f})={n_dmg} {'❤️‍🩹' if n_dmg < old_dmg2 else '❤️‍🔥'} "
     # Check Color of both moves
     pre_percentages1, pre_percentages2 = percentages1.copy(), percentages2.copy()
+
     if not decided:
         match (move1['color'], move2['color']):
             case ("white", "white") | ("white", "gold") | ("gold", "white") | ("gold", "gold"):
@@ -612,21 +628,18 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 winner['eq1_name'] = buff_eqs[0]
                 winner['eq1_msg'] = f"Woah! **{z1['name']}** seemingly comes back to life with its **{buff_eqs[0]}**!"
     # Blue move set to trigger here
-    if winner['winner'] == "2" and not winner.get('z1_blue_void', False):
-        if not k_o_s_e:
-            z1_blue_percent /= 2
-        if z1_blue_percent > 0:
-            new_winner = random.choices(["", "2"], [z1_blue_percent, 100 - z1_blue_percent])[0]
-            winner['winner'] = new_winner
-            if winner['winner'] == "":
-                if 'status_effect' in winner:
-                    percentages2 = pre_percentages2
-                    del winner['status_effect']
-                if 'eq1_name' in winner:
-                    winner['eq1_msg'] = f"**{z1['name']}** uses 🟦 **{z1['moves'][6]['name']}**!\n" + winner.get('eq1_msg', '')
-                else:
-                    winner['eq1_name'] = ""
-                    winner['eq1_msg'] = f"**{z1['name']}** uses 🟦 **{z1['moves'][6]['name']}**!"
+    if winner['winner'] == "2" and (not winner.get('z1_blue_void', False) or 'pierce' in winner.get('eq2_msg', '')):
+        if z1_blue_trigger:
+            if 'pierce' not in winner.get('eq2_msg', ''):
+                winner['winner'] = ""
+            if 'status_effect' in winner:
+                percentages2 = pre_percentages2
+                del winner['status_effect']
+            if 'eq1_name' in winner:
+                winner['eq1_msg'] = f"**{z1['name']}** uses 🟦 **{z1['moves'][6]['name']}**!\n" + winner.get('eq1_msg', '')
+            else:
+                winner['eq1_name'] = ""
+                winner['eq1_msg'] = f"**{z1['name']}** uses 🟦 **{z1['moves'][6]['name']}**!"
 
     for idx, eq2 in enumerate(eq2_list):
         if k_o_s_e and winner['winner'] == "1" and 'chance to survive from being knocked out' in eq2:
@@ -635,21 +648,18 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             if winner['winner'] == "":
                 winner['eq2_name'] = buff_eqs[1]
                 winner['eq2_msg'] = f"Woah! **{z2['name']}** seemingly comes back to life with its **{buff_eqs[1]}**!"
-    if winner['winner'] == "1" and not winner.get('z2_blue_void', False):
-        if not k_o_s_e:
-            z2_blue_percent /= 2
-        if z2_blue_percent > 0:
-            new_winner = random.choices(["", "1"], [z2_blue_percent, 100 - z2_blue_percent])[0]
-            winner['winner'] = new_winner
-            if winner['winner'] == "":
-                if 'status_effect' in winner:
-                    percentages1 = pre_percentages1
-                    del winner['status_effect']
-                if 'eq1_name' in winner:
-                    winner['eq1_msg'] = f"**{z2['name']}** uses 🟦 **{z2['moves'][6]['name']}**!\n" + winner.get('eq1_msg', '')
-                else:
-                    winner['eq1_name'] = ""
-                    winner['eq1_msg'] = f"**{z2['name']}** uses 🟦 **{z2['moves'][6]['name']}**!"
+    if winner['winner'] == "1" and (not winner.get('z2_blue_void', False) or 'pierce' in winner.get('eq1_msg', '')):
+        if z2_blue_trigger:
+            if 'pierce' not in winner.get('eq1_msg', ''):
+                winner['winner'] = ""
+            if 'status_effect' in winner:
+                percentages1 = pre_percentages1
+                del winner['status_effect']
+            if 'eq1_name' in winner:
+                winner['eq1_msg'] = f"**{z2['name']}** uses 🟦 **{z2['moves'][6]['name']}**!\n" + winner.get('eq1_msg', '')
+            else:
+                winner['eq1_name'] = ""
+                winner['eq1_msg'] = f"**{z2['name']}** uses 🟦 **{z2['moves'][6]['name']}**!"
 
     return winner, percentages1, percentages2, status_affects, p1_temp, p2_temp
 
