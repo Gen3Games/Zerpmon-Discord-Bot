@@ -20,7 +20,7 @@ import xrpl_functions
 import db_query
 from db_query import add_bg, add_flair
 from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, checks, callback, reset_alert, \
-    auction_functions, post_rank_fn
+    auction_functions, post_rank_fn, br_helper
 from xrpl.utils import xrp_to_drops
 from utils.trade import trade_item
 from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete, \
@@ -129,6 +129,9 @@ def execute_before_command(ctx: nextcord.Interaction):
         pass
 
 
+br_channel, br_battle_channel = None, None
+
+
 @client.event
 async def on_http_ratelimit(limit, remaining, reset_after, bucket, scope):
     print(f'Hit rate limit {limit}, {remaining}, {reset_after}, {bucket}, {scope}')
@@ -152,10 +155,28 @@ async def on_close():
 @client.event
 async def on_ready():
     print('Bot connected to Discord!')
+    global br_channel, br_battle_channel
     for guild in client.guilds:
         if guild.id == config.MAIN_GUILD[0]:
-            for r, v in config.RANKS.items():
-                config.RANKS[r]['role'] = nextcord.utils.get(guild.roles, name=r)
+            for i in range(3):
+                try:
+                    for r, v in config.RANKS.items():
+                        config.RANKS[r]['role'] = nextcord.utils.get(guild.roles, name=r)
+                    config.global_br_participants = db_query.get_br_dict()
+                    br_channel = nextcord.utils.get(guild.channels, id=config.BR_CHANNEL)
+                    br_battle_channel = nextcord.utils.get(guild.channels, id=config.BR_BATTLE_CHANNEL)
+                    br_embed = CustomEmbed(title="Click the ✅ to enter into the Battle Royale",
+                                           description=f"**Battle royale** will automatically start when the total number of **participants** reaches **30**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
+                    if config.BR_MSG_ID is None:
+                        br_msg = await br_channel.send(embed=br_embed)
+                        await br_msg.add_reaction('✅')
+                        config.BR_MSG_ID = br_msg.id
+                    else:
+                        msg_ = await br_channel.fetch_message(config.BR_MSG_ID)
+                        await msg_.edit(embed=br_embed)
+                    break
+                except:
+                    await asyncio.sleep(5)
         print(guild.name)
     config.gym_main_reset = db_query.get_gym_reset()
     if not check_auction.is_running():
@@ -2130,6 +2151,7 @@ async def gym_ld(interaction: nextcord.Interaction):
 @client.slash_command(name='battle_royale', description='Start Battle Royale -> 1 Zerpmon from each player ( max 50 )',
                       )
 async def battle_royale(interaction: nextcord.Interaction,
+                        br_type: str = SlashOption(name='type', required=True, choices=["normal", "round-robin"]),
                         reward: str = SlashOption(
                             required=True,
                             name="reward",
@@ -2217,42 +2239,45 @@ async def battle_royale(interaction: nextcord.Interaction,
     try:
         config.battle_royale_started = False
         await msg.edit(content="Battle **beginning**")
-        while len(config.battle_royale_participants) > 1:
-            random_ids = random.sample(config.battle_royale_participants, 2)
-            # Remove the selected players from the array
-            config.battle_royale_participants = [id_ for id_ in config.battle_royale_participants if
-                                                 id_ not in random_ids]
-            config.ongoing_battles.append(random_ids[0]['id'])
-            config.ongoing_battles.append(random_ids[1]['id'])
+        if br_type == 'normal':
+            while len(config.battle_royale_participants) > 1:
+                random_ids = random.sample(config.battle_royale_participants, 2)
+                # Remove the selected players from the array
+                config.battle_royale_participants = [id_ for id_ in config.battle_royale_participants if
+                                                     id_ not in random_ids]
+                config.ongoing_battles.append(random_ids[0]['id'])
+                config.ongoing_battles.append(random_ids[1]['id'])
 
-            battle_instance = {
-                "type": 'friendly',
-                "challenger": random_ids[0]['id'],
-                "username1": random_ids[0]['username'],
-                "challenged": random_ids[1]['id'],
-                "username2": random_ids[1]['username'],
-                "active": True,
-                "channel_id": interaction.channel_id,
-                "timeout": time.time() + 60,
-                'battle_type': 1,
-            }
-            config.battle_dict[msg.id] = battle_instance
+                battle_instance = {
+                    "type": 'friendly',
+                    "challenger": random_ids[0]['id'],
+                    "username1": random_ids[0]['username'],
+                    "challenged": random_ids[1]['id'],
+                    "username2": random_ids[1]['username'],
+                    "active": True,
+                    "channel_id": interaction.channel_id,
+                    "timeout": time.time() + 60,
+                    'battle_type': 1,
+                }
+                config.battle_dict[msg.id] = battle_instance
 
-            try:
+                try:
 
-                winner = await battle_function.proceed_battle(msg, battle_instance,
-                                                              battle_instance['battle_type'],
-                                                              battle_name='Battle Royale')
-                if winner == 1:
-                    config.battle_royale_participants.append(random_ids[0])
-                elif winner == 2:
-                    config.battle_royale_participants.append(random_ids[1])
-            except Exception as e:
-                logging.error(f"ERROR during friendly battle R: {e}\n{traceback.format_exc()}")
-            finally:
-                config.ongoing_battles.remove(random_ids[0]['id'])
-                config.ongoing_battles.remove(random_ids[1]['id'])
-                del config.battle_dict[msg.id]
+                    winner = await battle_function.proceed_battle(msg, battle_instance,
+                                                                  battle_instance['battle_type'],
+                                                                  battle_name='Battle Royale')
+                    if winner == 1:
+                        config.battle_royale_participants.append(random_ids[0])
+                    elif winner == 2:
+                        config.battle_royale_participants.append(random_ids[1])
+                except Exception as e:
+                    logging.error(f"ERROR during friendly battle R: {e}\n{traceback.format_exc()}")
+                finally:
+                    config.ongoing_battles.remove(random_ids[0]['id'])
+                    config.ongoing_battles.remove(random_ids[1]['id'])
+                    del config.battle_dict[msg.id]
+        else:
+            await br_helper.do_matches(interaction.channel_id, msg)
 
         await msg.channel.send(
             f"**CONGRATULATIONS** **{config.battle_royale_participants[0]['username']}** on winning the Battle Royale!")
@@ -2789,7 +2814,6 @@ async def ranked_battle(interaction: nextcord.Interaction,
             "timeout": time.time() + 60,
             'battle_type': b_type,
         }
-
         # Sleep for a while and notify timeout
         await asyncio.sleep(60)
         if msg.id in config.battle_dict and config.battle_dict[msg.id]['active'] == False:
@@ -3735,6 +3759,34 @@ async def on_raw_reaction_add(reaction: nextcord.RawReactionActionEvent):
                         if user.id not in [i['id'] for i in all_p]:
                             config.free_battle_royale_p[r_msg_id].append(
                                 {'id': user.id, 'username': user_mention, 'address': user_data['address']})
+            elif r_msg_id == config.BR_MSG_ID:
+                user_data = db_query.get_owned(user.id)
+
+                if user_data is None:
+                    return
+                else:
+                    u_flair = f' | {user_data.get("flair", [])[0]}' if len(
+                        user_data.get("flair", [])) > 0 else ''
+                    user_mention = user.mention + u_flair
+                    if user_data is None or (len(user_data['zerpmons']) == 0 or len(
+                            user_data['trainer_cards']) == 0):
+                        return
+                    else:
+                        if user.id not in [i['id'] for i in config.global_br_participants]:
+                            config.global_br_participants.append(
+                                {'id': user.id, 'username': user_mention, 'address': user_data['address']})
+                if len(config.global_br_participants) >= 30:
+                    await br_helper.start_global_br(br_battle_channel)
+                else:
+                    db_query.save_br_dict(config.global_br_participants)
+                    br_embed = CustomEmbed(title="Click the ✅ to enter into the Battle Royale",
+                                           description=f"**Battle royale** will automatically start when the total number of **participants** reaches **30**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
+                    for i in range(3):
+                        try:
+                            msg_ = await br_channel.fetch_message(config.BR_MSG_ID)
+                            await msg_.edit(embed=br_embed)
+                        except:
+                            await asyncio.sleep(2)
 
 
 @client.event

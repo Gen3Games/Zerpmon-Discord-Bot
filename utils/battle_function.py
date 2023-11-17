@@ -373,7 +373,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                     winner['eq2_name'] = buff_eqs[1]
                     winner['eq_name'] = buff_eqs[1]
                     winner['eq2_msg'] = f"✨**{buff_eqs[1]}**✨ ({z2['name']})"
-                    winner['z1_blue_void'] = True
+                    # winner['z1_blue_void'] = True
                 move1['dmg'] = new_dmg
                 winner['move1']['dmg'] = new_dmg
         crit = get_crit_chance(eq1_list)
@@ -406,7 +406,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                     winner['eq_name'] = buff_eqs[0]
                     winner['eq1_name'] = buff_eqs[1]
                     winner['eq1_msg'] = f"✨**{buff_eqs[0]}**✨ ({z1['name']})"
-                    winner['z2_blue_void'] = True # if move2['dmg'] > move1.get('dmg', 0) else False
+                    # winner['z2_blue_void'] = True # if move2['dmg'] > move1.get('dmg', 0) else False
                 move2['dmg'] = new_dmg
                 winner['move2']['dmg'] = new_dmg
         crit = get_crit_chance(eq2_list)
@@ -415,11 +415,11 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             winner['move2']['dmg'] = round(move2['dmg'])
             winner['move2']['mul'] += " 🎯"
 
-        if move2['dmg'] > move1.get('dmg', 0) and ((move2['color'] == 'white' and move1['color'] in ['blue', 'purple']) or (move2['color'] == 'gold' and z1_blue_trigger)):
+        if move2['dmg'] > move1.get('dmg', 0) and ((move2['color'] == 'white' and move1['color'] == 'purple' and winner['move1']['stars'] > 0) or (move2['color'] in ['white', 'gold'] and z1_blue_trigger)):
             for idx, eq2 in enumerate(eq2_list):
                 if 'pierce opponent' in eq2:
                     trigger = random.choices([True, False], [eq2_vals[idx], 100 - eq2_vals[idx]])[0]
-                    m_name = move1['name'] if move2['color'] == 'white' else z1['moves'][6]['name']
+                    m_name = move1['name'] if move1['color'] == 'purple' else z1['moves'][6]['name']
                     if trigger:
                         decided = True
                         if random.randint(1, 2) == 1:
@@ -432,18 +432,19 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                             winner['winner'] = '2'
                         winner['eq2_name'] = buff_eqs[1]
                         winner['eq_name'] = buff_eqs[1]
-                        winner['z2_blue_void'] = True
+                        if not (move2['color'] == 'white' and move1['color'] == 'purple'):
+                            winner['z1_blue_void'] = True
                     else:
                         winner[
                             'eq2_msg'] = f"{z2['name']}'s **{move2['name']}** couldn't break through {z1['name']}'s **{m_name}**!"
                         winner['eq2_name'] = buff_eqs[1]
 
     if 'dmg' in move1:
-        if move1['dmg'] > move2.get('dmg', 0) and ((move1['color'] == 'white' and move2['color'] == 'purple') or (move1['color'] == 'gold' and z2_blue_trigger)):
+        if move1['dmg'] > move2.get('dmg', 0) and ((move1['color'] == 'white' and move2['color'] == 'purple' and winner['move2']['stars'] > 0) or (move1['color'] in ['white', 'gold'] and z2_blue_trigger)):
             for idx, eq1 in enumerate(eq1_list):
                 if 'pierce opponent' in eq1:
                     trigger = random.choices([True, False], [eq1_vals[idx], 100 - eq1_vals[idx]])[0]
-                    m_name = move2['name'] if move1['color'] == 'white' else z2['moves'][6]['name']
+                    m_name = move2['name'] if move2['color'] == 'purple' else z2['moves'][6]['name']
                     if trigger:
                         decided = True
                         if random.randint(1, 2) == 1:
@@ -456,7 +457,8 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                             winner['winner'] = '1'
                         winner['eq1_name'] = buff_eqs[0]
                         winner['eq_name'] = buff_eqs[0]
-                        winner['z1_blue_void'] = True
+                        if not (move1['color'] == 'white' and move2['color'] == 'purple'):
+                            winner['z2_blue_void'] = True
                     else:
                         winner[
                             'eq1_msg'] = f"{z1['name']}'s **{move1['name']}** couldn't break through {z2['name']}'s **{m_name}**!"
@@ -630,9 +632,10 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
     # Blue move set to trigger here
     if winner['winner'] == "2" and (not winner.get('z1_blue_void', False) or 'pierce' in winner.get('eq2_msg', '')):
         if z1_blue_trigger:
-            if 'pierce' not in winner.get('eq2_msg', ''):
+            if not winner.get('z1_blue_void', False):
                 winner['winner'] = ""
             if 'status_effect' in winner:
+                percentages1 = pre_percentages1
                 percentages2 = pre_percentages2
                 del winner['status_effect']
             if 'eq1_name' in winner:
@@ -650,9 +653,10 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 winner['eq2_msg'] = f"Woah! **{z2['name']}** seemingly comes back to life with its **{buff_eqs[1]}**!"
     if winner['winner'] == "1" and (not winner.get('z2_blue_void', False) or 'pierce' in winner.get('eq1_msg', '')):
         if z2_blue_trigger:
-            if 'pierce' not in winner.get('eq1_msg', ''):
+            if not winner.get('z2_blue_void', False):
                 winner['winner'] = ""
             if 'status_effect' in winner:
+                percentages2 = pre_percentages2
                 percentages1 = pre_percentages1
                 del winner['status_effect']
             if 'eq1_name' in winner:
@@ -1655,6 +1659,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             except Exception as e:
                 print(f"Delete failed retrying {e}")
 
+    battle_instance['z1_name'] = z1['name']
+    battle_instance['z2_name'] = z2['name']
     if len(user1_zerpmons) == 0:
         await send_message(msg_hook, hidden, embeds=[], files=[],
             content=f"**WINNER**   👑**{battle_instance['username2']}**👑")
@@ -1662,7 +1668,6 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         db_query.update_battle_log(_data1['discord_id'], _data2['discord_id'], _data1['username'], _data2['username'],
                                    battle_log['teamA'],
                                    battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'] + f'{b_type}v{b_type}')
-
         db_query.update_pvp_user_wr(_data1['discord_id'], 0, recent_deck=None if 'Ranked' not in battle_name else p1_deck, b_type=b_type)
         db_query.update_pvp_user_wr(_data2['discord_id'], 1, recent_deck=None if 'Ranked' not in battle_name else p2_deck, b_type=b_type)
         return 2
@@ -1969,7 +1974,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             stats_arr = responses[0]
             embed = CustomEmbed(title=f"🏆 Mission Victory 🏆",
                                 color=0x8ef6e4)
-            embed.add_field(name="XP", value=stats_arr[3] if not double_xp else 2 * stats_arr[3], inline=True)
+            embed.add_field(name="XP", value=stats_arr[3], inline=True)
             private = True
             for res in responses[1:]:
                 response, reward, qty, token_id = res

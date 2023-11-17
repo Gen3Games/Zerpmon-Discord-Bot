@@ -405,7 +405,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     await interaction.send(embeds=[embed, CustomEmbed(
         title=f'**Remaining Missions** for the day: `{10 - _b_num}`', description=description)] if loser == 2 else [
         CustomEmbed(title=f'**Remaining Missions** for the day: `{10 - _b_num}`' + reset_str, description=description)]
-                           , view=(View() if loser == 1 else view2) if (10 - _b_num == 0) else view, ephemeral=True)
+                           , view=view2 if (10 - _b_num == 0) else view, ephemeral=True)
     button.callback = lambda i: button_callback(user_id, i, loser, mission_zerpmon_used)
 
 

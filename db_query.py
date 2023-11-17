@@ -1611,6 +1611,17 @@ def save_error_txn(user_address, amount, nft_id):
     col.update_one({'address': user_address}, query, upsert=True)
 
 
+def save_br_dict(data):
+    col = db['back_log']
+    query = {'$set': {'data': data}}
+    col.update_one({'address': '0x0'}, query, upsert=True)
+
+
+def get_br_dict():
+    col = db['back_log']
+    doc = col.find_one({'address': '0x0'})
+    return doc.get('data', []) if doc else []
+
 """GIFT BOXES"""
 
 

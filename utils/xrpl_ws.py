@@ -347,7 +347,7 @@ async def listener(client, store_address, wager_address):
                 elif 'TransactionType' in message and message['TransactionType'] == "OfferCreate" and type(
                         message.get('TakerPays', '')) is dict:
                     if message.get('TakerPays')['currency'] == 'ZRP' and type(message.get('TakerGets', {})) is str:
-                        print('OfferCreate: ', message)
+                        # print('OfferCreate: ', message)
                         amount = float(message['TakerPays']['value'])
                         xrp = float(int(message['TakerGets']) / 10 ** 6)
                         # config.zrp_price = xrp / amount

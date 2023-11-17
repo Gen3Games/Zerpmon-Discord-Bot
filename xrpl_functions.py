@@ -137,7 +137,7 @@ async def get_zrp_price_api(total_tokens=50):
         return config.zrp_price
 
 
-# print(asyncio.run(get_zrp_price()))
+# print(asyncio.run(get_zrp_price_api()))
 async def get_zrp_price():
     # req = requests.post('https://api.xrpl.to/api/search', json={'search': 'zrp'})
     try:
