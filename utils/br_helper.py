@@ -4,6 +4,7 @@ import time
 import traceback
 from nextcord import Interaction, Message, TextChannel
 import config
+import db_query
 from utils import battle_function
 from collections import deque
 
@@ -76,17 +77,21 @@ async def do_matches(channel_id: int, msg: Message, participants=None):
                 del config.battle_dict[msg.id]
     if not participants:
         config.battle_royale_participants = [winners.pop()]
+        return None
+    else:
+        return winners
 
 
 async def start_global_br(battle_channel: TextChannel):
     participants = config.global_br_participants.copy()
     config.global_br_participants = []
+    # db_query.save_br_dict([])
     try:
         msg = await battle_channel.send(content="Battle **beginning**")
-        await do_matches(battle_channel.id, msg, participants=participants)
+        winners = await do_matches(battle_channel.id, msg, participants=participants)
 
         await msg.channel.send(
-            f"**CONGRATULATIONS** **{config.global_br_participants[0]['username']}** on winning the Battle Royale!")
+            f"**CONGRATULATIONS** **{winners[0]['username']}** on winning the Battle Royale!")
 
     except Exception as e:
         logging.error(f'Error in battleR: {traceback.format_exc()}')

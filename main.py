@@ -2681,7 +2681,8 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
             return
         zerp_embed = CustomEmbed(title=f"Reward Pot: {amount} {reward}" if amount > 0 else '',
                                  description="Battle **beginning!**")
-        for i, user_obj in enumerate(config.free_battle_royale_p[msg.id].copy()):
+        players_obj = config.free_battle_royale_p[msg.id].copy()
+        for i, user_obj in enumerate(players_obj):
             user_zerps = db_query.get_owned(user_obj['id'])['zerpmons']
             if len(user_zerps) > 0:
                 zerp = random.choice(list(user_zerps.keys()))
@@ -2690,15 +2691,15 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
                 zerp = db_query.get_rand_zerpmon(level=1)
                 z_name = zerp['name'] + ' (FTP)'
             user_obj['zerp'] = zerp
-            config.free_battle_royale_p[msg.id][i] = user_obj
+            players_obj[i] = user_obj
             zerp_embed.add_field(name='\u200B', value=f'{user_obj["username"]} draws **{z_name}**',
                                  inline=False)
         await msg.edit(embed=zerp_embed, view=None)
         total_amount = amount
-        while len(config.free_battle_royale_p[msg.id]) > 1:
-            random_ids = random.sample(config.free_battle_royale_p[msg.id], 2)
+        while len(players_obj) > 1:
+            random_ids = random.sample(players_obj, 2)
             # Remove the selected IDs from the array
-            config.free_battle_royale_p[msg.id] = [id_ for id_ in config.free_battle_royale_p[msg.id] if
+            players_obj = [id_ for id_ in players_obj if
                                                    id_ not in random_ids]
             config.ongoing_battles.append(random_ids[0]['id'])
             config.ongoing_battles.append(random_ids[1]['id'])
@@ -2724,9 +2725,9 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
                                                               battle_instance['battle_type'],
                                                               battle_name='Free Battle Royale')
                 if winner == 1:
-                    config.free_battle_royale_p[msg.id].append(random_ids[0])
+                    players_obj.append(random_ids[0])
                 elif winner == 2:
-                    config.free_battle_royale_p[msg.id].append(random_ids[1])
+                    players_obj.append(random_ids[1])
             except Exception as e:
                 logging.error(f"ERROR during friendly battle R: {e}\n{traceback.format_exc()}")
                 await interaction.send(
@@ -2737,14 +2738,14 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
                 del config.battle_dict[msg.id]
 
         await msg.channel.send(embed=CustomEmbed(
-            description=f"**CONGRATULATIONS** **{config.free_battle_royale_p[msg.id][0]['username']}** on winning the Battle Royale!\n"
+            description=f"**CONGRATULATIONS** **{players_obj[0]['username']}** on winning the Battle Royale!\n"
                         f"Thanks for playing Zerpmon Battle Royale, if you would like to level-up, battle and earn {reward} with your very own Zerpmon, you can purchase one [here](https://xrp.cafe/collection/zerpmon)\n"
                         f"Learn more about Zerpmon [here](https://www.zerpmon.world/) and join the [Discord](https://discord.gg/TYZsTjDyRN) now!")
         )
         if amount > 0:
             await msg.reply(
-                f'Sending transaction for **`{total_amount} {reward}`** to {config.free_battle_royale_p[msg.id][0]["username"]}')
-            saved = await send_amount(config.free_battle_royale_p[msg.id][0]["address"],
+                f'Sending transaction for **`{total_amount} {reward}`** to {players_obj[0]["username"]}')
+            saved = await send_amount(players_obj[0]["address"],
                                       total_amount, 'wager')
             if not saved:
                 await msg.reply(
@@ -3775,18 +3776,23 @@ async def on_raw_reaction_add(reaction: nextcord.RawReactionActionEvent):
                         if user.id not in [i['id'] for i in config.global_br_participants]:
                             config.global_br_participants.append(
                                 {'id': user.id, 'username': user_mention, 'address': user_data['address']})
-                if len(config.global_br_participants) >= 30:
+                br_finished = False
+                if len(config.global_br_participants) >= 2:
+                    br_finished = True
                     await br_helper.start_global_br(br_battle_channel)
-                else:
-                    db_query.save_br_dict(config.global_br_participants)
-                    br_embed = CustomEmbed(title="Click the ✅ to enter into the Battle Royale",
-                                           description=f"**Battle royale** will automatically start when the total number of **participants** reaches **30**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
-                    for i in range(3):
-                        try:
-                            msg_ = await br_channel.fetch_message(config.BR_MSG_ID)
-                            await msg_.edit(embed=br_embed)
-                        except:
-                            await asyncio.sleep(2)
+
+                db_query.save_br_dict(config.global_br_participants)
+                br_embed = CustomEmbed(title="Click the ✅ to enter into the Battle Royale",
+                                       description=f"**Battle royale** will automatically start when the total number of **participants** reaches **30**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
+                for i in range(3):
+                    try:
+                        msg_ = await br_channel.fetch_message(config.BR_MSG_ID)
+                        if br_finished:
+                            await msg_.clear_reaction('✅')
+                            await msg_.add_reaction('✅')
+                        await msg_.edit(embed=br_embed)
+                    except:
+                        await asyncio.sleep(2)
 
 
 @client.event
