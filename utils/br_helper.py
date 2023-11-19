@@ -2,11 +2,18 @@ import logging
 import random
 import time
 import traceback
-from nextcord import Interaction, Message, TextChannel
+from nextcord import Interaction, Message, TextChannel, Embed
 import config
 import db_query
 from utils import battle_function
 from collections import deque
+
+
+class CustomEmbed(Embed):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.set_footer(text='Zerpmon',
+                        icon_url=config.ICON_URL)
 
 
 async def do_matches(channel_id: int, msg: Message, participants=None):
@@ -18,11 +25,22 @@ async def do_matches(channel_id: int, msg: Message, participants=None):
     # config.battle_royale_participants.append(i)
     # config.battle_royale_participants.append(i2)
     all_players = participants if participants else config.battle_royale_participants
-    for i in all_players:
-        winners.append(i)
-    losers = []
-    print('Starting tournament')
+    count = len(all_players)
+    schedule_str = ""
+    round_n = 1
+    i = 0
+    while i < count:
+        winners.appendleft(all_players[i])
+        if i+1 < count:
+            winners.appendleft(all_players[i+1])
+            schedule_str += f"**Match #{(i+2)//2}**:\n{all_players[i]['username']} vs {all_players[i+1]['username']}\n\n"
+        else:
+            schedule_str += f"**Match #{(i+2)//2}**:\n{all_players[i]['username']} vs Revived Player?\n\n"
+        i += 2
 
+    await msg.reply(embed=CustomEmbed(title=f"Round {round_n}", color=0xe0ffcd, description=schedule_str))
+
+    losers = []
     while len(winners) > 1:
         size = len(winners)
         print(losers)
@@ -75,6 +93,19 @@ async def do_matches(channel_id: int, msg: Message, participants=None):
                 config.ongoing_battles.remove(p1['id'])
                 config.ongoing_battles.remove(p2['id'])
                 del config.battle_dict[msg.id]
+
+        if len(winners) != 1:
+            count = len(winners)
+            schedule_str = ""
+            i = 0
+            while i < count:
+                if i + 1 < count:
+                    schedule_str += f"**Match #{(i + 2) // 2}**:\n{winners[i]['username']} vs {winners[i + 1]['username']}\n\n"
+                else:
+                    schedule_str += f"**Match #{(i + 2) // 2}**:\n{winners[i]['username']} vs Revived Player?\n\n"
+                i += 2
+            round_n += 1
+            await msg.reply(embed=CustomEmbed(title=f"Round {round_n}", color=0xe0ffcd, description=schedule_str))
     if not participants:
         config.battle_royale_participants = [winners.pop()]
         return None

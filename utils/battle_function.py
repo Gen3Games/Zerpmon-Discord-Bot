@@ -638,7 +638,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 winner['eq1_name'] = buff_eqs[0]
                 winner['eq1_msg'] = f"Woah! **{z1['name']}** seemingly comes back to life with its **{buff_eqs[0]}**!"
     # Blue move set to trigger here
-    if winner['winner'] == "2" and (not winner.get('z1_blue_void', False) or 'pierce' in winner.get('eq2_msg', '')):
+    if winner['winner'] == "2" and (not winner.get('z1_blue_void', False) or 'pierce' in winner.get('eq2_msg', '') or 'nullified' in winner.get('eq2_msg', '')):
         if z1_blue_trigger:
             if not winner.get('z1_blue_void', False):
                 winner['winner'] = ""
@@ -660,7 +660,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             if winner['winner'] == "":
                 winner['eq2_name'] = buff_eqs[1]
                 winner['eq2_msg'] = f"Woah! **{z2['name']}** seemingly comes back to life with its **{buff_eqs[1]}**!"
-    if winner['winner'] == "1" and (not winner.get('z2_blue_void', False) or 'pierce' in winner.get('eq1_msg', '')):
+    if winner['winner'] == "1" and (not winner.get('z2_blue_void', False) or 'pierce' in winner.get('eq1_msg', '') or 'nullified' in winner.get('eq1_msg', '')):
         if z2_blue_trigger:
             if not winner.get('z2_blue_void', False):
                 winner['winner'] = ""
