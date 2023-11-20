@@ -122,6 +122,10 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
     eq1_lower_list = [i.lower() for i in eq1_note.get('notes', [])]
     eq2_lower_list = [i.lower() for i in eq2_note.get('notes', [])]
     print(z1, z2)
+    z1_blue_percent = 0 if z1['moves'][6]['percent'] in ["0.00", "0", ""] else float(z1['moves'][6]['percent'])
+    z2_blue_percent = 0 if z2['moves'][6]['percent'] in ["0.00", "0", ""] else float(z2['moves'][6]['percent'])
+    blue_dict = {'orig_b1': z1_blue_percent, 'orig_b2': z2_blue_percent, 'new_b1': z1_blue_percent, 'new_b2': z2_blue_percent}
+
     for eq1_lower in eq1_lower_list:
         if 'eq_applied' not in z1 or z1.get('eq_applied', '') != z2['name']:
             if 'opponent miss chance' in eq1_lower or ('eq_applied' not in z1 and 'miss chance' in eq1_lower):
@@ -134,6 +138,14 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                 #     z1['buffer_miss'] = 0
                 z1['eq_applied'] = z2['name']
                 status_affects[0].append(eq1_lower)
+            elif 'opponent blue chance' in eq1_lower or ('eq_applied' not in z1 and 'blue chance' in eq1_lower):
+                z1['eq_applied'] = z2['name']
+                match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
+                percent_c = float(match.group()) if match is not None else 0
+                if 'oppo' in eq1_lower:
+                    blue_dict['new_b2'] = z2_blue_percent - percent_c
+                else:
+                    blue_dict['new_b1'] = z1_blue_percent + percent_c
         if 'increase' in eq1_lower and 'star' in eq1_lower:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             extra_star1 = int(float(match.group())) if match is not None else 0
@@ -149,11 +161,21 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                 #     z2['buffer_miss'] = 0
                 z2['eq_applied'] = z1['name']
                 status_affects[1].append(eq2_lower)
+            elif 'opponent blue chance' in eq2_lower or ('eq_applied' not in z2 and 'blue chance' in eq2_lower):
+                z2['eq_applied'] = z1['name']
+                match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
+                percent_c = float(match.group()) if match is not None else 0
+                if 'oppo' in eq2_lower:
+                    blue_dict['new_b1'] = z1_blue_percent - percent_c
+                else:
+                    blue_dict['new_b2'] = z2_blue_percent + percent_c
         if 'increase' in eq2_lower and 'star' in eq2_lower:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             extra_star2 = int(float(match.group())) if match is not None else 0
     print(extra_star1, extra_star2)
     p1, p2, m1, m2 = apply_status_effects(percentages1.copy(), percentages2.copy(), status_affects)
+    z1_moves[6]['percent'] = blue_dict['new_b1']
+    z2_moves[6]['percent'] = blue_dict['new_b2']
 
     main_embed = CustomEmbed(title="Zerpmon rolling attacks...", color=0x35bcbf)
     path1 = f"./static/images/{z1_obj['name']}.png"
@@ -217,7 +239,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
 
     file = nextcord.File(f"{message.id}.png", filename="image.png")
     main_embed.set_image(url=f'attachment://image.png')
-    return main_embed, file, p1, p2, eq1_note, eq2_note
+    return main_embed, file, p1, p2, eq1_note, eq2_note, blue_dict
 
 
 def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False):
@@ -261,7 +283,7 @@ def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False):
 
 def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_types, buff_eqs, p1=None, p2=None,
                     p1_temp=None,
-                    p2_temp=None, mission=False):
+                    p2_temp=None, mission=False, blue_dict=None):
     z1 = db_query.get_zerpmon(zerpmon1_name)
     print(p1, p2, p1_temp, p2_temp)
     eq1_list = [i.lower() for i in db_query.get_eq_by_name(buff_eqs[0]).get('notes')] if buff_eqs[0] is not None else []
@@ -309,8 +331,8 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                     z2['moves']] if p2 is None else p2
     if p2_temp is None:
         p2_temp = percentages2
-    z1_blue_percent = 0 if z1['moves'][6]['percent'] in ["0.00", "0", ""] else float(z1['moves'][6]['percent'])
-    z2_blue_percent = 0 if z2['moves'][6]['percent'] in ["0.00", "0", ""] else float(z2['moves'][6]['percent'])
+    z1_blue_percent = max(0, blue_dict['new_b1'])
+    z2_blue_percent = max(0, blue_dict['new_b2'])
     # print(f'Percentages2: {percentages2}')
     # if 'miss chance' in eq1:
     #     status_affects[0].append(eq1)
@@ -850,7 +872,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                   z2['moves']]
         buffed_type2 = [gym_type] * (stage - 3) if stage < 7 else [gym_type] * (stage - 4)
 
-        main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(interaction, z1, z2, z1_obj.copy(),
+        main_embed, file, p1, p2, eq1_note, eq2_note, updated_blue_dict = get_zerp_battle_embed(interaction, z1, z2, z1_obj.copy(),
                                                                              z2.copy(), z1_type,
                                                                              z2_type, [buffed_type1, buffed_type2],
                                                                              buffed_zerp, gym_type if stage > 3 else '',
@@ -893,7 +915,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                                              [buffed_type1, buffed_type2],
                                                                              [z1.get('buff_eq', None),
                                                                               z2.get('buff_eq', None)], p1, p2,
-                                                                             p1_temp, p2_temp,
+                                                                             p1_temp, p2_temp, blue_dict=updated_blue_dict
                                                                              )
             t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
             t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
@@ -1116,6 +1138,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                 if 'opponent miss chance' in eq1_lower:
                     p1, p2, _, __ = apply_status_effects(p1, p2, [[], [
                         eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')]])
+
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
@@ -1399,10 +1422,10 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             if eq_type not in list(types2.keys()) and eq_type != 'Omni':
                 del z2['buff_eq']
 
-        main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type,
+        main_embed, file, p1, p2, eq1_note, eq2_note, updated_blue_dict = get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type,
                                                                              z2_type,
                                                                              [buffed_type1, buffed_type2], buffed_zerp1,
-                                                                             buffed_zerp2, bg_img, p1, p2)
+                                                                             buffed_zerp2, bg_img, p1, p2, )
         if battle_instance['type'] == 'free_br':
             main_embed.description = f'{battle_instance["username1"]} vs {battle_instance["username2"]}'
 
@@ -1452,7 +1475,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                                              [buffed_type1, buffed_type2],
                                                                              [z1.get('buff_eq', None),
                                                                               z2.get('buff_eq', None)], p1, p2,
-                                                                             p1_temp, p2_temp,
+                                                                             p1_temp, p2_temp, blue_dict=updated_blue_dict
                                                                              )
             t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
             t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
@@ -1783,9 +1806,9 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
     except:
         pass
 
-    main_embed, file, p1, p2, eq1_note, eq2_note = get_zerp_battle_embed(interaction, z1, z2, z1_obj, z2, z1_type,
+    main_embed, file, p1, p2, eq1_note, eq2_note, updated_blue_dict = get_zerp_battle_embed(interaction, z1, z2, z1_obj, z2, z1_type,
                                                                          z2_type, [buffed_type1, []], buffed_zerp, '',
-                                                                         _data1.get('bg', [None])[0], None, None)
+                                                                         _data1.get('bg', [None])[0], None, None,)
 
     await asyncio.sleep(1)
     await interaction.send(content="\u200B", embed=main_embed, file=file, ephemeral=True)
@@ -1808,7 +1831,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                                                                          [buffed_type1, []], [z1.get('buff_eq', None),
                                                                                               z2.get('buff_eq', None)],
                                                                          p1, p2, p1_temp, p2_temp,
-                                                                         mission=True)
+                                                                         mission=True, blue_dict=updated_blue_dict)
         t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
         t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
         t_info1 = f'({t_info1})' if t_info1 not in ["", " "] else t_info1
