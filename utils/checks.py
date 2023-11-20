@@ -334,7 +334,7 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
     return True
 
 
-def get_show_zerp_embed(zerpmon, interaction: nextcord.Interaction):
+def get_show_zerp_embed(zerpmon, interaction):
     lvl, xp, w_candy, g_candy, l_candy = db_query.get_lvl_xp(zerpmon['name'], get_candies=True)
     embed = CustomEmbed(title=f"**{zerpmon['name']}**:\n",
                         color=0xff5252,
@@ -374,15 +374,15 @@ def get_show_zerp_embed(zerpmon, interaction: nextcord.Interaction):
                   (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
                   f"> Percentage: {move['percent']}%\n",
             inline=False)
-
-    admin_role = nextcord.utils.get(interaction.guild.roles, name="Founders")
-    if admin_role in interaction.user.roles:
-        embed.add_field(
-            name=f"**Total Matches:**",
-            value=f"{0 if 'total' not in zerpmon else zerpmon['total']}", inline=False)
-        embed.add_field(
-            name=f"**Winrate:**",
-            value=f"{0 if 'winrate' not in zerpmon else round(zerpmon['winrate'], 2)}%", inline=True)
+    if interaction is not None:
+        admin_role = nextcord.utils.get(interaction.guild.roles, name="Founders")
+        if admin_role in interaction.user.roles:
+            embed.add_field(
+                name=f"**Total Matches:**",
+                value=f"{0 if 'total' not in zerpmon else zerpmon['total']}", inline=False)
+            embed.add_field(
+                name=f"**Winrate:**",
+                value=f"{0 if 'winrate' not in zerpmon else round(zerpmon['winrate'], 2)}%", inline=True)
 
     embed.set_image(
         url=zerpmon['image'] if "https:/" in zerpmon['image'] else 'https://cloudflare-ipfs.com/ipfs/' + zerpmon[

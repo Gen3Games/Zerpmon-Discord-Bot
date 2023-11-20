@@ -52,12 +52,31 @@ async def send_global_message(guild, text, image):
         logging.error(f'ERROR: {traceback.format_exc()}')
 
 
-async def send_message(msg_hook, hidden, embeds, files, content):
+async def send_message(msg_hook, hidden, embeds, files, content, view=None):
     # Determine where to send the message based on the 'hidden' condition
     if hidden:
-        await msg_hook.send(content=content, embeds=embeds, files=files, ephemeral=True)
+        await msg_hook.send(content=content, embeds=embeds, files=files, ephemeral=True, view=view)
     else:
-        await msg_hook.send(content=content, embeds=embeds, files=files, )
+        await msg_hook.send(content=content, embeds=embeds, files=files, view=view)
+
+
+async def show_single_embed(i, z1):
+    zerpmon = db_query.get_zerpmon(z1.lower().title())
+    embed1 = checks.get_show_zerp_embed(zerpmon, None, )
+    await i.send(content="\u200B", embeds=[embed1], files=[], ephemeral=True)
+
+
+async def get_battle_view(msg, z1, z2):
+
+    view = nextcord.ui.View(timeout=120)
+    b1 = nextcord.ui.Button(label=f'View {z1}', style=nextcord.ButtonStyle.green, )
+    b1.callback = lambda i: show_single_embed(i, z1)
+    b2 = nextcord.ui.Button(label=f'View {z2}', style=nextcord.ButtonStyle.green, )
+    b2.callback = lambda i: show_single_embed(i, z2)
+    view.add_item(b1)
+    view.add_item(b2)
+    print('get_battle_view', view.children)
+    return view
 
 
 def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buffed_types, buffed_zerp1, buffed_zerp2,
@@ -358,7 +377,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
     print(f'dmg: {new_dmg1}, {new_dmg2}', winner)
     decided = False
     if 'dmg' in move1:
-        move1['dmg'] = new_dmg1 if new_dmg1 else move1['dmg']
+        move1['dmg'] = new_dmg1 if type(new_dmg1) is not str else move1['dmg']
         d1m = 1.0
         # print(types[1], types[0])
 
@@ -392,7 +411,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
             winner['move1']['mul'] += " 🎯"
 
     if 'dmg' in move2:
-        move2['dmg'] = new_dmg2 if new_dmg2 else move2['dmg']
+        move2['dmg'] = new_dmg2 if type(new_dmg2) is not str else move2['dmg']
         d2m = 1.0
 
         _t1 = move2['type'].lower().replace(" ", "")
@@ -1199,6 +1218,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         trainer_embed = CustomEmbed(title=f"Trainers Battle",
                                     description=f"({battle_instance['username1']} VS {battle_instance['username2']})",
                                     color=0xf23557)
+
         tc1 = list(_data1['trainer_cards'].values())[0] if ('battle_deck' not in _data1) or (
                 '0' in _data1['battle_deck'] and ('trainer' not in _data1['battle_deck']['0'])) else \
             _data1['trainer_cards'][_data1['battle_deck']['0']['trainer']]
@@ -1392,10 +1412,16 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                 msg_hook = message
             else:
                 msg_hook = message.channel
+            if 'Battle Royale' in battle_name:
+                main_embed.clear_fields()
+                show_view = await get_battle_view(msg_hook, z1['name'], z2['name'])
+            else:
+                show_view = nextcord.ui.View()
+            print(show_view)
             await send_message(msg_hook, hidden, content="\u200B", embeds=[trainer_embed, main_embed],
-                               files=[file2, file], )
+                               files=[file2, file], view=show_view)
         else:
-            await send_message(msg_hook, hidden, content="\u200B", embeds=[main_embed], files=[file], )
+            await send_message(msg_hook, hidden, content="\u200B", embeds=[main_embed], files=[file], view=show_view)
 
         eliminate = ""
         move_counter = 0

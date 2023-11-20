@@ -3,6 +3,7 @@ import random
 import time
 import traceback
 from nextcord import Interaction, Message, TextChannel, Embed
+from utils.xrpl_ws import send_zrp
 import config
 import db_query
 from utils import battle_function
@@ -35,7 +36,7 @@ async def do_matches(channel_id: int, msg: Message, participants=None):
             winners.appendleft(all_players[i+1])
             schedule_str += f"**Match #{(i+2)//2}**:\n{all_players[i]['username']} vs {all_players[i+1]['username']}\n\n"
         else:
-            schedule_str += f"**Match #{(i+2)//2}**:\n{all_players[i]['username']} vs Revived Player?\n\n"
+            schedule_str += f"**Match #{(i+2)//2}**:\n{all_players[i]['username']} vs Revived Wildcard\n\n"
         i += 2
 
     await msg.reply(embed=CustomEmbed(title=f"Round {round_n}", color=0xe0ffcd, description=schedule_str))
@@ -55,8 +56,7 @@ async def do_matches(channel_id: int, msg: Message, participants=None):
                     p2 = random.choice(losers)
                 except:
                     p2 = random.choice(old_losers)
-                await msg.channel.send(
-                    f"It's a miracle! {p2['zerp_name']} was brought back from the dead")
+
             size -= 2
             config.ongoing_battles.append(p1['id'])
             config.ongoing_battles.append(p2['id'])
@@ -94,16 +94,22 @@ async def do_matches(channel_id: int, msg: Message, participants=None):
                 config.ongoing_battles.remove(p2['id'])
                 del config.battle_dict[msg.id]
 
-        if len(winners) != 1:
-            count = len(winners)
+        count = len(winners)
+        if count != 1:
+            if count % 2 != 0:
+                p2 = random.choice(losers)
+                winners.appendleft(p2)
+                await msg.channel.send(
+                    f"It's a miracle! **{p2['zerp_name']}** was brought back from the dead")
+                count += 1
             schedule_str = ""
-            i = 0
-            while i < count:
-                if i + 1 < count:
-                    schedule_str += f"**Match #{(i + 2) // 2}**:\n{winners[i]['username']} vs {winners[i + 1]['username']}\n\n"
-                else:
-                    schedule_str += f"**Match #{(i + 2) // 2}**:\n{winners[i]['username']} vs Revived Player?\n\n"
-                i += 2
+            i = count - 2
+            while i >= 0:
+                # if i - 1 < count:
+                schedule_str += f"**Match #{(count - i) // 2}**:\n{winners[i]['username']} vs {winners[i + 1]['username']}\n\n"
+                # else:
+                #     schedule_str += f"**Match #{(i + 2) // 2}**:\n{winners[i]['username']} vs Revived Wildcard\n\n"
+                i -= 2
             round_n += 1
             await msg.reply(embed=CustomEmbed(title=f"Round {round_n}", color=0xe0ffcd, description=schedule_str))
     if not participants:
@@ -123,6 +129,17 @@ async def start_global_br(battle_channel: TextChannel):
 
         await msg.channel.send(
             f"**CONGRATULATIONS** **{winners[0]['username']}** on winning the Battle Royale!")
+        await msg.reply(
+            f"'Sending transaction for **`1 ZRP`** to {winners[0]['username']}'")
+        saved = await send_zrp(winners[0]["address"],
+                                  1, 'wager')
+        if not saved:
+            await msg.reply(
+                f"**Failed**, something went wrong while sending the Txn")
+
+        else:
+            await msg.reply(
+                f"**Successfully** sent `1` ZRP")
 
     except Exception as e:
         logging.error(f'Error in battleR: {traceback.format_exc()}')

@@ -166,9 +166,9 @@ async def on_ready():
                     br_channel = nextcord.utils.get(guild.channels, id=config.BR_CHANNEL)
                     br_battle_channel = nextcord.utils.get(guild.channels, id=config.BR_BATTLE_CHANNEL)
                     br_embed = CustomEmbed(title="Click the ✅ to enter into the Battle Royale",
-                                           description=f"**Battle royale** will automatically start when the total number of **participants** reaches **30**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
+                                           description=f"**Battle royale** will automatically start when the total number of **participants** reaches **20**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
                     if config.BR_MSG_ID is None:
-                        br_msg = await br_channel.send(embed=br_embed)
+                        br_msg = await br_channel.send(content='<@&1122838152294432838>', embed=br_embed)
                         await br_msg.add_reaction('✅')
                         config.BR_MSG_ID = br_msg.id
                     else:
@@ -2227,7 +2227,7 @@ async def battle_royale(interaction: nextcord.Interaction,
         await asyncio.sleep(start_after * 60)
 
     send_amount = xrpl_ws.send_txn if reward == 'XRP' else xrpl_ws.send_zrp
-    # config.battle_royale_participants *= 30
+    config.battle_royale_participants *= 5
     if len(config.battle_royale_participants) <= 1:
         await msg.edit(content=f"Battle **timed out** <t:{int(time.time())}:R>")
         config.battle_royale_participants = []
@@ -3778,20 +3778,22 @@ async def on_raw_reaction_add(reaction: nextcord.RawReactionActionEvent):
                             config.global_br_participants.append(
                                 {'id': user.id, 'username': user_mention, 'address': user_data['address']})
                 br_finished = False
-                if len(config.global_br_participants) >= 2:
+                if len(config.global_br_participants) >= 20:
                     br_finished = True
                     await br_helper.start_global_br(br_battle_channel)
 
                 db_query.save_br_dict(config.global_br_participants)
                 br_embed = CustomEmbed(title="Click the ✅ to enter into the Battle Royale",
-                                       description=f"**Battle royale** will automatically start when the total number of **participants** reaches **30**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
+                                       description=f"**Battle royale** will automatically start when the total number of **participants** reaches **20**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
                 for i in range(3):
                     try:
                         msg_ = await br_channel.fetch_message(config.BR_MSG_ID)
                         if br_finished:
                             await msg_.clear_reaction('✅')
                             await msg_.add_reaction('✅')
-                        await msg_.edit(embed=br_embed)
+                            await msg_.edit(content='<@&1122838152294432838>', embed=br_embed)
+                        else:
+                            await msg_.edit(embed=br_embed)
                     except:
                         await asyncio.sleep(2)
 
