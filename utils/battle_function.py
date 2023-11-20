@@ -54,6 +54,8 @@ async def send_global_message(guild, text, image):
 
 async def send_message(msg_hook, hidden, embeds, files, content, view=None):
     # Determine where to send the message based on the 'hidden' condition
+    if view is None:
+        view = nextcord.ui.View()
     if hidden:
         await msg_hook.send(content=content, embeds=embeds, files=files, ephemeral=True, view=view)
     else:

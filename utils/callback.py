@@ -650,8 +650,8 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     b3 = Button(label="Buy Power Candy (Gold)", style=ButtonStyle.blurple, emoji='🍭', row=0)
     b4 = Button(label="Buy Golden Liquorice", style=ButtonStyle.green, emoji='🍯', row=1)
     b5 = Button(label="Buy Battle Zones", style=ButtonStyle.green, emoji='🏟️', row=1)
-    b6 = Button(label="Buy Name Flair", style=ButtonStyle.green, emoji='💠', row=1)
-    b7 = Button(label="Buy Zerpmon Equipment", style=ButtonStyle.red, emoji='🗡️', row=1)
+    b6 = Button(label="Buy Zerpmon Equipment", style=ButtonStyle.red, emoji='🗡️', row=1)
+    b7 = Button(label="Buy Name Flair", style=ButtonStyle.green, emoji='💠', row=1)
     # user_d = db_query.get_owned(str(user_id))
     # zrp_gift_box, xblade_gift_box = db_query.get_boxes(user_d['address'])
     all_btns = [b0, b1, b2, b3, b4, b5, b6, b7]
@@ -683,8 +683,8 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     b3.callback = lambda i: on_button_click(i, label=b3.label, amount=candy_gold_p)
     b4.callback = lambda i: on_button_click(i, label=b4.label, amount=liquor_p)
     b5.callback = lambda i: on_button_click(i, label=b5.label, amount=battle_zone_p)
-    b6.callback = lambda i: on_button_click(i, label=b6.label, amount=name_flair_p)
-    b7.callback = lambda i: on_button_click(i, label=b7.label, amount=equip_p)
+    b6.callback = lambda i: on_button_click(i, label=b6.label, amount=equip_p)
+    b7.callback = lambda i: on_button_click(i, label=b7.label, amount=name_flair_p)
 
     await interaction.edit_original_message(embeds=[main_embed, sec_embed], view=view)
 

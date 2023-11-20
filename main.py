@@ -2227,7 +2227,7 @@ async def battle_royale(interaction: nextcord.Interaction,
         await asyncio.sleep(start_after * 60)
 
     send_amount = xrpl_ws.send_txn if reward == 'XRP' else xrpl_ws.send_zrp
-    config.battle_royale_participants *= 5
+    # config.battle_royale_participants *= 5
     if len(config.battle_royale_participants) <= 1:
         await msg.edit(content=f"Battle **timed out** <t:{int(time.time())}:R>")
         config.battle_royale_participants = []
