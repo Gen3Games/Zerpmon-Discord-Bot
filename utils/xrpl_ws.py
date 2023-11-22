@@ -169,7 +169,8 @@ async def send_txn(to: str, amount: float, sender):
                 account=sending_address,
                 destination=receiving_address,
                 amount=str(send_amt),  # 10 XRP (in drops)
-                sequence=sequence
+                sequence=sequence,
+                source_tag=13888813
             )
 
             # Sign and send the transaction
@@ -501,7 +502,7 @@ async def send_nft(from_, to_address, token_id):
                 nftoken_id=token_id,  # set to 0 for a new offer
                 flags=NFTokenCreateOfferFlag.TF_SELL_NFTOKEN,  # set to 0 for a new offer
                 destination=to_address,  # set to the address of the user you want to sell to
-
+                source_tag=13888813
             )
 
             response = await safe_sign_and_submit_transaction(tx, sending_wallet, client)
@@ -545,7 +546,7 @@ async def accept_nft(wallet, offer, sender='0', token='0'):
             sequence=sequence,  # set the next sequence number for your account
             nftoken_sell_offer=offer,  # set to 0 for a new offer
             flags=0,  # set to 0 for a new offer
-
+            source_tag=13888813
         )
 
         response = await safe_sign_and_submit_transaction(tx, sending_wallet, client)
@@ -621,6 +622,7 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
                     "issuer": config.ISSUER[issuer]
                 },
                 "sequence": sequence,
+                "source_tag": 13888813
             }
             # Construct the transaction dictionary
             transaction = Payment.from_dict(req_json)
@@ -707,6 +709,7 @@ async def create_nft_offer(from_, token_id, price, to_address, currency='XRP'):
                     nftoken_id=token_id,  # set to 0 for a new offer
                     flags=NFTokenCreateOfferFlag.TF_SELL_NFTOKEN,  # set to 0 for a new offer
                     destination=to_address,  # set to the address of the user you want to sell to
+                    source_tag=13888813
                 )
             else:
                 tx = NFTokenCreateOffer(
@@ -719,7 +722,8 @@ async def create_nft_offer(from_, token_id, price, to_address, currency='XRP'):
                         currency=currency,
                         issuer="rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe",
                         value=price
-                    )
+                    ),
+                    source_tag=13888813
                 )
             response = await safe_sign_and_submit_transaction(tx, sending_wallet, client)
             print("------------------")
@@ -831,7 +835,7 @@ async def send_nft_with_amt(from_, to_address, token_id, price, currency='ZRP'):
                 nftoken_id=token_id,  # set to 0 for a new offer
                 flags=NFTokenCreateOfferFlag.TF_SELL_NFTOKEN,  # set to 0 for a new offer
                 destination=to_address,  # set to the address of the user you want to sell to
-
+                source_tag=13888813
             )
 
             response = await safe_sign_and_submit_transaction(tx, sending_wallet, client)
@@ -879,7 +883,7 @@ async def cancel_offer(from_, offer):
                 account=sending_address,
                 sequence=sequence,  # set the next sequence number for your account
                 nftoken_offers=[offer],  # set to 0 for a new offer
-
+                source_tag=13888813
             )
 
             response = await safe_sign_and_submit_transaction(tx, sending_wallet, client)
@@ -1004,7 +1008,7 @@ async def get_latest_nft_offers(address):
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
-# asyncio.run(send_txn('rHKStNq3QQHHRUp3CG6z1riufHWA5VLfY8', 150, 'store'))
-# asyncio.run(send_zrp('r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', 5, 'loan'))
+# asyncio.run(send_zrp('rZ4D18peYsVMwJ5QafNJNzUAsWQmguYp7', 1, 'loan'))
+# asyncio.run(send_txn('rLNNGQwberUSwBVT4AxxcHdo67SnccwhZc', 1, 'wager'))
 
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))

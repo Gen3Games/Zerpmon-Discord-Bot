@@ -72,6 +72,7 @@ async def gen_txn_url(to_address, from_address, amount):
         "Account": f"{from_address}",
         "Destination": to_address,
         "Amount": f"{amount}",
+        "SourceTag": 13888813
     }
     payload = {
         "txjson": tjson,
@@ -104,6 +105,7 @@ async def gen_nft_txn_url(from_address, nft_id, destination = config.WAGER_ADDR)
         "Amount": "0",
         "Flags": 1,
         "Destination": destination,
+        "SourceTag": 13888813
     }
     payload = {
         "txjson": tjson,
@@ -132,7 +134,8 @@ async def gen_nft_accept_txn(from_address, offer, nft_id):
     tjson = {
         "Account": from_address,
         "NFTokenSellOffer": offer,
-        "TransactionType": "NFTokenAcceptOffer"
+        "TransactionType": "NFTokenAcceptOffer",
+        "SourceTag": 13888813
     }
     payload = {
         "txjson": tjson,
@@ -168,6 +171,7 @@ async def gen_zrp_txn_url(to_address, from_address, amount):
             "value": f'{amount}',
             "issuer": config.ISSUER['ZRP']
         },
+        "SourceTag": 13888813
     }
     payload = {
         "txjson": tjson,
