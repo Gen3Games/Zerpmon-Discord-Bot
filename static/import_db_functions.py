@@ -12,7 +12,6 @@ client = pymongo.MongoClient(config.MONGO_URL)
 db = client['Zerpmon']
 
 
-
 # users_c = db['users']
 # users_c.drop()
 
@@ -329,8 +328,10 @@ def cache_data():
         z_nfts = get_issuer_nfts_data('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME')
         nfts = get_issuer_nfts_data('rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy')
         e_nfts = get_issuer_nfts_data('rEQQ8tTnJm4ECbPv71K9syrHrTJTv6DX3T')
+        c_nfts = get_collab_nfts()
         z_nfts.extend(nfts)
         z_nfts.extend(e_nfts)
+        z_nfts.extend(c_nfts)
         tba = get_cached()
         for nft in z_nfts:
             if not check_nft_cached(nft['nftokenID'], tba):
@@ -347,6 +348,16 @@ def cache_data():
 
     except Exception as e:
         print(str(e), ' error')
+
+
+def get_collab_nfts():
+    with open('./ZerpmonCollabTrainerNFTs.txt', 'r') as file:
+        tokenIds = [i.strip('\n') for i in file.readlines()]
+        # print(tokenIds)
+        nfts = [i for i in get_issuer_nfts_data(config.ISSUER['TrainerV2']) if i['nftokenID'] in tokenIds]
+        print([i['nftSerial'] for i in nfts])
+        return nfts
+
 
 
 def reset_all_gyms():

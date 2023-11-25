@@ -1076,9 +1076,13 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                 res, token_id, empty = await send_random_zerpmon(addr, safari=True)
                                 if empty:
                                     SAFARI_REWARD_CHANCES['zerpmon'] = 0
-                                msg = config.ZERP_MSG(token_id[0])
+                                if token_id[3] == config.ISSUER['TrainerV2']:
+                                    msg = f"**{token_id[0]}** bumped into you on your journey! They decided to follow you!"
+                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{token_id[0]}** !! 🔥 🔥\n@everyone'
+                                else:
+                                    msg = config.ZERP_MSG(token_id[0])
+                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just caught **{token_id[0]}** !! 🔥 🔥\n@everyone'
                                 rewards.append(f"Won {token_id[0]}!")
-                                description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just caught **{token_id[0]}** !! 🔥 🔥\n@everyone'
                                 await send_general_message(guild=interaction.guild, text=description,
                                                            image=token_id[1])
                             case _:
@@ -1509,6 +1513,7 @@ async def initiate_loan(interaction: nextcord.Interaction, listing):
                                                  'address': addr}, days, amount_total=amount - listing['per_day_cost'])
                 if loaned:
                     if listing['xrp']:
+                        await send_txn(loaner_obj['address'], amount / days, 'loan')
                         await send_txn(loaner_obj['address'], amount / days, 'loan')
                     else:
                         await send_zrp(loaner_obj['address'], round(amount / days, 2), 'loan')

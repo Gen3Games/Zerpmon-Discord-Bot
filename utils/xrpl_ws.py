@@ -460,7 +460,10 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
     else:
         status, stored_nfts = await xrpl_functions.get_nfts(config.SAFARI_ADDR)
     wallet_empty = False
-    stored_zerpmons = [nft for nft in stored_nfts if nft["Issuer"] == issuer and nft['NFTokenID'] not in tokens_sent]
+    issuers = [issuer]
+    if safari:
+        issuers.append(config.ISSUER['TrainerV2'])
+    stored_zerpmons = [nft for nft in stored_nfts if nft["Issuer"] in issuers and nft['NFTokenID'] not in tokens_sent]
     logging.error(f'Found Zerpmons {issuer} {len(stored_zerpmons)}')
     if len(stored_zerpmons) == 0:
         return
@@ -482,10 +485,10 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
             else:
                 nft_data = await get_nft_metadata_safe(random_zerpmon['URI'], token_id)
             img = nft_data['image']
-            if not gift_box:
-                return res, [(nft_data['name'] if 'name' in nft_data else token_id), img], wallet_empty
-            else:
-                return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id], wallet_empty
+            # if not gift_box:
+            #     return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, ], wallet_empty
+            # else:
+            return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id, random_zerpmon['Issuer']], wallet_empty
 
 
 async def send_nft(from_, to_address, token_id):

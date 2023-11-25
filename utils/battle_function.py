@@ -122,8 +122,8 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
     eq1_lower_list = [i.lower() for i in eq1_note.get('notes', [])]
     eq2_lower_list = [i.lower() for i in eq2_note.get('notes', [])]
     print(z1, z2)
-    z1_blue_percent = 0 if z1['moves'][6]['percent'] in ["0.00", "0", ""] else float(z1['moves'][6]['percent'])
-    z2_blue_percent = 0 if z2['moves'][6]['percent'] in ["0.00", "0", ""] else float(z2['moves'][6]['percent'])
+    z1_blue_percent = 0 if z1_obj['moves'][6]['percent'] in ["0.00", "0", ""] else float(z1_obj['moves'][6]['percent'])
+    z2_blue_percent = 0 if z2_obj['moves'][6]['percent'] in ["0.00", "0", ""] else float(z2_obj['moves'][6]['percent'])
     blue_dict = {'orig_b1': z1_blue_percent, 'orig_b2': z2_blue_percent, 'new_b1': z1_blue_percent, 'new_b2': z2_blue_percent}
 
     for eq1_lower in eq1_lower_list:
@@ -721,7 +721,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
     return winner, percentages1, percentages2, status_affects, p1_temp, p2_temp
 
 
-bt = battle_zerpmons("Fiepion", "Elapix", [["fire"], ["Bug", "Steel"]], [[], []], ["Dark", "Dark"], [None, None])
+bt = battle_zerpmons("Fiepion", "Elapix", [["fire"], ["Bug", "Steel"]], [[], []], ["Dark", "Dark"], [None, None], blue_dict={'orig_b1': 0, 'orig_b2': 0, 'new_b1': 0, 'new_b2': 0})
 print(json.dumps(bt, indent=2))
 
 

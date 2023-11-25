@@ -39,15 +39,17 @@ async def update_nft_holdings(client: nextcord.Client):
 
                 for nft in nfts:
 
-                    if nft["Issuer"] == config.ISSUER["Trainer"]:
+                    if nft["Issuer"] in [config.ISSUER["Trainer"], config.ISSUER["TrainerV2"]]:
                         serial = str(nft["nft_serial"])
                         if serial in list(old_user['trainer_cards'].keys()):
                             t_serial.append(serial)
                             continue
                         print(serial, list(old_user['trainer_cards'].keys()))
                         metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+                        if metadata is None:
+                            continue
 
-                        if "Zerpmon Trainers" in metadata['description']:
+                        if "Zerpmon" in metadata['description']:
                             t_serial.append(serial)
                             # Add to MongoDB here
                             new_z = {"name": metadata['name'],
