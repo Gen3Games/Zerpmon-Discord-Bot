@@ -17,7 +17,7 @@ class CustomEmbed(Embed):
                         icon_url=config.ICON_URL)
 
 
-async def do_matches(channel_id: int, msg: Message, participants=None):
+async def do_matches(channel_id: int, msg: Message, participants=None, name="Battle Royale"):
     winners = deque()
     # i = config.battle_royale_participants[0].copy()
     # i['id'], i['username'] = '228969462785638410', '228969462785638410'
@@ -72,13 +72,17 @@ async def do_matches(channel_id: int, msg: Message, participants=None):
                 "timeout": time.time() + 60,
                 'battle_type': 1,
             }
+            if 'Free' in name:
+                battle_instance['type'] = 'free_br'
+                battle_instance['z1'] = p1['zerp']
+                battle_instance['z2'] = p2['zerp']
             config.battle_dict[msg.id] = battle_instance
 
             try:
 
                 winner = await battle_function.proceed_battle(msg, battle_instance,
                                                               battle_instance['battle_type'],
-                                                              battle_name='Battle Royale')
+                                                              battle_name=name)
                 p1['zerp_name'] = battle_instance['z1_name']
                 p2['zerp_name'] = battle_instance['z2_name']
                 if winner == 1:

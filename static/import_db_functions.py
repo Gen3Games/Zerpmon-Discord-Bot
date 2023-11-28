@@ -77,7 +77,7 @@ def import_moves():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_for_Glad.csv', 'r') as csvfile:
         collection = db['MoveSets']
         # c2 = db['MoveSets2']
         # c2.drop()

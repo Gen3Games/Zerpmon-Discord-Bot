@@ -1881,7 +1881,9 @@ async def nft(interaction: nextcord.Interaction, your_nft_id: str, opponent_nft_
 
 @wager_battle.subcommand(name='battle_royale',
                          description="Battle Royale by waging equal amounts of XRP (Winner takes all)")
-async def battle_royale_wager(interaction: nextcord.Interaction, amount: int,
+async def battle_royale_wager(interaction: nextcord.Interaction,
+                              br_type: str = SlashOption(name='type', required=True, choices=["normal", "round-robin"]),
+                              amount: int = SlashOption(required=True, min_value=1),
                               reward: str = SlashOption(
                                   name="reward",
                                   choices={"XRP": 'XRP', "ZRP": 'ZRP'},
@@ -1983,50 +1985,52 @@ async def battle_royale_wager(interaction: nextcord.Interaction, amount: int,
         config.battle_royale_started = False
         await msg.edit(embed=CustomEmbed(description="Battle **beginning**"), view=None)
         total_amount = len(config.battle_royale_participants) * amount
-        while len(config.battle_royale_participants) > 1:
-            random_ids = random.sample(config.battle_royale_participants, 2)
-            # Remove the selected IDs from the array
-            config.battle_royale_participants = [id_ for id_ in config.battle_royale_participants if
-                                                 id_ not in random_ids]
-            config.ongoing_battles.append(random_ids[0]['id'])
-            config.ongoing_battles.append(random_ids[1]['id'])
+        if br_type == 'normal':
+            while len(config.battle_royale_participants) > 1:
+                random_ids = random.sample(config.battle_royale_participants, 2)
+                # Remove the selected IDs from the array
+                config.battle_royale_participants = [id_ for id_ in config.battle_royale_participants if
+                                                     id_ not in random_ids]
+                config.ongoing_battles.append(random_ids[0]['id'])
+                config.ongoing_battles.append(random_ids[1]['id'])
 
-            battle_instance = {
-                "type": 'friendly',
-                "challenger": random_ids[0]['id'],
-                "username1": random_ids[0]['username'],
-                "challenged": random_ids[1]['id'],
-                "username2": random_ids[1]['username'],
-                "active": True,
-                "channel_id": interaction.channel_id,
-                "timeout": time.time() + 60,
-                'battle_type': 1,
-            }
-            config.battle_dict[msg.id] = battle_instance
+                battle_instance = {
+                    "type": 'friendly',
+                    "challenger": random_ids[0]['id'],
+                    "username1": random_ids[0]['username'],
+                    "challenged": random_ids[1]['id'],
+                    "username2": random_ids[1]['username'],
+                    "active": True,
+                    "channel_id": interaction.channel_id,
+                    "timeout": time.time() + 60,
+                    'battle_type': 1,
+                }
+                config.battle_dict[msg.id] = battle_instance
 
-            try:
+                try:
 
-                winner = await battle_function.proceed_battle(msg, battle_instance,
-                                                              battle_instance['battle_type'],
-                                                              battle_name='Wager Battle Royale')
-                if winner == 1:
-                    config.battle_royale_participants.append(random_ids[0])
-                elif winner == 2:
-                    config.battle_royale_participants.append(random_ids[1])
-            except Exception as e:
-                logging.error(f"ERROR during wager battle Royale: {e}\n{traceback.format_exc()}")
-                await interaction.send(
-                    f'Something went wrong during this match, returning both participants `{reward}`')
-                for user in [random_ids[0], random_ids[1]]:
-                    await send_amount(user["address"],
-                                      amount, 'wager')
+                    winner = await battle_function.proceed_battle(msg, battle_instance,
+                                                                  battle_instance['battle_type'],
+                                                                  battle_name='Wager Battle Royale')
+                    if winner == 1:
+                        config.battle_royale_participants.append(random_ids[0])
+                    elif winner == 2:
+                        config.battle_royale_participants.append(random_ids[1])
+                except Exception as e:
+                    logging.error(f"ERROR during wager battle Royale: {e}\n{traceback.format_exc()}")
+                    await interaction.send(
+                        f'Something went wrong during this match, returning both participants `{reward}`')
+                    for user in [random_ids[0], random_ids[1]]:
+                        await send_amount(user["address"],
+                                          amount, 'wager')
 
-                    total_amount -= amount
-            finally:
-                config.ongoing_battles.remove(random_ids[0]['id'])
-                config.ongoing_battles.remove(random_ids[1]['id'])
-                del config.battle_dict[msg.id]
-
+                        total_amount -= amount
+                finally:
+                    config.ongoing_battles.remove(random_ids[0]['id'])
+                    config.ongoing_battles.remove(random_ids[1]['id'])
+                    del config.battle_dict[msg.id]
+        else:
+            await br_helper.do_matches(interaction.channel_id, msg, name='Wager Battle Royale')
         await msg.channel.send(
             f"**CONGRATULATIONS** **{config.battle_royale_participants[0]['username']}** on winning the Wager Battle Royale!")
 
@@ -2584,7 +2588,9 @@ async def free(interaction: nextcord.Interaction):
 
 
 @free.subcommand(name='battle_royale', description="Battle Royale initiated using XRP by one person (Winner takes it)")
-async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
+async def free_battle_royale(interaction: nextcord.Interaction,
+                             br_type: str = SlashOption(name='type', required=True, choices=["normal", "round-robin"]),
+                             amount: int = SlashOption(required=True, min_value=0),
                              reward: str = SlashOption(
                                  name="reward",
                                  choices={"XRP": 'XRP', "ZRP": 'ZRP'},
@@ -2697,47 +2703,50 @@ async def free_battle_royale(interaction: nextcord.Interaction, amount: int,
                                  inline=False)
         await msg.edit(embed=zerp_embed, view=None)
         total_amount = amount
-        while len(players_obj) > 1:
-            random_ids = random.sample(players_obj, 2)
-            # Remove the selected IDs from the array
-            players_obj = [id_ for id_ in players_obj if
-                                                   id_ not in random_ids]
-            config.ongoing_battles.append(random_ids[0]['id'])
-            config.ongoing_battles.append(random_ids[1]['id'])
+        if br_type == 'normal':
+            while len(players_obj) > 1:
+                random_ids = random.sample(players_obj, 2)
+                # Remove the selected IDs from the array
+                players_obj = [id_ for id_ in players_obj if
+                               id_ not in random_ids]
+                config.ongoing_battles.append(random_ids[0]['id'])
+                config.ongoing_battles.append(random_ids[1]['id'])
 
-            battle_instance = {
-                "type": 'free_br',
-                "challenger": random_ids[0]['id'],
-                "z1": random_ids[0]['zerp'],
-                "username1": random_ids[0]['username'],
-                "challenged": random_ids[1]['id'],
-                "z2": random_ids[1]['zerp'],
-                "username2": random_ids[1]['username'],
-                "active": True,
-                "channel_id": interaction.channel_id,
-                "timeout": time.time() + 60,
-                'battle_type': 1,
-            }
-            config.battle_dict[msg.id] = battle_instance
+                battle_instance = {
+                    "type": 'free_br',
+                    "challenger": random_ids[0]['id'],
+                    "z1": random_ids[0]['zerp'],
+                    "username1": random_ids[0]['username'],
+                    "challenged": random_ids[1]['id'],
+                    "z2": random_ids[1]['zerp'],
+                    "username2": random_ids[1]['username'],
+                    "active": True,
+                    "channel_id": interaction.channel_id,
+                    "timeout": time.time() + 60,
+                    'battle_type': 1,
+                }
+                config.battle_dict[msg.id] = battle_instance
 
-            try:
+                try:
 
-                winner = await battle_function.proceed_battle(msg, battle_instance,
-                                                              battle_instance['battle_type'],
-                                                              battle_name='Free Battle Royale')
-                if winner == 1:
-                    players_obj.append(random_ids[0])
-                elif winner == 2:
-                    players_obj.append(random_ids[1])
-            except Exception as e:
-                logging.error(f"ERROR during friendly battle R: {e}\n{traceback.format_exc()}")
-                await interaction.send(
-                    f'Something went wrong during this match{", returning `" + reward + "`" if amount > 0 else ""}')
-            finally:
-                config.ongoing_battles.remove(random_ids[0]['id'])
-                config.ongoing_battles.remove(random_ids[1]['id'])
-                del config.battle_dict[msg.id]
-
+                    winner = await battle_function.proceed_battle(msg, battle_instance,
+                                                                  battle_instance['battle_type'],
+                                                                  battle_name='Free Battle Royale')
+                    if winner == 1:
+                        players_obj.append(random_ids[0])
+                    elif winner == 2:
+                        players_obj.append(random_ids[1])
+                except Exception as e:
+                    logging.error(f"ERROR during friendly battle R: {e}\n{traceback.format_exc()}")
+                    await interaction.send(
+                        f'Something went wrong during this match{", returning `" + reward + "`" if amount > 0 else ""}')
+                finally:
+                    config.ongoing_battles.remove(random_ids[0]['id'])
+                    config.ongoing_battles.remove(random_ids[1]['id'])
+                    del config.battle_dict[msg.id]
+        else:
+            players_obj = await br_helper.do_matches(interaction.channel_id, msg, players_obj,
+                                                     name="Free Battle Royale")
         await msg.channel.send(embed=CustomEmbed(
             description=f"**CONGRATULATIONS** **{players_obj[0]['username']}** on winning the Battle Royale!\n"
                         f"Thanks for playing Zerpmon Battle Royale, if you would like to level-up, battle and earn {reward} with your very own Zerpmon, you can purchase one [here](https://xrp.cafe/collection/zerpmon)\n"
