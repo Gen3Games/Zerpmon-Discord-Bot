@@ -105,10 +105,12 @@ async def update_nft_holdings(client: nextcord.Client):
                         if loaned:
                             serials.append(serial)
                         else:
-                            db_query.remove_user_nft(user_obj['discord_id'], serial, False)
+                            if False:
+                                db_query.remove_user_nft(user_obj['discord_id'], serial, False)
                 for serial in list(old_user['trainer_cards'].keys()):
                     if serial not in t_serial:
-                        db_query.remove_user_nft(user_obj['discord_id'], serial, True)
+                        if False:
+                            db_query.remove_user_nft(user_obj['discord_id'], serial, True)
                 for serial in list(old_user['equipments'].keys()):
                     if serial not in e_serial:
                         db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
@@ -142,7 +144,7 @@ async def update_nft_holdings(client: nextcord.Client):
                                 print(f"USER already has the required role {e}")
                             await asyncio.sleep(2)
 
-                db_query.update_user_decks(user_obj['discord_id'], serials, t_serial)
+                db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial)
             except Exception as e:
                 logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
 

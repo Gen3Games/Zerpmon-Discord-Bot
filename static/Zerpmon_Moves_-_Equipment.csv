@@ -22,3 +22,7 @@ OMNI,17.5% chance for enemy Gold Attack to do 0 damage,25% chance to pierce oppo
 OMNI,Reduce opponent damage by 17.5%,Increase own purple moves by 1 star,Iron Shield
 OMNI,11.5% chance to survive from being knocked out by opponent,Increase opponent miss chance by 6.25%,Magic Wand
 OMNI,Increases own crit chance by 15%,Decrease own miss chance by 12.5%,Longbow
+OMNI,Decrease own miss chance by 50%,Decrease Own damage by 35%,Life Core
+OMNI,When Miss Roll again 50% chance,,Magic Blindfold
+OMNI,Increase Own Miss chance by 25%,Increase own damage by 70%,Power Glove
+OMNI,Increase Own Blue Chance by 12.5%,Decrease Opponent Blue Chance by 12.5%,Tattered Cloak

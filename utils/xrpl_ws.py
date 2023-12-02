@@ -47,8 +47,7 @@ async def get_ws_client():
 async def get_nft_metadata_safe(uri, token_id):
     try:
         data = xrpl_functions.get_nft_metadata(uri)
-        img = ('https://ipfs.io/ipfs/' + data['image'].replace("ipfs://",
-                                                               "")) if 'image' in data else ''
+        img = (data['image'] if "https:/" in data['image'] else 'https://ipfs.io/ipfs/' + data['image'].replace("ipfs://", "")) if 'image' in data else ''
         data['image'] = img
     except:
         url, name = await get_nft_data_wager(token_id)
@@ -254,6 +253,7 @@ async def listener(client, store_address, wager_address):
                                 else:
                                     if message['Destination'] == store_address:
                                         user_id = user['discord_id']
+                                        st_bal = await get_balance(config.STORE_ADDR)
                                         if user_id in config.revive_potion_buyers:
                                             qty = config.revive_potion_buyers[user_id]
                                             if amount == round(config.POTION[0] * qty, 6) or (
@@ -265,7 +265,8 @@ async def listener(client, store_address, wager_address):
                                                 config.store_24_hr_buyers.append(user_id)
                                                 config.latest_purchases[user_id] = amount
                                                 del config.revive_potion_buyers[user_id]
-                                                await send_txn(Reward_address, amount, 'store')
+                                                if st_bal > 40:
+                                                    await send_txn(Reward_address, amount, 'store')
                                         if user_id in config.mission_potion_buyers:
                                             qty = config.mission_potion_buyers[user_id]
                                             if amount == round(config.MISSION_REFILL[0] * qty, 6) or (
@@ -277,11 +278,13 @@ async def listener(client, store_address, wager_address):
                                                 config.store_24_hr_buyers.append(user_id)
                                                 config.latest_purchases[user_id] = amount
                                                 del config.mission_potion_buyers[user_id]
-                                                await send_txn(Reward_address, amount, 'store')
+                                                if st_bal > 40:
+                                                    await send_txn(Reward_address, amount, 'store')
                                         else:
                                             config.latest_purchases[user_id] = amount
                                             print('Here', amount, config.latest_purchases)
-                                            await send_txn(Reward_address, amount, 'store')
+                                            if st_bal > 40:
+                                                await send_txn(Reward_address, amount, 'store')
 
                                     elif message['Destination'] == wager_address:
                                         # Check wager addresses and add them to global var wager_senders

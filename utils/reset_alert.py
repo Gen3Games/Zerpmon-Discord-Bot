@@ -49,19 +49,22 @@ async def send_reset_message(client: nextcord.Client):
                 await asyncio.sleep(5)
             all_users = db_query.get_all_users()
             for user in all_users:
-                if 'gym' in user:
-                    won_gyms = user['gym'].get('won', {})
-                    for gym, obj in won_gyms.items():
-                        if obj['next_battle_t'] < time.time() - 86300:
-                            db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True)
-                        else:
-                            db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False)
-                for r_key in ['rank', 'rank1', 'rank5']:
-                    if r_key in user:
-                        rnk = user[r_key]['tier']
-                        decay_tiers = config.TIERS[-2:]
-                        if user[r_key]['last_battle_t'] < time.time() - 86400 and rnk in decay_tiers:
-                            db_query.update_rank(user['discord_id'], win=False, decay=True, field=r_key)
+                try:
+                    if 'gym' in user:
+                        won_gyms = user['gym'].get('won', {})
+                        for gym, obj in won_gyms.items():
+                            if obj['next_battle_t'] < time.time() - 86300:
+                                db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True)
+                            else:
+                                db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False)
+                    for r_key in ['rank', 'rank1', 'rank5']:
+                        if r_key in user:
+                            rnk = user[r_key]['tier']
+                            decay_tiers = config.TIERS[-2:]
+                            if user[r_key]['last_battle_t'] < time.time() - 86400 and rnk in decay_tiers:
+                                db_query.update_rank(user['discord_id'], win=False, decay=True, field=r_key)
+                except:
+                    logging.error(f'USER OBJ ERROR: {traceback.format_exc()}')
             active_loans, expired_loans = db_query.get_active_loans()
             offer_expired = [f"<@{_i['listed_by']['id']}> your loan listing for {_i['zerpmon_name']} has been deactivated\n" for _i in expired_loans]
             for loan in active_loans:

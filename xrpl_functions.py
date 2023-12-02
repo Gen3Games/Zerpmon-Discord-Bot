@@ -162,13 +162,13 @@ def get_nft_metadata(uri, multi=False):
         with open("./static/metadata.json", "r") as f:
             data = json.load(f)
             obj = {}
-            for item in data:
-                if multi:
-                    if item["uri"] in uri:
-                        obj[item["uri"]] = item['metadata']
-                else:
-                    if item["uri"] == uri:
-                        return item['metadata']
+            if multi:
+                for u in uri:
+                    if u in data:
+                        obj[u] = data[u]['metadata']
+            else:
+                if uri in data:
+                    return data[uri]['metadata']
             if multi:
                 return obj
         return None
@@ -180,7 +180,7 @@ def get_nft_metadata_by_id(nftid):
     try:
         with open("./static/metadata.json", "r") as f:
             data = json.load(f)
-            for item in data:
+            for k, item in data.items():
                 if item["nftid"] == nftid:
                     return item
         return None
@@ -192,7 +192,7 @@ def get_nft_id_by_name(name):
     try:
         with open("./static/metadata.json", "r") as f:
             data = json.load(f)
-            for item in data:
+            for k, item in data.items():
                 if item["metadata"]['name'] == name:
                     return item["nftid"]
         return None

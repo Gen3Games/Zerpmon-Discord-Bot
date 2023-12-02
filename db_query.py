@@ -38,7 +38,7 @@ def save_user(user):
     user = json.loads(doc_str)
     print(user)
     result = users_collection.update_one(
-        {'discord_id': user['discord_id']},
+        {'address': user['address']},
         {'$set': user},
         upsert=True
     )
@@ -49,7 +49,7 @@ def save_user(user):
         print(f"Updated user")
 
 
-def update_user_decks(discord_id, serials, t_serial):
+def update_user_decks(address, discord_id, serials, t_serial):
     user_obj = get_owned(discord_id)
 
     mission_trainer = user_obj["mission_trainer"] if 'mission_trainer' in user_obj else ""
@@ -84,7 +84,7 @@ def update_user_decks(discord_id, serials, t_serial):
     logging.error(f'Serials {serials} \nnew deck: {new_battle_deck}')
     save_user({'mission_trainer': mission_trainer, 'mission_deck': new_mission_deck,
                'battle_deck': new_battle_deck, 'gym_deck': new_gym_deck,
-               'discord_id': user_obj["discord_id"]})
+               'discord_id': user_obj["discord_id"], 'address': address})
 
 
 def remove_user_nft(discord_id, serial, trainer=False, equipment=False):
@@ -146,7 +146,7 @@ def get_all_users():
     users_collection = db['users']
 
     result = users_collection.find()
-    return [i for i in result]
+    return [i for i in result if i.get('discord_id', None)]
 
 
 def get_owned(user_id):

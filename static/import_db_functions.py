@@ -1,4 +1,5 @@
 import json
+import traceback
 
 import pymongo
 import csv
@@ -293,6 +294,7 @@ def get_issuer_nfts_data(issuer):
         print("get_collection_5kk")
         url = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer={issuer}"
         response = requests.get(url)
+        # print(response.text)
         response = response.json()
 
         nfts = response['nfts']
@@ -320,7 +322,7 @@ def get_issuer_nfts_data(issuer):
         print("Total NFTs: ", len(nfts))
         return nfts
     except Exception as e:
-        print(str(e), ' error')
+        print(traceback.format_exc())
 
 
 def cache_data():
@@ -334,15 +336,15 @@ def cache_data():
         z_nfts.extend(c_nfts)
         tba = get_cached()
         for nft in z_nfts:
-            if not check_nft_cached(nft['nftokenID'], tba):
+            if nft['uri'] not in tba:
                 for _i, j in enumerate(nft['metadata']['attributes']):
                     if j['trait_type'] == 'Type':
                         nft['metadata']['attributes'][_i]['value'] = str(j['value']).strip().lower().title()
-                tba.append({
+                tba[nft['uri']] = {
                     'nftid': nft['nftokenID'],
                     'metadata': nft['metadata'],
                     'uri': nft['uri']
-                })
+                }
         with open("./metadata.json", "w") as f:
             json.dump(tba, f)
 
@@ -390,14 +392,28 @@ def import_equipments():
             })
 
 
+def switch_cached():
+    with open("./metadata.json", "r") as f:
+        arr = json.load(f)
+        new_t = {}
+        uris = []
+        for i in arr:
+            if i['uri'] not in uris:
+                uris.append(i['uri'])
+                new_t[i['uri']] = i
+        print(new_t, len(new_t))
+        with open("./metadata.json", "w") as fw:
+            json.dump(new_t, fw, indent=2)
+
+# switch_cached()
 # import_boxes()
-import_moves()
-import_movesets()
-# import_level()
-import_attrs_img()
-clean_attrs()
-update_all_zerp_moves()
-cache_data()
-# import_equipments()
+# import_moves()
+# import_movesets()
+# # import_level()
+# import_attrs_img()
+# clean_attrs()
+# update_all_zerp_moves()
+# cache_data()
+import_equipments()
 
 # reset_all_gyms()
