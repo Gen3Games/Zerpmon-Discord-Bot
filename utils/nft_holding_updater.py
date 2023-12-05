@@ -113,7 +113,8 @@ async def update_nft_holdings(client: nextcord.Client):
                             db_query.remove_user_nft(user_obj['discord_id'], serial, True)
                 for serial in list(old_user['equipments'].keys()):
                     if serial not in e_serial:
-                        db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
+                        if False:
+                            db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
                 if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
                     for guild in guilds:

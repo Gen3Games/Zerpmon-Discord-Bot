@@ -174,7 +174,7 @@ def get_nft_metadata(uri, multi=False):
         return None
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
-
+# print(get_nft_metadata('697066733A2F2F516D5569335961754250393173537159347576686234437335587768734C67456A3274625074523138696656654B2F3130332E6A736F6E'))
 
 def get_nft_metadata_by_id(nftid):
     try:

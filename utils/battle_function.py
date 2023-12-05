@@ -17,6 +17,10 @@ import config
 import db_query
 from utils import xrpl_ws, checks
 
+OMNI_TRAINERS = ["0008138805D83B701191193A067C4011056D3DEE2B298C55535743B50000001A",
+                 "0008138805D83B701191193A067C4011056D3DEE2B298C556A3D14B60000001B",
+                 "0008138805D83B701191193A067C4011056D3DEE2B298C553C7172B400000019"]
+
 
 class CustomEmbed(nextcord.Embed):
     def __init__(self, *args, **kwargs):
@@ -128,7 +132,8 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                  'new_b2': z2_blue_percent}
 
     for eq1_lower in eq1_lower_list:
-        if ('opponent miss chance' in eq1_lower and z1.get('eq_applied', '') != z2['name']) or ('eq_applied' not in z1 and 'miss chance' in eq1_lower):
+        if ('opponent miss chance' in eq1_lower and z1.get('eq_applied', '') != z2['name']) or (
+                'eq_applied' not in z1 and 'miss chance' in eq1_lower):
             # if 'own miss chance' in eq1_lower:
             #     match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             #     buffer_m = (int(float(match.group())) if match is not None else 0)
@@ -138,19 +143,20 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
             #     z1['buffer_miss'] = 0
             z1['eq_applied'] = z2['name']
             status_affects[0].append(eq1_lower)
-        elif ('opponent blue chance' in eq1_lower) or ('eq_applied' not in z1 and 'blue chance' in eq1_lower):
+        elif ('opponent blue chance' in eq1_lower) or ('own blue chance' in eq1_lower):
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             percent_c = float(match.group()) if match is not None else 0
             if 'oppo' in eq1_lower:
                 blue_dict['new_b2'] = z2_blue_percent - percent_c
             else:
-                z1['eq_applied'] = z2['name']
+                # z1['eq_applied'] = z2['name']
                 blue_dict['new_b1'] = z1_blue_percent + percent_c
         if 'increase' in eq1_lower and 'star' in eq1_lower:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             extra_star1 = int(float(match.group())) if match is not None else 0
     for eq2_lower in eq2_lower_list:
-        if ('opponent miss chance' in eq2_lower and z2.get('eq_applied', '') != z1['name']) or ('eq_applied' not in z2 and 'miss chance' in eq2_lower):
+        if ('opponent miss chance' in eq2_lower and z2.get('eq_applied', '') != z1['name']) or (
+                'eq_applied' not in z2 and 'miss chance' in eq2_lower):
             # if 'own miss chance' in eq2_lower:
             #     match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             #     buffer_m = (int(float(match.group())) if match is not None else 0)
@@ -160,13 +166,13 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
             #     z2['buffer_miss'] = 0
             z2['eq_applied'] = z1['name']
             status_affects[1].append(eq2_lower)
-        elif ('opponent blue chance' in eq2_lower) or ('eq_applied' not in z2 and 'blue chance' in eq2_lower):
+        elif ('opponent blue chance' in eq2_lower) or ('own blue chance' in eq2_lower):
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             percent_c = float(match.group()) if match is not None else 0
             if 'oppo' in eq2_lower:
                 blue_dict['new_b1'] = z1_blue_percent - percent_c
             else:
-                z2['eq_applied'] = z1['name']
+                # z2['eq_applied'] = z1['name']
                 blue_dict['new_b2'] = z2_blue_percent + percent_c
         if 'increase' in eq2_lower and 'star' in eq2_lower:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
@@ -492,7 +498,6 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                     if ((move2['color'] == 'white' and move1['color'] == 'purple' and winner['move1']['stars'] > 0) or (
                             move2['color'] in ['white', 'gold'] and z1_blue_trigger)):
 
-
                         trigger = random.choices([True, False], [eq2_vals[idx], 100 - eq2_vals[idx]])[0]
                         m_name = move1['name'] if (
                                 move2['color'] == 'white' and move1['color'] == 'purple' and winner['move1'][
@@ -561,10 +566,12 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                             winner['eq1_name'] = buff_eqs[0]
     if new_dmg1 != old_dmg1:
         n_dmg = winner['move1']['dmg']
-        winner['dmg_str1'] = f"({old_dmg1} x{n_dmg / old_dmg1:.1f})={n_dmg} {'❤️‍🩹' if n_dmg < old_dmg1 else '❤️‍🔥'} "
+        winner[
+            'dmg_str1'] = f" ({old_dmg1} x{int(n_dmg / old_dmg1)}) {n_dmg} {'❤️‍🩹' if n_dmg < old_dmg1 else '❤️‍🔥'} "
     if new_dmg2 != old_dmg2:
         n_dmg = winner['move2']['dmg']
-        winner['dmg_str2'] = f"({old_dmg2} x{n_dmg / old_dmg2:.1f})={n_dmg} {'❤️‍🩹' if n_dmg < old_dmg2 else '❤️‍🔥'} "
+        winner[
+            'dmg_str2'] = f" ({old_dmg2} x{int(n_dmg / old_dmg2)}) {n_dmg} {'❤️‍🩹' if n_dmg < old_dmg2 else '❤️‍🔥'} "
     # Check Color of both moves
     pre_percentages1, pre_percentages2 = percentages1.copy(), percentages2.copy()
 
@@ -923,6 +930,9 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                 i = 'Dragon'
             if i in buffed_type1:
                 buffed_zerp = i
+            elif tc1['nft_id'] in OMNI_TRAINERS:
+                buffed_zerp = i
+                break
 
         z2 = user2_zerpmons[-1]
         z2_moves = z2['moves']
@@ -1438,6 +1448,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                       'teamB': {'trainer': tc2, 'zerpmons': []}, 'battle_type': battle_name}
 
     else:
+        tc1, tc2 = None, None
         user1_zerpmons = [user1_zerpmons[battle_instance['z1']]] if type(battle_instance['z1']) is str else [
             battle_instance['z1']]
         user2_zerpmons = [user2_zerpmons[battle_instance['z2']]] if type(battle_instance['z2']) is str else [
@@ -1471,6 +1482,10 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                 i = 'Dragon'
             if i in buffed_type1:
                 buffed_zerp1 = i
+            elif tc1 and tc1['nft_id'] in OMNI_TRAINERS:
+                buffed_zerp1 = i
+                break
+
         if 'buff_eq' in z1:
             eq1 = _data1['equipments'][z1['eq']]
             types1 = {}
@@ -1492,6 +1507,9 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                 i = 'Dragon'
             if i in buffed_type2:
                 buffed_zerp2 = i
+            elif tc2 and tc2['nft_id'] in OMNI_TRAINERS:
+                buffed_zerp1 = i
+                break
         if 'buff_eq' in z2:
             eq2 = _data2['equipments'][z2['eq']]
             types2 = {}
@@ -1598,7 +1616,6 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                     break
 
             print(result)
-
 
             # purple attacks
             if 'status_effect' in result:
@@ -1863,8 +1880,12 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
 
     z1_type = [i['value'] for i in z1['attributes'] if i['trait_type'] == 'Type']
     buffed_type1 = []
+    has_omni_t = False
     if len(_data1['trainer_cards']) > 0:
         for key, tc1 in _data1['trainer_cards'].items():
+            if tc1.get('nft_id', '') in OMNI_TRAINERS:
+                has_omni_t = True
+                break
             buffed_type1.extend(
                 [i['value'] for i in tc1['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type'])
 
@@ -1875,6 +1896,9 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             i = 'Dragon'
         if i in buffed_type1:
             buffed_zerp = i
+        elif has_omni_t:
+            buffed_zerp = i
+            break
 
     z2 = db_query.get_rand_zerpmon(level=z1_level)
     while z2['name'] == z1['name']:
