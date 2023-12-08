@@ -28,13 +28,13 @@ class CustomEmbed(nextcord.Embed):
 
 button_cache = {'revive': [], 'mission': []}
 SAFARI_REWARD_CHANCES = {
-    "zrp": 88.4166,
+    "zrp": 87.5833,
     "battle_zone": 0.8667,
     "name_flair": 0.1667,
     "candy_white": 2.1667,
     "candy_gold": 2.1667,
     "candy_level_up": 0.8333,
-    "equipment": 0, # 0.7000,
+    "equipment": 0.7000,
     "jackpot": 0.1833,
     "gym_refill": 2.6667,
     "revive_potion": 1.2667,
@@ -876,6 +876,12 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 print(_i.data, holdings)
                 selected_option = _i.data["values"][0]  # Get the selected option
                 await _i.response.defer(ephemeral=True)
+                has_bought = db_query.not_bought_eq(addr, selected_option)
+                if has_bought:
+                    await _i.edit_original_message(content=f"Sorry, you have already bought {selected_option}\n"
+                                                           f"`Note: Can only buy 1 of each type from Store`", embeds=[],
+                                                   view=View())
+                    return
                 proceed = check_eq_in_wallet(selected_option, holdings.get(selected_option, 0))
                 if not proceed:
                     await _i.edit_original_message(content="Sorry, this equipment have been sold out", embeds=[],
@@ -898,6 +904,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                     if created:
                         # Make 0 XRP sell offer of equipment NFT
                         # XUMM txn for buying the NFT using ZRP
+                        db_query.save_bought_eq(addr, selected_option)
                         addr, success = await zrp_purchase_callback(_i, amount=amount, item=label, buy_offer=True,
                                                                     offerId=data[-1], token_id=data[-2])
                         if success:
@@ -911,7 +918,9 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                 content="Failed, please make sure to sign the **TXN** within a few minutes", embeds=[],
                                 view=View())
                             db_query.remove_token_sent(data[-2])
-                            await cancel_offer('store', data[-1])
+                            cancelled =await cancel_offer('store', data[-1])
+                            if cancelled:
+                                db_query.remove_bought_eq(addr, selected_option)
                     else:
                         await _i.edit_original_message(content="Failed, Something went wrong", embeds=[], view=View())
                         db_query.remove_token_sent(data[-2])

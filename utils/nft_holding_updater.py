@@ -28,7 +28,8 @@ async def update_nft_holdings(client: nextcord.Client):
         for old_user in all_users:
             user_obj = old_user
             try:
-                if 'address' not in user_obj or len(user_obj['address']) < 5 or user_obj['address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':
+                if 'address' not in user_obj or len(user_obj['address']) < 5 or user_obj[
+                    'address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':
                     continue
                 good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
                 if not good_status:
@@ -105,16 +106,16 @@ async def update_nft_holdings(client: nextcord.Client):
                         if loaned:
                             serials.append(serial)
                         else:
-                            if False:
-                                db_query.remove_user_nft(user_obj['discord_id'], serial, False)
+                            # if False:
+                            db_query.remove_user_nft(user_obj['discord_id'], serial, False)
                 for serial in list(old_user['trainer_cards'].keys()):
                     if serial not in t_serial:
-                        if False:
-                            db_query.remove_user_nft(user_obj['discord_id'], serial, True)
+                        # if False:
+                        db_query.remove_user_nft(user_obj['discord_id'], serial, True)
                 for serial in list(old_user['equipments'].keys()):
                     if serial not in e_serial:
-                        if False:
-                            db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
+                        # if False:
+                        db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
                 if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
                     for guild in guilds:

@@ -6,7 +6,7 @@ from statistics import mean
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models import IssuedCurrency, AccountLines, Transaction
 from xrpl.models.requests.account_nfts import AccountNFTs
-from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx, NFTSellOffers, request
+from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx, NFTSellOffers, request, AccountTx
 from xrpl.transaction import get_transaction_from_hash
 import config
 import json
@@ -267,6 +267,72 @@ async def get_tx(client, hash_):
             print(e)
             await asyncio.sleep(1)
 
+
+async def all_tx(address, zrp=False, url=False):
+    print('run')
+    # 'wss://xrplcluster.com/'
+    # "wss://r1.staykx.com:6005/"
+    client = AsyncJsonRpcClient('https://xrplcluster.com/' if not url else url)
+    marker = True
+    markerVal = None
+    total = 0
+    count = 0
+    for i in range(5):
+        try:
+            while marker:
+                print('Making req...')
+                acct_info = AccountTx(
+                    account=address,
+                    ledger_index_min=-1,
+                    ledger_index_max=-1,
+                    ledger_index="validated",
+                    limit=400,
+                    marker=markerVal
+                )
+                response = await client.request(acct_info)
+                result = response.result
+                print(result, total, count)
+                for txn in result["transactions"]:
+                    # print(txn)
+                    try:
+                        if not zrp:
+                            count += 1
+                            a = txn.get('tx', {}).get('Amount', 0)
+                            total += int(a)
+                            print(f"Count {count}       Total sent: {total/(10**6)} XRP     Value {a}")
+                        else:
+                            count += 1
+                            a = txn.get('tx', {}).get('Amount', {}).get('value', 0)
+                            if float(a) >= 500:
+                                continue
+                            total += float(a)
+
+                            print(f"{address} TxnCount {count}    Total sent: {round(total, 2)} ZRP     Value {a}")
+                    except:
+                        print(traceback.format_exc())
+                if "marker" in result:
+                    markerVal = result["marker"]
+                    print(result["marker"])
+                else:
+                    marker = False
+            print(txn)
+            return total
+
+        except Exception as e:
+            print('Error', traceback.format_exc())
+            await asyncio.sleep(10)
+
+
+async def testMain():
+    # task1 = asyncio.create_task(all_tx(config.ZRP_STORE, zrp=True))
+    task2 = asyncio.create_task(all_tx(config.STORE_ADDR, zrp=True, url="https://xrpl.ws/"))
+
+    # Wait for both tasks to complete
+    await asyncio.gather(task2)
+
+
+# Run the main coroutine using asyncio.run()
+# asyncio.run(testMain())
 
 async def get_sell_offers(client, nft_id):
     for i in range(5):

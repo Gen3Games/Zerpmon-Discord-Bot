@@ -1230,7 +1230,8 @@ def apply_white_candy(user_id, zerp_name, amt=1):
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'white':
-            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * (0.02*amt)), 1)
+            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * (0.02 * amt)),
+                                            1)
     del zerp['_id']
     white_candy_usage = cnt
     zerp['white_candy'] = white_candy_usage + amt
@@ -1252,7 +1253,8 @@ def apply_gold_candy(user_id, zerp_name, amt=1):
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'gold':
-            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * (0.02*amt), 1)
+            zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * (0.02 * amt),
+                                            1)
     del zerp['_id']
     gold_candy_usage = cnt
     zerp['gold_candy'] = gold_candy_usage + amt
@@ -1622,6 +1624,7 @@ def get_br_dict():
     doc = col.find_one({'address': '0x0'})
     return doc.get('data', []) if doc else []
 
+
 """GIFT BOXES"""
 
 
@@ -1656,3 +1659,26 @@ def remove_token_sent(token_id):
 def get_all_tokens_sent():
     col = db['rewarded_nfts']
     return [i['nft'] for i in col.find({})]
+
+
+def save_bought_eq(addr, eq_name):
+    col = db['purchase_history_eq']
+    col.update_one({'address': addr}, {'$push': {'bought_eqs': eq_name}}, upsert=True)
+
+
+def remove_bought_eq(addr, eq_name):
+    col = db['purchase_history_eq']
+    col.update_one(
+        {'address': addr},
+        {'$pull': {'bought_eqs': {'$eq': eq_name}}},
+    )
+
+
+def not_bought_eq(addr, eq_name):
+    col = db['purchase_history_eq']
+    obj = col.find_one({'address': addr})
+    if obj is None:
+        return True
+    else:
+        purchased = obj.get('bought_eqs', [])
+        return eq_name in purchased

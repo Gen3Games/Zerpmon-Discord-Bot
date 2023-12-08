@@ -1014,7 +1014,7 @@ async def get_latest_nft_offers(address):
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
-# asyncio.run(send_zrp('rZ4D18peYsVMwJ5QafNJNzUAsWQmguYp7', 1, 'loan'))
+# asyncio.run(send_zrp(config.ISSUER['ZRP'], 7300.9568, 'safari'))
 # asyncio.run(send_txn('rLNNGQwberUSwBVT4AxxcHdo67SnccwhZc', 1, 'wager'))
 
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))
