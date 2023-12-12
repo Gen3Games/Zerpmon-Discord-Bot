@@ -82,7 +82,7 @@ def update_purple_stars(total, status_affect_solo):
     return total, status_affect_solo
 
 
-def update_array(arr, index, value, own=False):
+def update_array(arr, index, value, own=False, is_boss=False):
     caller_name = inspect.currentframe().f_back.f_code.co_name
     print("Caller function:", caller_name)
     print('ARR RECV: ', arr, value)
@@ -102,7 +102,11 @@ def update_array(arr, index, value, own=False):
             buffer_miss += remaining_value - arr[index]
         remaining_value = arr[index]
     print(f'here: {remaining_value, value, buffer_miss, arr}')
+    if index == 7 and is_boss and remaining_value + arr[7] > 70:
+        remaining_value = 70 - arr[-1]
     if value < 0 and arr[-1] is not None and not own:
+        if is_boss and remaining_value + arr[-1] > 70:
+            remaining_value = 70 - arr[-1]
         arr[index] -= remaining_value
         arr[-1] += remaining_value
         print('ARR RET: ', arr)
@@ -142,7 +146,7 @@ def update_array(arr, index, value, own=False):
     return arr
 
 
-def apply_status_effects(p1, p2, status_e):
+def apply_status_effects(p1, p2, status_e, is_boss=False):
     print(f'old: {p1, p2}, {status_e}')
     old_miss1, old_miss2 = p1[-1], p2[-1]
 
@@ -194,7 +198,7 @@ def apply_status_effects(p1, p2, status_e):
                 None, '0')
                 if index is None:
                     continue
-                p2 = update_array(p2, index, val)
+                p2 = update_array(p2, index, val, is_boss=is_boss)
 
             else:
                 (index, m1) = (7, f'@me⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect or "miss" in effect else (
@@ -226,7 +230,7 @@ def apply_status_effects(p1, p2, status_e):
                         ((4 if (p2[4] is not None and p2[4] != 0) else (5 if p2[5] is not None else p2[4]),
                           f'@op⬇️{config.COLOR_MAPPING["purple"]}') if "purple" in effect else
                          (lg_index2, f'@op⬇️{config.COLOR_MAPPING["gold"]}')))))))
-                p2 = update_array(p2, index, val)
+                p2 = update_array(p2, index, val, is_boss=is_boss)
             else:
                 (index, m1) = (7, f'@me⬇️{config.COLOR_MAPPING["miss"]}') if "red" in effect or "miss" in effect else (
                     (6, f'@me⬇️{config.COLOR_MAPPING["blue"]}') if "blue" in effect else
@@ -300,7 +304,7 @@ def apply_status_effects(p1, p2, status_e):
                       ((mg_index2,
                         f'@me⬆️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
                        (lg_index2, f'@me⬆️{config.COLOR_MAPPING["gold"]}')))))
-                p2 = update_array(p2, index, val)
+                p2 = update_array(p2, index, val, is_boss=is_boss)
 
         elif "decrease" in effect:
             val = -val
@@ -330,7 +334,7 @@ def apply_status_effects(p1, p2, status_e):
                       ((mg_index2,
                         f'@me⬇️{config.COLOR_MAPPING["gold"]}') if "highest" in effect and "gold" in effect else
                        (lg_index2, f'@me⬇️{config.COLOR_MAPPING["gold"]}')))))
-                p2 = update_array(p2, index, val, own=True)
+                p2 = update_array(p2, index, val, own=True, is_boss=is_boss)
         print(m2)
         m2 += f" **{abs(val)}**%{index if index is not None else ''}"
 

@@ -29,6 +29,11 @@ def get_next_ts(days=1):
     return target_time.timestamp()
 
 
+def is_monday():
+    current_time = datetime.datetime.now(pytz.utc)
+    return current_time.weekday() == 0
+
+
 def save_user(user):
     users_collection = db['users']
     # Upsert user
@@ -1681,4 +1686,86 @@ def not_bought_eq(addr, eq_name):
         return True
     else:
         purchased = obj.get('bought_eqs', [])
-        return eq_name in purchased
+        return not (eq_name in purchased)
+
+
+"""BOSS BATTLE"""
+
+
+def get_trainer(nft_id):
+    try:
+        with open("./static/metadata.json", "r") as f:
+            data = json.load(f)
+            for uri in data:
+                if nft_id == data[uri]['nftid']:
+                    data[uri]['metadata']['token_id'] = nft_id
+                    return data[uri]['metadata']
+        return None
+    except Exception as e:
+        print(f"ERROR in getting metadata: {e}")
+
+
+def get_rand_boss():
+    zerpmon_collection = db['MoveSets2']
+    random_doc = zerpmon_collection.find({'name': {'$regex': 'Experiment'}})
+    return random.choice([i for i in random_doc])
+
+
+def get_boss_reset(hp) -> [bool, int, int]:
+    stats_col = db['stats_log']
+    obj = stats_col.find_one({'name': 'world_boss'})
+    if obj is None:
+        obj = {}
+    reset_t = obj.get('boss_reset_t', 0)
+    if reset_t < time.time() - 3600:
+        n_t = int(get_next_ts(7))
+        active = hp > 0
+        boss = get_rand_boss()
+        trainer = get_trainer('0008138805D83B701191193A067C4011056D3DEE2B298C553C7172B400000019')
+        del boss['_id']
+        stats_col.update_one({
+            'name': 'world_boss'
+        },
+            {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp, 'boss_zerpmon': boss,
+                      'boss_trainer': trainer, "reward": 500 if not obj['boss_active'] else 500 + obj['reward']//1,
+                      'start_hp': hp
+                      }
+             }, upsert=True
+        )
+        return active, hp, n_t
+    else:
+        return obj.get('boss_active'), obj.get('boss_hp'), reset_t
+
+
+def get_boss_stats():
+    stats_col = db['stats_log']
+    obj = stats_col.find_one({'name': 'world_boss'})
+    return obj
+
+
+def set_boss_battle_t(user_id, reset_next_t=False) -> None:
+    users_col = db['users']
+    users_col.update_one({'discord_id': str(user_id)},
+                         {'$set': {'boss_battle_stats.next_battle_t': get_next_ts() if not reset_next_t else 0}})
+
+
+def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
+    users_col = db['users']
+    users_col.update_one({'discord_id': str(user_id)},
+                         {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done}})
+    stats_col = db['stats_log']
+    new_hp = cur_hp - dmg_done
+    if new_hp > 0:
+        stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': new_hp}})
+    else:
+        stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
+
+
+def boss_reward_winners() -> list:
+    users_col = db['users']
+
+    filter = {"boss_battle_stats": {"$exists": True}}
+    projection = {"boss_battle_stats": 1, "address": 1, "discord_id": 1, "username": 1, '_id': 0}
+    li = users_col.find(filter, projection)
+
+    return [i for i in li]

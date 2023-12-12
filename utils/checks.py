@@ -254,7 +254,8 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
                     f"need {battle_type} to do {battle_nickname} battles.")
                 return False
         elif battle_nickname == 'Instant Ranked' and user_d['discord_id'] != str(user_id):
-            def_deck = user_d.get('recent_deck' + (f'{battle_type}' if battle_type != 3 else ''), user_d['battle_deck'].get('0', {}))
+            def_deck = user_d.get('recent_deck' + (f'{battle_type}' if battle_type != 3 else ''),
+                                  user_d['battle_deck'].get('0', {}))
             if len(def_deck) < battle_type + 1:
                 if 'trainer' not in def_deck:
                     await interaction.send(
@@ -331,6 +332,47 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
             await interaction.send(
                 f"Sorry please enter a valid Gym.", ephemeral=True)
             return False
+    return True
+
+
+async def check_boss_battle(user_id, interaction: nextcord.Interaction):
+    owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
+
+    # Sanity checks
+
+    user_d = owned_nfts['data']
+    if user_d is None:
+        await interaction.send(
+            f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
+        return False
+
+    if len(user_d['zerpmons']) == 0:
+        await interaction.send(
+            f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing Boss battles",
+            ephemeral=True)
+        return False
+
+    if 'battle_deck' in user_d and len(user_d['battle_deck']) > 0 and len(user_d['battle_deck']['0']) == 0:
+        await interaction.send(
+            f"**{owned_nfts['user']}** your default battle deck contains 0 Zerpmon, "
+            f"need 1 to do Boss battles.", ephemeral=True)
+        return False
+    if 'boss_battle_stats' in user_d:
+        # if user_d['gym']['active_t'] > time.time():
+        #     _hours, _minutes, _s = await get_time_left_utc()
+        #     await interaction.send(
+        #         f"Sorry please wait **{_hours}**h **{_minutes}**m for your next Gym Battle.", ephemeral=True)
+        #     return False
+        valid = user_d['boss_battle_stats']['next_battle_t'] < time.time()
+        if not valid:
+            h, m, s = await get_time_left_utc()
+            await interaction.send(
+                f"Sorry, you have to wait **{h}**h **{m}**m for doing Boss Battles.", ephemeral=True)
+            return False
+    if not config.boss_active:
+        await interaction.send(
+            f"Please wait until the World Boss is summoned. (<t:{config.boss_reset_t}:R>)", ephemeral=True)
+        return False
     return True
 
 

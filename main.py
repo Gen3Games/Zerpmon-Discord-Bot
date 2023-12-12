@@ -156,10 +156,17 @@ async def on_close():
 async def on_ready():
     print('Bot connected to Discord!')
     global br_channel, br_battle_channel
+    zerpmon_players = 0
     for guild in client.guilds:
         if guild.id == config.MAIN_GUILD[0]:
             for i in range(3):
                 try:
+                    if zerpmon_players == 0:
+                        try:
+                            z_role = nextcord.utils.get(guild.roles, name="Zerpmon Holder")
+                            zerpmon_players = len(z_role.members)
+                        except:
+                            logging.error(f"Error while getting holders {traceback.format_exc()}")
                     for r, v in config.RANKS.items():
                         config.RANKS[r]['role'] = nextcord.utils.get(guild.roles, name=r)
                     config.global_br_participants = db_query.get_br_dict()
@@ -179,6 +186,7 @@ async def on_ready():
                     await asyncio.sleep(5)
         print(guild.name)
     config.gym_main_reset = db_query.get_gym_reset()
+    config.boss_active, _, config.boss_reset_t = db_query.get_boss_reset(zerpmon_players*500)
     if not check_auction.is_running():
         check_auction.start()
     if len(config.loaners) == 0:
@@ -3728,6 +3736,22 @@ async def loan_cancel(interaction: nextcord.Interaction,
 
 
 # LOAN COMMANDS
+
+# Boss Battle Commands
+
+@client.slash_command(name="battle_world_boss", description="Start Battle against the World Boss (Usage 1/day)")
+@commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
+async def boss_battle(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    user = interaction.user
+
+    proceed = await checks.check_boss_battle(user.id, interaction)
+    if not proceed:
+        return
+
+    await callback.boss_callback(user.id, interaction)
+
+# Boss Battle Commands
 
 # Reaction Tracker
 

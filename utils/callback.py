@@ -79,7 +79,7 @@ async def purchase_callback(_i: nextcord.Interaction, amount, qty=1, double_xp=F
         pass
     # Sanity checks
 
-    if user_owned_nfts is None: #or (len(user_owned_nfts['zerpmons']) == 0 and not loan):
+    if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
             embeds=[], view=View())
@@ -101,7 +101,8 @@ async def purchase_callback(_i: nextcord.Interaction, amount, qty=1, double_xp=F
     user_address = user_owned_nfts['address']
     uuid, url, href = await xumm_functions.gen_txn_url(config.STORE_ADDR if not loan else config.LOAN_ADDR,
                                                        user_address, send_amt * 10 ** 6)
-    embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here (expires <t:{int(time.time()) + 180}:R>).",
+    embed = CustomEmbed(color=0x01f39d,
+                        title=f"Please sign the transaction using this QR code or click here (expires <t:{int(time.time()) + 180}:R>).",
                         url=href)
 
     embed.set_image(url=url)
@@ -339,7 +340,8 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     config.ongoing_missions.append(user_id)
     xp_mode = _user_owned_nfts['data'].get('xp_mode', None)
     try:
-        loser, stats = await battle_function.proceed_mission(interaction, user_id, _battle_z[0], _b_num, xp_mode=xp_mode)
+        loser, stats = await battle_function.proceed_mission(interaction, user_id, _battle_z[0], _b_num,
+                                                             xp_mode=xp_mode)
     except Exception as e:
         logging.error(f"ERROR during mission: {e}\n{traceback.format_exc()}")
         return
@@ -401,7 +403,8 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     embed.set_image(
         url=nft['image'] if "https:/" in nft['image'] else 'https://cloudflare-ipfs.com/ipfs/' + nft[
             'image'].replace("ipfs://", ""))
-    description = '**XP MODE**:' + ('🟢' if xp_mode else '🔴') + '\n\n**XRP MODE**:' + ('🟢' if xp_mode == False else '🔴')
+    description = '**XP MODE**:' + ('🟢' if xp_mode else '🔴') + '\n\n**XRP MODE**:' + (
+        '🟢' if xp_mode == False else '🔴')
     await interaction.send(embeds=[embed, CustomEmbed(
         title=f'**Remaining Missions** for the day: `{10 - _b_num}`', description=description)] if loser == 2 else [
         CustomEmbed(title=f'**Remaining Missions** for the day: `{10 - _b_num}`' + reset_str, description=description)]
@@ -695,7 +698,7 @@ async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=F
 
     # Sanity checks
 
-    if user_owned_nfts is None: # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
+    if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
             embeds=[], view=View())
@@ -713,7 +716,8 @@ async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=F
         uuid, url, href = await xumm_functions.gen_nft_accept_txn(
             user_address,
             offerId, token_id)
-    embed = CustomEmbed(color=0x01f39d, title=f"Please sign the transaction using this QR code or click here (expires <t:{int(time.time()) + 180}:R>).",
+    embed = CustomEmbed(color=0x01f39d,
+                        title=f"Please sign the transaction using this QR code or click here (expires <t:{int(time.time()) + 180}:R>).",
                         url=href)
 
     embed.set_image(url=url)
@@ -876,8 +880,9 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 print(_i.data, holdings)
                 selected_option = _i.data["values"][0]  # Get the selected option
                 await _i.response.defer(ephemeral=True)
-                has_bought = db_query.not_bought_eq(addr, selected_option)
-                if has_bought:
+                not_bought = db_query.not_bought_eq(addr, selected_option)
+                cancelled = False
+                if not not_bought:
                     await _i.edit_original_message(content=f"Sorry, you have already bought {selected_option}\n"
                                                            f"`Note: Can only buy 1 of each type from Store`", embeds=[],
                                                    view=View())
@@ -918,23 +923,23 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                 content="Failed, please make sure to sign the **TXN** within a few minutes", embeds=[],
                                 view=View())
                             db_query.remove_token_sent(data[-2])
-                            cancelled =await cancel_offer('store', data[-1])
-                            if cancelled:
-                                db_query.remove_bought_eq(addr, selected_option)
+                            cancelled = await cancel_offer('store', data[-1])
                     else:
                         await _i.edit_original_message(content="Failed, Something went wrong", embeds=[], view=View())
                         db_query.remove_token_sent(data[-2])
-                        await cancel_offer('store', data[-1])
+                        cancelled = await cancel_offer('store', data[-1])
                 except Exception as e:
                     logging.error(f'ERROR while sending EQ: {traceback.format_exc()}')
                     try:
                         db_query.remove_token_sent(data[-2])
-                        await cancel_offer('store', data[-1])
+                        cancelled = await cancel_offer('store', data[-1])
                     except:
                         logging.error(f'ERROR while cancelling EQ offer during exception: {traceback.format_exc()}')
                 finally:
                     del config.eq_ongoing_purchasers[addr]
                     config.eq_purchases[selected_option] -= 1
+                    if cancelled:
+                        db_query.remove_bought_eq(addr, selected_option)
 
             # Register the event handler for the select menu
             select_menu.callback = lambda interact: handle_select_menu(interact, addr)
@@ -1008,7 +1013,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                             #     msg = random.choice(config.NOTHING_MSG)
                             #     rewards.append("Gained Nothing")
                             case "zrp":
-                                r_int = random.randint(10, 415)/10
+                                r_int = random.randint(10, 415) / 10
                                 s_amount = round(amount * r_int / 100, 2)
                                 status = await send_zrp(addr, s_amount, 'safari')
                                 msg = random.choice(
@@ -1017,7 +1022,8 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                             case "equipment":
                                 db_query.add_equipment(addr, 1)
                                 msg = random.choice(config.EQUIPMENT_MSG)
-                                success, data,empty = await send_equipment(user_id, addr, label, safari=True, random_eq=True)
+                                success, data, empty = await send_equipment(user_id, addr, label, safari=True,
+                                                                            random_eq=True)
                                 if empty:
                                     SAFARI_REWARD_CHANCES['equipment'] = 0
                                 if success:
@@ -1640,3 +1646,16 @@ async def cancel_loan(interaction: nextcord.Interaction, listing: dict, is_listi
         else:
             await asyncio.sleep(2)
             await interaction.edit_original_message(content=f"**Done**")
+
+
+"""Boss battles"""
+
+
+async def boss_callback(user_id, interaction: nextcord.Interaction):
+    try:
+        db_query.set_boss_battle_t(user_id)
+        await interaction.send('Battle beginning!', ephemeral=True)
+        winner = await battle_function.proceed_boss_battle(interaction)
+    except Exception as e:
+        db_query.set_boss_battle_t(user_id, reset_next_t=True)
+        logging.error(f'ERROR in gym battle: {traceback.format_exc()}')
