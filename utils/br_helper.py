@@ -60,7 +60,7 @@ async def do_matches(channel_id: int, msg: Message, participants=None, name="Bat
             size -= 2
             config.ongoing_battles.append(p1['id'])
             config.ongoing_battles.append(p2['id'])
-
+            p1, p2 = p2, p1
             battle_instance = {
                 "type": 'friendly',
                 "challenger": p1['id'],

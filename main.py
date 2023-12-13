@@ -186,7 +186,8 @@ async def on_ready():
                     await asyncio.sleep(5)
         print(guild.name)
     config.gym_main_reset = db_query.get_gym_reset()
-    config.boss_active, _, config.boss_reset_t = db_query.get_boss_reset(zerpmon_players*500)
+    config.zerpmon_holders = zerpmon_players
+    config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(zerpmon_players*500)
     if not check_auction.is_running():
         check_auction.start()
     if len(config.loaners) == 0:
@@ -3739,7 +3740,7 @@ async def loan_cancel(interaction: nextcord.Interaction,
 
 # Boss Battle Commands
 
-@client.slash_command(name="battle_world_boss", description="Start Battle against the World Boss (Usage 1/day)")
+@client.slash_command(name="battle_world_boss", description="Initiate Battle against the World Boss (Usage 1/day)")
 @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
 async def boss_battle(interaction: nextcord.Interaction):
     execute_before_command(interaction)
@@ -3750,6 +3751,44 @@ async def boss_battle(interaction: nextcord.Interaction):
         return
 
     await callback.boss_callback(user.id, interaction)
+
+
+@client.slash_command(name="world_boss_dashboard", description="Shows player’s total damage done to the boss, and remaining World Boss health")
+@commands.cooldown(rate=1, per=10, type=commands.BucketType.user)
+async def boss_stats(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    user = interaction.user
+
+    user_d = db_query.get_owned(str(user.id))
+    boss_info = db_query.get_boss_stats()
+    boss_zerp = boss_info.get('boss_zerpmon')
+    boss_trainer = boss_info.get('boss_trainer')
+    if not user_d:
+        await interaction.send("Please make sure you have verified your account and then try this command again", ephemeral=True)
+        return
+
+    embed = CustomEmbed(color=0x42b883,
+                        title=f"World boss stats 🦍 {boss_zerp['name']} 🦍")
+    embed.set_image(
+        boss_zerp['image'] if "https:/" in boss_zerp['image'] else 'https://cloudflare-ipfs.com/ipfs/' + boss_zerp[
+            'image'].replace("ipfs://", ""))
+    embed.add_field(name="Boss Trainer 👿:", value=f"> **{boss_trainer['name']}**", inline=False)
+    embed.add_field(name="Total HP 💚:", value=f"> **{boss_info['start_hp']}**", inline=False)
+    embed.add_field(name="HP Left 💚:", value=f"> **{boss_info['boss_hp']}**", inline=False)
+    embed.add_field(name="Reward Pool 💰:", value=f"> **{boss_info['reward']} ZRP**", inline=False)
+    embed.add_field(name="Reset time 🕟:", value=f"> <t:{boss_info['boss_reset_t']}:R>", inline=False)
+    embed.add_field(name='\u200B', value=f"\u200B", inline=False)
+
+    embed.add_field(name='Personal stats', value=f"\u200B", inline=False)
+    stats = user_d.get('boss_battle_stats', {})
+    dmg = stats.get('weekly_dmg', 0)
+    embed.add_field(name="Total Damage dealt 🏹:", value=f"> **{stats.get('total_dmg', 0)}**", inline=False)
+    embed.add_field(name="Current Boss Damage 🏹:", value=f"> **{dmg}**", inline=False)
+    embed.add_field(name="Max Damage 🎯:", value=f"> **{stats.get('max_dmg', 0)}**", inline=False)
+    embed.add_field(name="ZRP share 💵:", value=f"> **{round(dmg * boss_info['reward'] / boss_info['start_hp'], 1)}**", inline=False)
+    embed.add_field(name="battle again ⏰:", value=f"> <t:{int(stats.get('next_battle_t', time.time()))}:R>",
+                    inline=False)
+    await interaction.send(embed=embed, ephemeral=True)
 
 # Boss Battle Commands
 

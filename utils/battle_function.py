@@ -115,7 +115,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
         if buffed2:
             dmg_mul += 0.1
     if dmg_mul > 1:
-        extra_dmgs = db_query.get_trainer_buff_dmg(z2['name'])
+        extra_dmgs = db_query.get_trainer_buff_dmg(z2['name'].replace('💢 ', ''))
         for i, move in enumerate(z2_moves):
             if 'dmg' in move and move['dmg'] != "":
                 z2_moves[i]['dmg'] = round(move['dmg'] + extra_dmgs[i], 1)
@@ -138,7 +138,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                  'new_b2': z2_blue_percent}
 
     for eq1_lower in eq1_lower_list:
-        if ('opponent miss chance' in eq1_lower and z1.get('eq_applied', '') != z2['name']) or (
+        if ('opponent miss chance' in eq1_lower and z1.get('eq_applied', '') != z2['name'].replace('💢 ', '')) or (
                 'eq_applied' not in z1 and 'miss chance' in eq1_lower):
             # if 'own miss chance' in eq1_lower:
             #     match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
@@ -148,7 +148,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
             # if z1['buffer_miss'] < 0:
             #     z1['buffer_miss'] = 0
             if not rage or 'oppo' not in eq1_lower:
-                z1['eq_applied'] = z2['name']
+                z1['eq_applied'] = z2['name'].replace('💢 ', '')
                 status_affects[0].append(eq1_lower)
         elif ('opponent blue chance' in eq1_lower) or ('own blue chance' in eq1_lower):
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
@@ -354,7 +354,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
         if buffed2:
             dmg_mul += 0.1
     if dmg_mul > 1:
-        extra_dmgs = db_query.get_trainer_buff_dmg(z2['name'])
+        extra_dmgs = db_query.get_trainer_buff_dmg(zerpmon2_name)
         for i, move in enumerate(z2['moves']):
             if 'dmg' in move and move['dmg'] != "":
                 z2['moves'][i]['dmg'] = round(move['dmg'] + extra_dmgs[i], 1)
@@ -468,7 +468,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 move1['dmg'] = new_dmg
                 winner['move1']['dmg'] = new_dmg
         crit = get_crit_chance(eq1_list)
-        if crit or (idx1 is not None and idx1['crit']):
+        if (crit and idx1 is None) or (idx1 is not None and idx1['crit']):
             move1['dmg'] = round(2 * int(move1['dmg']))
             winner['move1']['dmg'] = round(move1['dmg'])
             winner['move1']['mul'] += " 🎯"
@@ -507,7 +507,7 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 move2['dmg'] = new_dmg
                 winner['move2']['dmg'] = new_dmg
         crit = get_crit_chance(eq2_list)
-        if crit or (idx2 is not None and idx2['crit']):
+        if (crit and idx2 is None) or (idx2 is not None and idx2['crit']):
             move2['dmg'] = round(2 * int(move2['dmg']))
             winner['move2']['dmg'] = round(move2['dmg'])
             winner['move2']['mul'] += " 🎯"
@@ -674,9 +674,11 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 if winner['move1']['stars'] > 0:
                     m1 = db_query.get_move(move1['name'])
                     note = m1['notes'].lower()
+
+                    pn1, pn2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                                                              [[note], []], is_boss=is_boss)
                     if not rage or 'oppo' not in note:
-                        percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
-                                                                                    [[note], []], is_boss=is_boss)
+                        percentages1, percentages2 = pn1, pn2
                     p1_temp, p2_temp = percentages1, percentages2
                     winner['winner'] = '1'
                     winner['status_effect'] = note
@@ -739,9 +741,10 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 else:
                     if winner['move2']['dmg'] == 0:
                         if winner['move1']['stars'] > 0:
+                            pn1, pn2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                                                              [[note], []], is_boss=is_boss)
                             if not rage or 'oppo' not in note:
-                                percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
-                                                                                            [[note], []], is_boss=is_boss)
+                                percentages1, percentages2 = pn1, pn2
                             p1_temp, p2_temp = percentages1, percentages2
                             winner['winner'] = '1'
                             winner['status_effect'] = note
@@ -756,9 +759,12 @@ def battle_zerpmons(zerpmon1_name, zerpmon2_name, types, status_affects, buffed_
                 s2 = winner['move2']['stars']
                 if s1 > s2:
                     m1 = db_query.get_move(move1['name'])
+
+                    pn1, pn2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                                                                                    [[m1['notes']], []],
+                                                                                    is_boss=is_boss)
                     if not rage or 'oppo' not in m1['notes']:
-                        percentages1, percentages2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
-                                                                                    [[m1['notes']], []], is_boss=is_boss)
+                        percentages1, percentages2 = pn1, pn2
                     p1_temp, p2_temp = percentages1, percentages2
                     winner['winner'] = '1'
                     winner['status_effect'] = m1['notes'].lower()
@@ -1046,11 +1052,11 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                                              p1_temp, p2_temp,
                                                                              blue_dict=updated_blue_dict,
                                                                              idx1=None if is_reroll != 2 else
-                                                                             {'i': move1_cached['idx'],
-                                                                              'crit': '🎯' in move1_cached['mul']},
+                                                                             {'i': move1_cached[0],
+                                                                              'crit': '🎯' in move1_cached[1]},
                                                                              idx2=None if is_reroll != 1 else
-                                                                             {'i': move2_cached['idx'],
-                                                                              'crit': '🎯' in move2_cached['mul']})
+                                                                             {'i': move2_cached[0],
+                                                                              'crit': '🎯' in move2_cached[1]})
             t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
             t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
             t_info1 = f'({t_info1})' if t_info1 not in ["", " "] else t_info1
@@ -1070,10 +1076,12 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
 
             if is_reroll == 1:
                 atk_msg = s1
-                result['move2'] = move2_cached
+                result['move2']['idx'] = move2_cached[0]
+                result['move2']['mul'] = move2_cached[1]
             elif is_reroll == 2:
                 atk_msg = s2
-                result['move1'] = move1_cached
+                result['move1']['idx'] = move1_cached[0]
+                result['move1']['mul'] = move1_cached[1]
             else:
                 atk_msg = s1 + s2 + "Calculating Battle results..."
 
@@ -1083,13 +1091,15 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                 f"{result['eq2_msg']}\n" if 'eq2_name' in result else '')
 
             if 'reset_roll1' in result or 'reset_roll2' in result:
-                await msg_hook.send(content=pre_text, ephemeral=True)
+                old_status = is_reroll
                 if 'reset_roll1' in result:
                     is_reroll = 1
-                    move2_cached = result['move2']
+                    move2_cached = [result['move2']['idx'], result['move2']['mul']]
                 else:
                     is_reroll = 2
-                    move1_cached = result['move1']
+                    move1_cached = [result['move1']['idx'], result['move1']['mul']]
+                if is_reroll != old_status:
+                    await msg_hook.send(content=pre_text, ephemeral=True)
                 continue
             is_reroll = None
 
@@ -1648,11 +1658,11 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                                              p1_temp, p2_temp,
                                                                              blue_dict=updated_blue_dict,
                                                                              idx1=None if is_reroll != 2 else
-                                                                             {'i': move1_cached['idx'],
-                                                                              'crit': '🎯' in move1_cached['mul']},
+                                                                             {'i': move1_cached[0],
+                                                                              'crit': '🎯' in move1_cached[1]},
                                                                              idx2=None if is_reroll != 1 else
-                                                                             {'i': move2_cached['idx'],
-                                                                              'crit': '🎯' in move2_cached['mul']})
+                                                                             {'i': move2_cached[0],
+                                                                              'crit': '🎯' in move2_cached[1]})
             t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
             t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
             t_info1 = f'({t_info1})' if t_info1 not in ["", " "] else t_info1
@@ -1673,10 +1683,12 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
             if is_reroll == 1:
                 atk_msg = s1
-                result['move2'] = move2_cached
+                result['move2']['idx'] = move2_cached[0]
+                result['move2']['mul'] = move2_cached[1]
             elif is_reroll == 2:
                 atk_msg = s2
-                result['move1'] = move1_cached
+                result['move1']['idx'] = move1_cached[0]
+                result['move1']['mul'] = move1_cached[1]
             else:
                 atk_msg = s1 + s2 + "Calculating Battle results..."
 
@@ -1686,13 +1698,15 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             await asyncio.sleep(1)
 
             if 'reset_roll1' in result or 'reset_roll2' in result:
-                await send_message(msg_hook, hidden, embeds=[], files=[], content=pre_text)
+                old_status = is_reroll
                 if 'reset_roll1' in result:
                     is_reroll = 1
-                    move2_cached = result['move2']
+                    move2_cached = [result['move2']['idx'], result['move2']['mul']]
                 else:
                     is_reroll = 2
-                    move1_cached = result['move1']
+                    move1_cached = [result['move1']['idx'], result['move1']['mul']]
+                if is_reroll != old_status:
+                    await send_message(msg_hook, hidden, embeds=[], files=[], content=pre_text)
                 continue
             is_reroll = None
 
@@ -2042,11 +2056,11 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                                                                          p1, p2, p1_temp, p2_temp,
                                                                          mission=True, blue_dict=updated_blue_dict,
                                                                          idx1=None if is_reroll != 2 else
-                                                                         {'i': move1_cached['idx'],
-                                                                          'crit': '🎯' in move1_cached['mul']},
+                                                                         {'i': move1_cached[0],
+                                                                          'crit': '🎯' in move1_cached[1]},
                                                                          idx2=None if is_reroll != 1 else
-                                                                         {'i': move2_cached['idx'],
-                                                                          'crit': '🎯' in move2_cached['mul']}, )
+                                                                         {'i': move2_cached[0],
+                                                                          'crit': '🎯' in move2_cached[1]}, )
         t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
         t_info2 = config.TYPE_MAPPING[result['move2']['type'].replace(" ", '')] + ' ' + result['move2']['mul']
         t_info1 = f'({t_info1})' if t_info1 not in ["", " "] else t_info1
@@ -2067,10 +2081,12 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
 
         if is_reroll == 1:
             atk_msg = s1
-            result['move2'] = move2_cached
+            result['move2']['idx'] = move2_cached[0]
+            result['move2']['mul'] = move2_cached[1]
         elif is_reroll == 2:
             atk_msg = s2
-            result['move1'] = move1_cached
+            result['move1']['idx'] = move1_cached[0]
+            result['move1']['mul'] = move1_cached[1]
         else:
             atk_msg = s1 + s2 + "Calculating Battle results..."
 
@@ -2081,13 +2097,15 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
         await asyncio.sleep(1)
 
         if 'reset_roll1' in result or 'reset_roll2' in result:
-            await interaction.send(content=pre_text, ephemeral=True)
+            old_status = is_reroll
             if 'reset_roll1' in result:
                 is_reroll = 1
-                move2_cached = result['move2']
+                move2_cached = [result['move2']['idx'], result['move2']['mul']]
             else:
                 is_reroll = 2
-                move1_cached = result['move1']
+                move1_cached = [result['move1']['idx'], result['move1']['mul']]
+            if is_reroll != old_status:
+                await interaction.send(content=pre_text, ephemeral=True)
             continue
         is_reroll = None
         for i, effect in enumerate(status_stack[0].copy()):
@@ -2502,7 +2520,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                                                                            [None])[0],
                                                                                                 p1.copy() if p1 is not None else p1,
                                                                                                 p2.copy() if p2 is not None else p2,
-                                                                                                hp=boss_hp-dmg_done,
+                                                                                                hp=boss_hp - dmg_done,
                                                                                                 rage=rage_cnt >= 20)
         await asyncio.sleep(1)
         if msg_hook is None:
@@ -2514,13 +2532,15 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
 
         eliminate = ""
         is_reroll = None
+        move1_cached, move2_cached = None, None
         while eliminate == "":
             await asyncio.sleep(1)
             # If battle lasts long then end it
             if rage_cnt == 20:
                 await msg_hook.send(content=f"**{z2['name']}** is now **enraged** 😡 !", ephemeral=True)
                 p1, p2, _, __ = apply_status_effects(p1, p2, [[], [f'Decrease Own Red by {p2[7]}%']])
-            result, p1, p2, status_stack, p1_temp, p2_temp = battle_zerpmons(z1['name'], z2['name'], [z1_type, z2_type],
+            result, p1, p2, status_stack, p1_temp, p2_temp = battle_zerpmons(z1['name'], z2['name'].replace('💢 ', ''),
+                                                                             [z1_type, z2_type],
                                                                              status_stack,
                                                                              [buffed_type1, [z2_type[0]]],
                                                                              [z1.get('buff_eq', None),
@@ -2528,11 +2548,11 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                                              p1_temp, p2_temp,
                                                                              blue_dict=updated_blue_dict,
                                                                              idx1=None if is_reroll != 2 else
-                                                                             {'i': result['move1']['idx'],
-                                                                              'crit': '🎯' in result['move1']['mul']},
+                                                                             {'i': move1_cached[0],
+                                                                              'crit': '🎯' in move1_cached[1]},
                                                                              idx2=None if is_reroll != 1 else
-                                                                             {'i': result['move2']['idx'],
-                                                                              'crit': '🎯' in result['move2']['mul']},
+                                                                             {'i': move2_cached[0],
+                                                                              'crit': '🎯' in move2_cached[1]},
                                                                              is_boss=True, rage=rage_cnt >= 20)
 
             rage_cnt += 1
@@ -2557,8 +2577,12 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
 
             if is_reroll == 1:
                 atk_msg = s1
+                result['move2']['idx'] = move2_cached[0]
+                result['move2']['mul'] = move2_cached[1]
             elif is_reroll == 2:
                 atk_msg = s2
+                result['move1']['idx'] = move1_cached[0]
+                result['move1']['mul'] = move1_cached[1]
             else:
                 atk_msg = s1 + s2 + "Calculating Battle results..."
 
@@ -2568,8 +2592,15 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 f"{result['eq2_msg']}\n" if 'eq2_name' in result else '')
 
             if 'reset_roll1' in result or 'reset_roll2' in result:
-                await msg_hook.send(content=pre_text, ephemeral=True)
-                is_reroll = 1 if 'reset_roll1' in result else 2
+                old_status = is_reroll
+                if 'reset_roll1' in result:
+                    is_reroll = 1
+                    move2_cached = [result['move2']['idx'], result['move2']['mul']]
+                else:
+                    is_reroll = 2
+                    move1_cached = [result['move1']['idx'], result['move1']['mul']]
+                if is_reroll != old_status:
+                    await msg_hook.send(content=pre_text, ephemeral=True)
                 continue
             is_reroll = None
 
@@ -2804,7 +2835,8 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             name="Damage dealt 🏹",
             value=f"{dmg_done}",
             inline=False)
-        embed.add_field(name=f'Total Damage dealt this week', value=_data1.get('boss_battle_stats', {}).get('weekly_dmg', 0) + dmg_done,
+        embed.add_field(name=f'Total Damage dealt this week',
+                        value=_data1.get('boss_battle_stats', {}).get('weekly_dmg', 0) + dmg_done,
                         inline=False)
         embed.add_field(name=f'World Boss HP left',
                         value=boss_hp - dmg_done,
@@ -2845,34 +2877,41 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 embed = CustomEmbed(title=f"🏆 World Boss Defeated! 🏆",
                                     color=0x680747)
 
-                embed.set_image(z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2['image'].replace("ipfs://", ""))
+                embed.set_image(z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
+                    'image'].replace("ipfs://", ""))
                 content = f'🔥 🔥 Congratulations {user_mention} has defeated **{z2["name"]}**!! 🔥 🔥\n@everyone'
                 t_reward = boss_info['reward']
                 description = f"Starting to distribute **`{t_reward} ZRP` Boss reward!\n\n"
                 for player in winners:
                     p_dmg = player['boss_battle_stats']['weekly_dmg']
                     if p_dmg > 0:
-                        amt = round(p_dmg * t_reward/boss_info['start_hp'], 2)
-                        reward_dict[player['address']] = amt
+                        amt = round(p_dmg * t_reward / boss_info['start_hp'], 2)
+                        reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
                         description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`"
-                await send_global_message(guild=interaction.guild, text=content, image='', embed=embed, channel_id=1175175751633481819)
+                await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
+                                          channel_id=config.BOSS_CHANNEL)
                 break
             except:
                 logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
                 await asyncio.sleep(10)
-        for addr, amt in reward_dict.items():
-            saved = await xrpl_ws.send_zrp(addr, amt, 'wager')
+        total_txn = len(reward_dict)
+        success_txn = 0
+        failed_str = ''
+        for addr, obj in reward_dict.items():
+            saved = await xrpl_ws.send_zrp(addr, obj['amt'], 'wager')
+            if saved:
+                success_txn += 1
+            else:
+                failed_str += f"\n{obj['name']}\t`{obj['amt']} ZRP` ❌"
         try:
-            if not saved:
+            if success_txn == 0:
                 await interaction.send(
-                    f"**Failed**, something went wrong.",
-                    ephemeral=True)
+                    f"**Failed**, something went wrong." + failed_str)
             else:
                 await interaction.send(
-                    f"**Successfully** sent ZRP to everyone",
-                    ephemeral=True)
+                    f"**Successfully** sent ZRP. \n`({success_txn}/{total_txn} transactions confirmed)`" + failed_str)
         except:
             pass
-        db_query.set_boss_hp(_data1['discord_id'], dmg_done, boss_hp)
+        db_query.reset_weekly_dmg()
         config.boss_active = False
         return 1

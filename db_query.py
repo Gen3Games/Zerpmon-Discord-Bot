@@ -1711,13 +1711,14 @@ def get_rand_boss():
     return random.choice([i for i in random_doc])
 
 
-def get_boss_reset(hp) -> [bool, int, int]:
+def get_boss_reset(hp) -> [bool, int, int, int, bool]:
     stats_col = db['stats_log']
     obj = stats_col.find_one({'name': 'world_boss'})
     if obj is None:
         obj = {}
     reset_t = obj.get('boss_reset_t', 0)
-    if reset_t < time.time() - 3600:
+    msg_id = obj.get('boss_msg_id', None) if obj.get('boss_msg_id', None) else config.BOSS_MSG_ID
+    if not obj or (reset_t < time.time()):
         n_t = int(get_next_ts(7))
         active = hp > 0
         boss = get_rand_boss()
@@ -1727,14 +1728,14 @@ def get_boss_reset(hp) -> [bool, int, int]:
             'name': 'world_boss'
         },
             {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp, 'boss_zerpmon': boss,
-                      'boss_trainer': trainer, "reward": 500 if not obj['boss_active'] else 500 + obj['reward']//1,
-                      'start_hp': hp
+                      'boss_trainer': trainer, "reward": 500 if not obj.get('boss_active', False) else 500 + obj['reward']//2,
+                      'start_hp': hp, 'boss_msg_id': msg_id
                       }
              }, upsert=True
         )
-        return active, hp, n_t
+        return active, hp, n_t, msg_id, True
     else:
-        return obj.get('boss_active'), obj.get('boss_hp'), reset_t
+        return obj.get('boss_active'), obj.get('boss_hp'), reset_t, msg_id, False
 
 
 def get_boss_stats():
@@ -1752,13 +1753,26 @@ def set_boss_battle_t(user_id, reset_next_t=False) -> None:
 def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
     users_col = db['users']
     users_col.update_one({'discord_id': str(user_id)},
-                         {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done}})
+                         {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done, 'boss_battle_stats.total_dmg': dmg_done},
+                          '$max': {'boss_battle_stats.max_dmg': dmg_done}},
+                         )
     stats_col = db['stats_log']
     new_hp = cur_hp - dmg_done
     if new_hp > 0:
         stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': new_hp}})
     else:
         stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
+
+
+def set_boss_msg_id(msg_id) -> None:
+    stats_col = db['stats_log']
+    stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_msg_id': msg_id}})
+
+
+def reset_weekly_dmg() -> None:
+    users_col = db['users']
+    users_col.update_many({'boss_battle_stats': {'$exists': True}},
+                         {'$set': {'boss_battle_stats.weekly_dmg': 0}})
 
 
 def boss_reward_winners() -> list:
@@ -1769,3 +1783,15 @@ def boss_reward_winners() -> list:
     li = users_col.find(filter, projection)
 
     return [i for i in li]
+
+
+def get_boss_leaderboard():
+    users_collection = db['users']
+    filter = {'boss_battle_stats': {'$exists': True}}
+    projection = {"boss_battle_stats": 1, "address": 1, "discord_id": 1, "username": 1, '_id': 0}
+    top_users = [i for i in users_collection.find(filter, projection).sort('boss_battle_stats.weekly_dmg', DESCENDING)]
+    top_10 = []
+    for i in range(10):
+        if i < len(top_users):
+            top_10.append(top_users[i])
+    return top_10

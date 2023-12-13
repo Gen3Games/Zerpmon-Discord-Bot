@@ -28,13 +28,13 @@ class CustomEmbed(nextcord.Embed):
 
 button_cache = {'revive': [], 'mission': []}
 SAFARI_REWARD_CHANCES = {
-    "zrp": 87.5833,
+    "zrp": 88.2832,
     "battle_zone": 0.8667,
     "name_flair": 0.1667,
     "candy_white": 2.1667,
     "candy_gold": 2.1667,
     "candy_level_up": 0.8333,
-    "equipment": 0.7000,
+    "equipment": 0,# 0.7000,
     "jackpot": 0.1833,
     "gym_refill": 2.6667,
     "revive_potion": 1.2667,
@@ -43,7 +43,7 @@ SAFARI_REWARD_CHANCES = {
 }
 
 
-# print(sum(list(SAFARI_REWARD_CHANCES.values())))
+print(sum(list(SAFARI_REWARD_CHANCES.values())))
 
 
 async def wager_battle_r_callback(_i: nextcord.Interaction, amount, user_address, reward):
