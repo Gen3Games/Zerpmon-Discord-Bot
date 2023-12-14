@@ -157,6 +157,7 @@ async def on_ready():
     print('Bot connected to Discord!')
     global br_channel, br_battle_channel
     zerpmon_players = 0
+    boss_channel = None
     for guild in client.guilds:
         if guild.id == config.MAIN_GUILD[0]:
             for i in range(3):
@@ -170,8 +171,14 @@ async def on_ready():
                     for r, v in config.RANKS.items():
                         config.RANKS[r]['role'] = nextcord.utils.get(guild.roles, name=r)
                     config.global_br_participants = db_query.get_br_dict()
-                    br_channel = nextcord.utils.get(guild.channels, id=config.BR_CHANNEL)
-                    br_battle_channel = nextcord.utils.get(guild.channels, id=config.BR_BATTLE_CHANNEL)
+                    br_channel, br_battle_channel = None, None
+                    for channel in guild.channels:
+                        if channel.id == config.BR_CHANNEL:
+                            br_channel = channel
+                        elif channel.id == config.BR_BATTLE_CHANNEL:
+                            br_battle_channel = channel
+                        elif channel.id == config.BOSS_CHANNEL:
+                            boss_channel = channel
                     br_embed = CustomEmbed(title="Click the ✅ to enter into the Battle Royale",
                                            description=f"**Battle royale** will automatically start when the total number of **participants** reaches **20**.\n\n**`Total Participants: {len(config.global_br_participants)}`**")
                     if config.BR_MSG_ID is None:
@@ -188,6 +195,8 @@ async def on_ready():
     config.gym_main_reset = db_query.get_gym_reset()
     config.zerpmon_holders = zerpmon_players
     config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(zerpmon_players*500)
+    if new:
+        await reset_alert.send_boss_update_msg(boss_channel, not new, )
     if not check_auction.is_running():
         check_auction.start()
     if len(config.loaners) == 0:
@@ -3782,10 +3791,11 @@ async def boss_stats(interaction: nextcord.Interaction):
     embed.add_field(name='Personal stats', value=f"\u200B", inline=False)
     stats = user_d.get('boss_battle_stats', {})
     dmg = stats.get('weekly_dmg', 0)
+    total_dmg = boss_info['total_weekly_dmg']
     embed.add_field(name="Total Damage dealt 🏹:", value=f"> **{stats.get('total_dmg', 0)}**", inline=False)
     embed.add_field(name="Current Boss Damage 🏹:", value=f"> **{dmg}**", inline=False)
     embed.add_field(name="Max Damage 🎯:", value=f"> **{stats.get('max_dmg', 0)}**", inline=False)
-    embed.add_field(name="ZRP share 💵:", value=f"> **{round(dmg * boss_info['reward'] / boss_info['start_hp'], 1)}**", inline=False)
+    embed.add_field(name="ZRP share 💵:", value=f"> **{min(0, round(dmg * boss_info['reward'] / total_dmg, 1))}**", inline=False)
     embed.add_field(name="battle again ⏰:", value=f"> <t:{int(stats.get('next_battle_t', time.time()))}:R>",
                     inline=False)
     await interaction.send(embed=embed, ephemeral=True)

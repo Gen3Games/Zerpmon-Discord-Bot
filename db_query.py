@@ -1729,7 +1729,7 @@ def get_boss_reset(hp) -> [bool, int, int, int, bool]:
         },
             {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp, 'boss_zerpmon': boss,
                       'boss_trainer': trainer, "reward": 500 if not obj.get('boss_active', False) else 500 + obj['reward']//2,
-                      'start_hp': hp, 'boss_msg_id': msg_id
+                      'start_hp': hp, 'boss_msg_id': msg_id, 'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg']
                       }
              }, upsert=True
         )
@@ -1759,7 +1759,7 @@ def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
     stats_col = db['stats_log']
     new_hp = cur_hp - dmg_done
     if new_hp > 0:
-        stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': new_hp}})
+        stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': new_hp}, '$inc': {'total_weekly_dmg': dmg_done}})
     else:
         stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
 
@@ -1773,6 +1773,8 @@ def reset_weekly_dmg() -> None:
     users_col = db['users']
     users_col.update_many({'boss_battle_stats': {'$exists': True}},
                          {'$set': {'boss_battle_stats.weekly_dmg': 0}})
+    stats_col = db['stats_log']
+    stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_active': False}})
 
 
 def boss_reward_winners() -> list:

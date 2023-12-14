@@ -40,12 +40,13 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
     embed.add_field(name='\u200B', value=f"\u200B", inline=False)
 
     embed.add_field(name='Top damage dealers  🏹', value=f"\u200B", inline=False)
+    total_dmg = boss_info['total_weekly_dmg']
     for idx, user in enumerate(top_10):
         dmg = user['boss_battle_stats'].get('weekly_dmg', 0)
         embed.add_field(name=f"#{idx + 1} {user['username']}",
                         value=f"> Damage dealt **{dmg}**\n"
                               f"> Max damage **{user['boss_battle_stats'].get('max_dmg', 0)}**\n"
-                              f"> **ZRP share {round(dmg * boss_info['reward']/boss_info['start_hp'], 1)}**", inline=False)
+                              f"> **ZRP share {min(0, round(dmg * boss_info['reward'] / total_dmg, 1))}**", inline=False)
 
     if boss_hp_cache is None or boss_info['boss_hp'] != boss_hp_cache:
         boss_hp_cache = boss_info['boss_hp']

@@ -60,7 +60,6 @@ async def do_matches(channel_id: int, msg: Message, participants=None, name="Bat
             size -= 2
             config.ongoing_battles.append(p1['id'])
             config.ongoing_battles.append(p2['id'])
-            p1, p2 = p2, p1
             battle_instance = {
                 "type": 'friendly',
                 "challenger": p1['id'],
@@ -110,7 +109,7 @@ async def do_matches(channel_id: int, msg: Message, participants=None, name="Bat
             i = count - 2
             while i >= 0:
                 # if i - 1 < count:
-                schedule_str += f"**Match #{(count - i) // 2}**:\n{winners[i]['username']} vs {winners[i + 1]['username']}\n\n"
+                schedule_str += f"**Match #{(count - i) // 2}**:\n{winners[i+1]['username']} vs {winners[i]['username']}\n\n"
                 # else:
                 #     schedule_str += f"**Match #{(i + 2) // 2}**:\n{winners[i]['username']} vs Revived Wildcard\n\n"
                 i -= 2

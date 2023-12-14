@@ -2885,7 +2885,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 for player in winners:
                     p_dmg = player['boss_battle_stats']['weekly_dmg']
                     if p_dmg > 0:
-                        amt = round(p_dmg * t_reward / boss_info['start_hp'], 2)
+                        amt = round(p_dmg * t_reward / boss_info['total_weekly_dmg'], 2)
                         reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
                         description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`"
                 await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
