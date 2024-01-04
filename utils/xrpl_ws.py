@@ -372,8 +372,9 @@ async def main():
 
                 # subscribe to txns
                 subscribe_request = Subscribe(
-                    streams=[StreamParameter.TRANSACTIONS],
-                    accounts=[Address, config.WAGER_ADDR]
+                    # streams=[StreamParameter.TRANSACTIONS],
+                    accounts=[config.STORE_ADDR, config.WAGER_ADDR, config.SAFARI_ADDR, config.LOAN_ADDR,
+                              config.ISSUER['ZRP']]
                 )
                 await client.send(subscribe_request)
                 while True:
@@ -1004,7 +1005,9 @@ async def get_latest_nft_offers(address):
 # res, offer = asyncio.run(
 #     send_nft_with_amt('store', config.JACKPOT_ADDR, '000800009DFF301D909E72368E61B385BDE81008B1875053C81A10F200000057',
 #                       '50', ))
-# asyncio.run(cancel_offer('store', offer))
+# asyncio.run(cancel_offer('store', '1D233C476376D505623ED844AB02344AB976E3474844EF254C613AA6B31BFCE6'))
+# asyncio.run(cancel_offer('store', '898A175CA69460A7D6ED4FC6B9D9CDED75981935E9C726F5826C3867BB17872B'))
+# asyncio.run(cancel_offer('store', 'B9B91491A25812A2B61101048953820E41100447F3CF2BC2DAD2F2B2F2B3BEE1'))
 # asyncio.run(get_latest_nft_offers(config.REWARDS_ADDR))
 # asyncio.run(accept_nft('reward', offer='22FC29F159F14A9672D5E231EFEB6DB9E0FE5483A7CCE1E1C122BEC2FF79E1FD', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
 #                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E549986260000018B'))

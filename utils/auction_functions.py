@@ -101,7 +101,7 @@ def get_highest_bid(name):
                     return auction["floor"]
                 return auction["bids_track"][-1]["bid"]
         return None
-    
+
 def delete_auction(name):
     with open(JSON_FILE, "r") as f:
         data = json.load(f)

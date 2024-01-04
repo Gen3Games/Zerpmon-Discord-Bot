@@ -284,7 +284,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
                         if 'active_t' not in i or
                         i['active_t'] < time.time()]
     mission_deck_zerpmons = [] if 'mission_deck' not in _user_owned_nfts['data'] else \
-        [_i for k, _i in sorted(_user_owned_nfts['data']['mission_deck'].items(), key=lambda x: int(x[0]))]
+        [_i for k, _i in sorted(_user_owned_nfts['data']['mission_deck'].items(), key=lambda x: int(x[0])) if _i]
     alive_deck = [_i for _i in mission_deck_zerpmons if _i in [ke[0] for ke in _active_zerpmons]]
 
     # print(active_zerpmons[0])
@@ -602,9 +602,18 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     name_flair_p = config.ZRP_STORE['name_flair'] / zrp_price
     safari_p = config.ZRP_STORE['safari'] / zrp_price
     equip_p = config.ZRP_STORE['equipment'] / zrp_price
+    zerp_flair_p = config.ZRP_STORE['zerpmon_flair'] / zrp_price
+    lure_p = config.ZRP_STORE['zerpmon_lure'] / zrp_price
+    candy_overcharge_p = config.ZRP_STORE['overcharge_candy'] / zrp_price
+    candy_sour_p = config.ZRP_STORE['sour_candy'] / zrp_price
+    candy_star_p = config.ZRP_STORE['star_candy'] / zrp_price
+    jawb_p = config.ZRP_STORE['jawbreaker'] / zrp_price
+    candy_gummy_p = config.ZRP_STORE['gummy_candy'] / zrp_price
+
+    omni_p = round(equip_p * 188 / config.ZRP_STORE['equipment'], 2)
 
     main_embed.add_field(name="**Zerpmon Equipment**" + '\t🗡️',
-                         value=f"Cost: `{equip_p:.2f} ZRP`",
+                         value=f"Cost: `{equip_p:.2f} ZRP` (Omni: `{omni_p}`)",
                          inline=False)
 
     main_embed.add_field(name="**Gym Refill**" + '\t🍵',
@@ -619,6 +628,22 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
                          value=f"Cost: `{candy_gold_p:.2f} ZRP`",
                          inline=False)
 
+    main_embed.add_field(name="**Overcharge Candy**" + '\t🥝',
+                         value=f"Cost: `{candy_overcharge_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Gummy Candy**" + '\t🥘',
+                         value=f"Cost: `{candy_gummy_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Sour Candy**" + '\t🥑',
+                         value=f"Cost: `{candy_sour_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Star Candy**" + '\t🥞',
+                         value=f"Cost: `{candy_star_p:.2f} ZRP`",
+                         inline=False)
+
     main_embed.add_field(name="**Golden Liquorice**" + '\t🍯',
                          value=f"Cost: `{liquor_p:.2f} ZRP`",
                          inline=False)
@@ -629,6 +654,18 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
 
     main_embed.add_field(name="**Name Flair**" + '\t💠',
                          value=f"Cost: `{name_flair_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Zerpmon Name Flair**" + '\t💎',
+                         value=f"Cost: `{zerp_flair_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Zerpmon Lure**" + '\t🥭',
+                         value=f"Cost: `{lure_p:.2f} ZRP`",
+                         inline=False)
+
+    main_embed.add_field(name="**Jawbreaker**" + '\t🥊',
+                         value=f"Cost: `{jawb_p:.2f} ZRP`",
                          inline=False)
 
     main_embed.add_field(name="**Safari Trip**" + '\t🎰',
@@ -647,17 +684,24 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
 
     sec_embed = await show_zrp_holdings(interaction)
 
-    b0 = Button(label="Buy Safari Trip", style=ButtonStyle.green, emoji='🎰', row=0)
+    b0 = Button(label="Buy Safari Trip", style=ButtonStyle.blurple, emoji='🎰', row=0)
     b1 = Button(label="Buy Gym Refill", style=ButtonStyle.blurple, emoji='🍵', row=0)
     b2 = Button(label="Buy Power Candy (White)", style=ButtonStyle.blurple, emoji='🍬', row=0)
     b3 = Button(label="Buy Power Candy (Gold)", style=ButtonStyle.blurple, emoji='🍭', row=0)
-    b4 = Button(label="Buy Golden Liquorice", style=ButtonStyle.green, emoji='🍯', row=1)
-    b5 = Button(label="Buy Battle Zones", style=ButtonStyle.green, emoji='🏟️', row=1)
-    b6 = Button(label="Buy Zerpmon Equipment", style=ButtonStyle.red, emoji='🗡️', row=1)
-    b7 = Button(label="Buy Name Flair", style=ButtonStyle.green, emoji='💠', row=1)
+    b4 = Button(label="Buy Overcharge Candy", style=ButtonStyle.blurple, emoji='🥝', row=0)
+    b5 = Button(label="Buy Gummy Candy", style=ButtonStyle.red, emoji='🥘', row=1)
+    b6 = Button(label="Buy Sour Candy", style=ButtonStyle.red, emoji='🥑', row=1)
+    b7 = Button(label="Buy Star Candy", style=ButtonStyle.red, emoji='🥞', row=1)
+    b8 = Button(label="Buy Golden Liquorice", style=ButtonStyle.red, emoji='🍯', row=1)
+    b9 = Button(label="Buy Battle Zones", style=ButtonStyle.red, emoji='🏟️', row=1)
+    b10 = Button(label="Buy Zerpmon Equipment", style=ButtonStyle.green, emoji='🗡️', row=2)
+    b11 = Button(label="Buy Name Flair", style=ButtonStyle.green, emoji='💠', row=2)
+    b12 = Button(label="Buy Zerpmon Lure", style=ButtonStyle.green, emoji='🥭', row=2)
+    b13 = Button(label="Buy Jawbreaker", style=ButtonStyle.green, emoji='🥊', row=2)
+    b14 = Button(label="Buy Zerpmon Name Flair", style=ButtonStyle.green, emoji='💎', row=2)
     # user_d = db_query.get_owned(str(user_id))
     # zrp_gift_box, xblade_gift_box = db_query.get_boxes(user_d['address'])
-    all_btns = [b0, b1, b2, b3, b4, b5, b6, b7]
+    all_btns = [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14]
     # if zrp_gift_box > 0:
     #     b8 = Button(label="Open Zerpmon Gift Box", style=ButtonStyle.success, emoji='🎁', row=2)
     #     all_btns.append(b8)
@@ -684,10 +728,20 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     b1.callback = lambda i: on_button_click(i, label=b1.label, amount=refill_p)
     b2.callback = lambda i: on_button_click(i, label=b2.label, amount=candy_white_p)
     b3.callback = lambda i: on_button_click(i, label=b3.label, amount=candy_gold_p)
-    b4.callback = lambda i: on_button_click(i, label=b4.label, amount=liquor_p)
-    b5.callback = lambda i: on_button_click(i, label=b5.label, amount=battle_zone_p)
-    b6.callback = lambda i: on_button_click(i, label=b6.label, amount=equip_p)
-    b7.callback = lambda i: on_button_click(i, label=b7.label, amount=name_flair_p)
+
+    b4.callback = lambda i: on_button_click(i, label=b4.label, amount=candy_overcharge_p)
+    b5.callback = lambda i: on_button_click(i, label=b5.label, amount=candy_gummy_p)
+    b6.callback = lambda i: on_button_click(i, label=b6.label, amount=candy_sour_p)
+    b7.callback = lambda i: on_button_click(i, label=b7.label, amount=candy_star_p)
+
+    b8.callback = lambda i: on_button_click(i, label=b8.label, amount=liquor_p)
+    b9.callback = lambda i: on_button_click(i, label=b9.label, amount=battle_zone_p)
+    b10.callback = lambda i: on_button_click(i, label=b10.label, amount=equip_p)
+    b11.callback = lambda i: on_button_click(i, label=b11.label, amount=name_flair_p)
+
+    b12.callback = lambda i: on_button_click(i, label=b12.label, amount=lure_p)
+    b13.callback = lambda i: on_button_click(i, label=b13.label, amount=jawb_p)
+    b14.callback = lambda i: on_button_click(i, label=b14.label, amount=zerp_flair_p)
 
     await interaction.edit_original_message(embeds=[main_embed, sec_embed], view=view)
 
@@ -836,7 +890,7 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
     if len(key_list) > 80:
         b1 = Button(label='Show more', style=ButtonStyle.green)
         view.add_item(b1)
-        b1.callback = lambda _i: use_candy_callback(_i, label, next_page=next_page + 1)
+        b1.callback = lambda _i: use_candy_callback(_i, label, next_page=next_page + 1, amt=amt)
     await interaction.edit_original_message(content="Choose one **zerpmon**:", view=view)
 
 
@@ -876,10 +930,13 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             view.add_item(select_menu)
             await interaction.edit_original_message(content="Choose one **equipment**:", embeds=[], view=view)
 
-            async def handle_select_menu(_i: nextcord.Interaction, addr):
-                print(_i.data, holdings)
+            async def handle_select_menu(_i: nextcord.Interaction, addr, amt):
+                # print(_i.data, holdings)
                 selected_option = _i.data["values"][0]  # Get the selected option
                 await _i.response.defer(ephemeral=True)
+                if db_query.get_eq_by_name(selected_option).get('type') == 'Omni':
+                    amt = round(amt * 188 / config.ZRP_STORE['equipment'], 2)
+                print(f'{selected_option} price {amt}')
                 not_bought = db_query.not_bought_eq(addr, selected_option)
                 cancelled = False
                 if not not_bought:
@@ -904,16 +961,16 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                         embeds=[],
                         view=View())
                     created, data = await send_equipment(user_id, addr, selected_option, safari=False, random_eq=False,
-                                                         price=amount)
+                                                         price=amt)
                     config.eq_ongoing_purchasers[addr]['offer'] = data[-1]
                     if created:
                         # Make 0 XRP sell offer of equipment NFT
                         # XUMM txn for buying the NFT using ZRP
                         db_query.save_bought_eq(addr, selected_option)
-                        addr, success = await zrp_purchase_callback(_i, amount=amount, item=label, buy_offer=True,
+                        addr, success = await zrp_purchase_callback(_i, amount=amt, item=label, buy_offer=True,
                                                                     offerId=data[-1], token_id=data[-2])
                         if success:
-                            db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
+                            db_query.update_zrp_stats(burn_amount=amt, distributed_amount=0)
                             await _i.edit_original_message(
                                 content=f"Transaction **Successful**, sent {selected_option}\n"
                                         f"https://xrp.cafe/nft/{data[-2]}", embeds=[],
@@ -942,7 +999,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                         db_query.remove_bought_eq(addr, selected_option)
 
             # Register the event handler for the select menu
-            select_menu.callback = lambda interact: handle_select_menu(interact, addr)
+            select_menu.callback = lambda interact: handle_select_menu(interact, addr, amount)
         case "Buy Battle Zones":
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
             for i in config.GYMS:

@@ -47,8 +47,10 @@ async def check_auction():
     aucs = auction_functions.get_auctions()
     if len(aucs) == 0:
         return
+    auc_channel = client.get_channel(aucs[0]["channelid"])
+    if auc_channel is None:
+        auc_channel = await client.fetch_channel(aucs[0]["channelid"])
     for auc in aucs:
-        auc_channel = await client.fetch_channel(auc["channelid"])
         print(f"checking {auc['name']}")
         time_left = auc["end_time"] - int(time.time())
         if time_left <= 0:
@@ -779,7 +781,7 @@ async def mission_equipment(interaction: nextcord.Interaction,
         fail_msg = ''
         user1_z = []
         i = 0
-        while len(user1_z) != len(user_obj['mission_deck']):
+        for i in range(20):
             try:
                 zerp = user_obj['zerpmons'][user_obj['mission_deck'][str(i)]]
                 zerp_obj = db_query.get_zerpmon(zerp['name'])
@@ -1234,18 +1236,19 @@ async def show_deck(interaction: nextcord.Interaction):
         else:
             eqs = owned_nfts['equipment_decks']['mission_deck']
             for place, serial in sorted(deck.items(), key=lambda x: int(x[0])):
-                nft = owned_nfts['zerpmons'][serial]
-                lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'])
-                # zerpmon = db_query.get_zerpmon(nft['name'])
-                my_button = f"https://xrp.cafe/nft/{nft['token_id']}"
-                nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] == 'Type'])
-                active = "🟢" if 'active_t' not in nft or nft['active_t'] < time.time() else "🔴"
-                eq_name = owned_nfts['equipments'][eqs[place]]['name'] if eqs[place] in owned_nfts[
-                    'equipments'] else None
-                embed.add_field(
-                    name=f"{active}    #{serial}  **{nft['name']}** ({nft_type}) {' - ' + eq_name if eq_name is not None else ''}",
-                    value=f'> Level: **{lvl}**\n'
-                          f'> XP: **{xp}/{xp_req}**\n', inline=False)
+                if serial:
+                    nft = owned_nfts['zerpmons'][serial]
+                    lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'])
+                    # zerpmon = db_query.get_zerpmon(nft['name'])
+                    my_button = f"https://xrp.cafe/nft/{nft['token_id']}"
+                    nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] == 'Type'])
+                    active = "🟢" if 'active_t' not in nft or nft['active_t'] < time.time() else "🔴"
+                    eq_name = owned_nfts['equipments'][eqs[place]]['name'] if eqs[place] in owned_nfts[
+                        'equipments'] else None
+                    embed.add_field(
+                        name=f"{active}    #{serial}  **{nft['name']}** ({nft_type}) {' - ' + eq_name if eq_name is not None else ''}",
+                        value=f'> Level: **{lvl}**\n'
+                              f'> XP: **{xp}/{xp_req}**\n', inline=False)
     # if 'mission_trainer' not in owned_nfts:
     #     pass
     # else:
@@ -1376,6 +1379,17 @@ async def use_candy_fragment(interaction: nextcord.Interaction,
             f"**Success**",
             ephemeral=True)
 
+
+@use.subcommand(name="zerpmon_flair",
+                description="Use Zerpmon Name Flair - a 1/1 name that appears after a Zerpmon's name")
+async def use_zerpmon_flair(interaction: nextcord.Interaction,
+                               zerpmon_sr: str = SlashOption("zerpmon_name", autocomplete_callback=zerpmon_autocomplete,
+                                                        required=True)):
+    execute_before_command(interaction)
+    """
+            Deal with Zerpmon Name Flair
+            """
+    res = await callback.use_zerpmon_flair(interaction, zerpmon_sr)
 
 # @use.subcommand(description="Claim XRP earned from missions")
 # async def claim(interaction: nextcord.Interaction):
@@ -3242,7 +3256,7 @@ async def forceend(interaction: nextcord.Interaction, *, name: str, claimable: b
     embed.set_image(url=image)
     embed.add_field(name="Floor Price", value=f"{auction_functions.get_auction_by_name(name)['floor']} {currency}")
     embed.add_field(name="Winner", value=f"<@{highestBidder}>")
-    embed.add_field(name="Winning Bid", value=f"{highestBid} XRP")
+    embed.add_field(name="Winning Bid", value=f"{highestBid} {currency}")
     await interaction.edit_original_message(
         content=f"{name} auction has ended, <@{highestBidder}> won it with a bid of {highestBid} {currency}!")
     await interaction.channel.send(embed=embed)
@@ -3755,9 +3769,9 @@ async def boss_battle(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     user = interaction.user
 
-    proceed = await checks.check_boss_battle(user.id, interaction)
-    if not proceed:
-        return
+    # proceed = await checks.check_boss_battle(user.id, interaction)
+    # if not proceed:
+    #     return
 
     await callback.boss_callback(user.id, interaction)
 
@@ -3791,11 +3805,11 @@ async def boss_stats(interaction: nextcord.Interaction):
     embed.add_field(name='Personal stats', value=f"\u200B", inline=False)
     stats = user_d.get('boss_battle_stats', {})
     dmg = stats.get('weekly_dmg', 0)
-    total_dmg = boss_info['total_weekly_dmg']
+    total_dmg = boss_info['total_weekly_dmg'] + boss_info['boss_hp']
     embed.add_field(name="Total Damage dealt 🏹:", value=f"> **{stats.get('total_dmg', 0)}**", inline=False)
     embed.add_field(name="Current Boss Damage 🏹:", value=f"> **{dmg}**", inline=False)
     embed.add_field(name="Max Damage 🎯:", value=f"> **{stats.get('max_dmg', 0)}**", inline=False)
-    embed.add_field(name="ZRP share 💵:", value=f"> **{min(0, round(dmg * boss_info['reward'] / total_dmg, 1))}**", inline=False)
+    embed.add_field(name="ZRP share 💵:", value=f"> **{max(0, round(dmg * boss_info['reward'] / total_dmg, 1))}**", inline=False)
     embed.add_field(name="battle again ⏰:", value=f"> <t:{int(stats.get('next_battle_t', time.time()))}:R>",
                     inline=False)
     await interaction.send(embed=embed, ephemeral=True)

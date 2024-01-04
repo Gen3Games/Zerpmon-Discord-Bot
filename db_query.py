@@ -62,7 +62,7 @@ def update_user_decks(address, discord_id, serials, t_serial):
     battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {}
     gym_deck = user_obj["gym_deck"] if 'gym_deck' in user_obj else {}
 
-    new_mission_deck = {}
+    new_mission_deck = {i: None for i in range(20)}
     for k, v in mission_deck.items():
         if v in serials:
             new_mission_deck[k] = v
@@ -567,10 +567,10 @@ def update_mission_trainer(trainer_serial, user_id):
 def update_mission_deck(new_deck, user_id):
     users_collection = db['users']
 
-    doc = users_collection.find_one({'discord_id': str(user_id)})
+    # doc = users_collection.find_one({'discord_id': str(user_id)})
 
     # add the element to the array
-    arr = {} if "mission_deck" not in doc or doc["mission_deck"] == {} else doc["mission_deck"]
+    # arr = {} if "mission_deck" not in doc or doc["mission_deck"] == {} else doc["mission_deck"]
     # if arr != {}:
     #     for k, v in arr.copy().items():
     #         if v == zerpmon_id:
@@ -589,7 +589,8 @@ def update_mission_deck(new_deck, user_id):
 
 def clear_mission_deck(user_id):
     users_collection = db['users']
-    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': {}}})
+    n_deck = {i: None for i in range(20)}
+    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': n_deck}})
 
     if r.acknowledged:
         return True
@@ -1231,6 +1232,7 @@ def apply_white_candy(user_id, zerp_name, amt=1):
     if cnt >= 5 or int(user.get('white_candy', 0)) < amt:
         return False
     amt = min(amt, 5 - cnt)
+    print(amt)
 
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
@@ -1728,8 +1730,10 @@ def get_boss_reset(hp) -> [bool, int, int, int, bool]:
             'name': 'world_boss'
         },
             {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp, 'boss_zerpmon': boss,
-                      'boss_trainer': trainer, "reward": 500 if not obj.get('boss_active', False) else 500 + obj['reward']//2,
-                      'start_hp': hp, 'boss_msg_id': msg_id, 'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg']
+                      'boss_trainer': trainer,
+                      "reward": 500 if not obj.get('boss_active', False) else 500 + obj['reward'] // 2,
+                      'start_hp': hp, 'boss_msg_id': msg_id,
+                      'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg']
                       }
              }, upsert=True
         )
@@ -1759,7 +1763,8 @@ def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
     stats_col = db['stats_log']
     new_hp = cur_hp - dmg_done
     if new_hp > 0:
-        stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': new_hp}, '$inc': {'total_weekly_dmg': dmg_done}})
+        stats_col.update_one({'name': 'world_boss'},
+                             {'$set': {'boss_hp': new_hp}, '$inc': {'total_weekly_dmg': dmg_done}})
     else:
         stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
 
@@ -1772,7 +1777,7 @@ def set_boss_msg_id(msg_id) -> None:
 def reset_weekly_dmg() -> None:
     users_col = db['users']
     users_col.update_many({'boss_battle_stats': {'$exists': True}},
-                         {'$set': {'boss_battle_stats.weekly_dmg': 0}})
+                          {'$set': {'boss_battle_stats.weekly_dmg': 0}})
     stats_col = db['stats_log']
     stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_active': False}})
 
@@ -1797,3 +1802,13 @@ def get_boss_leaderboard():
         if i < len(top_users):
             top_10.append(top_users[i])
     return top_10
+
+
+"""Store V2 item functions"""
+
+
+def verify_zerp_flairs():
+    stats_col = db['stats_log']
+    flair_doc = stats_col.find_one({'name': 'zerpmon_flairs'})
+    if flair_doc is None:
+        stats_col.insert_one({'name': 'zerpmon_flairs', 'flairs': {i: None for i in config.ZERPMON_FLAIRS}})

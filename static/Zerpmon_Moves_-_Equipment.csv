@@ -15,14 +15,14 @@ GHOST,Increase own purple moves by 2 stars,,Old Key
 DRAGON,Decrease own miss chance by 25%,,Dragon Amulet
 DARK,Increases own crit chance by 30%,,Shadow Bangle
 STEEL,Increases own crit chance by 30%,,Power Core
-FAIRY,50% chance to pierce opponent's defenses,white vs purple or white/gold vs blue,,Fairy Dust
-COSMIC,50% chance to pierce opponent's defenses,white vs purple or white/gold vs blue,,Meteorite
+FAIRY,50% chance to pierce opponent's defenses white vs purple or white/gold vs blue,,Fairy Dust
+COSMIC,50% chance to pierce opponent's defenses white vs purple or white/gold vs blue,,Meteorite
 UNDEAD,Increase opponent miss chance by 12.5%,,Odd Skull
-OMNI,17.5% chance for enemy Gold Attack to do 0 damage,25% chance to pierce opponent's defenses,white vs purple or white/gold vs blue,Short Sword
+OMNI,17.5% chance for enemy Gold Attack to do 0 damage,25% chance to pierce opponent's defenses white vs purple or white/gold vs blue,Short Sword
 OMNI,Reduce opponent damage by 17.5%,Increase own purple moves by 1 star,Iron Shield
 OMNI,11.5% chance to survive from being knocked out by opponent,Increase opponent miss chance by 6.25%,Magic Wand
 OMNI,Increases own crit chance by 15%,Decrease own miss chance by 12.5%,Longbow
 OMNI,Decrease own miss chance by 50%,Reduce own damage by 35%,Life Core
 OMNI,Upon missing - 70% chance to roll again,,Magic Blindfold
-OMNI,Increase own miss chance by 25%,Increase own damage by 70%,Power Glove
+OMNI,Increase own miss chance by 12.5%,Increase own damage by 70%,Power Glove
 OMNI,Increase own blue chance by 12.5%,Decrease opponent blue chance by 12.5%,Tattered Cloak

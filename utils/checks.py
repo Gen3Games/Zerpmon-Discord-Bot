@@ -130,11 +130,12 @@ def get_deck_embed(deck_type, owned_nfts):
                          inline=False)
         # embed2.add_field(name='\u200b', value='\u200B', inline=False)
         new_v = v
-        if 'trainer' in v and v['trainer'] != "":
+        if 'trainer' in v and v['trainer'] != "" and v['trainer']:
             nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']]
             del new_v['trainer']
         for pos, sr in new_v.items():
-            nfts[str(pos)] = owned_nfts['zerpmons'][sr]
+            if sr:
+                nfts[str(pos)] = owned_nfts['zerpmons'][sr]
 
         if len(nfts) == 0:
             embed2.add_field(
@@ -243,7 +244,7 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
         if (battle_nickname == 'Ranked' or user_d['discord_id'] == str(user_id)) and 'battle_deck' in user_d and len(
                 user_d['battle_deck']) > 0 and len(user_d['battle_deck']['0']) < battle_type + 1:
             def_deck = user_d['battle_deck']['0']
-            if 'trainer' not in def_deck:
+            if not def_deck.get('trainer', None):
                 await interaction.send(
                     f"**{owned_nfts['user']}** you haven't set your Trainer in default deck, "
                     f"please set it and try again")
@@ -257,7 +258,7 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
             def_deck = user_d.get('recent_deck' + (f'{battle_type}' if battle_type != 3 else ''),
                                   user_d['battle_deck'].get('0', {}))
             if len(def_deck) < battle_type + 1:
-                if 'trainer' not in def_deck:
+                if not def_deck.get('trainer', None):
                     await interaction.send(
                         f"**{owned_nfts['user']}** haven't set their Trainer in default deck.")
                     return False
@@ -307,7 +308,7 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
         return False
     if 'gym_deck' in user_d and len(user_d['gym_deck']) > 0 and len(user_d['gym_deck']['0']) < 2:
         def_deck = user_d['gym_deck']['0']
-        if 'trainer' not in def_deck:
+        if not def_deck.get('trainer', None):
             await interaction.send(
                 f"**{owned_nfts['user']}** you haven't set your Trainer in default gym deck, "
                 f"please set it and try again", ephemeral=True)
@@ -376,13 +377,16 @@ async def check_boss_battle(user_id, interaction: nextcord.Interaction):
     return True
 
 
-def get_show_zerp_embed(zerpmon, interaction):
+def get_show_zerp_embed(zerpmon, interaction, omni=False):
     lvl, xp, w_candy, g_candy, l_candy = db_query.get_lvl_xp(zerpmon['name'], get_candies=True)
     embed = CustomEmbed(title=f"**{zerpmon['name']}**:\n",
                         color=0xff5252,
                         )
     my_button = f"https://xrp.cafe/nft/{zerpmon['nft_id']}"
-    nft_type = ', '.join([i['value'] for i in zerpmon['attributes'] if i['trait_type'] == 'Type'])
+    if omni:
+        nft_type = '🌟'
+    else:
+        nft_type = ', '.join([i['value'] for i in zerpmon['attributes'] if i['trait_type'] == 'Type'])
 
     embed.add_field(
         name=f"**{nft_type}**",
@@ -413,7 +417,7 @@ def get_show_zerp_embed(zerpmon, interaction):
                   (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
                   (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
-                  (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
+                  (f"> Type: {'🌟' if omni else config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
                   f"> Percentage: {move['percent']}%\n",
             inline=False)
     if interaction is not None:

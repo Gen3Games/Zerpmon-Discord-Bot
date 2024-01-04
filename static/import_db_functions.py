@@ -78,7 +78,7 @@ def import_moves():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_061223.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets.csv', 'r') as csvfile:
         collection = db['MoveSets']
         # c2 = db['MoveSets2']
         # c2.drop()
@@ -182,7 +182,7 @@ def get_cached():
     with open("./metadata.json", "r") as f:
         return json.load(f)
 
-
+# print(requests.get('https://bithomp.com/api/cors/v2/nft/0008138874D997D20619837CF3C7E1050A785E9F9AC53D7EEC38D87C048F1DE1?uri=true&metadata=true').text)
 def import_attrs_img():
     data = get_all_z()
     # tba = get_cached()  # [{nftid, metadata, uri},...]
@@ -192,9 +192,9 @@ def import_attrs_img():
             continue
         path = f"./static/images/{i['name']}.png"
         rr2 = requests.get(
-            f"https://bithomp.com/api/cors/v2/nft/{id}?uri=true&metadata=true&history=true&sellOffers=true&buyOffers=true&offersValidate=true&offersHistory=true")
+            f"https://bithomp.com/api/cors/v2/nft/{id}?uri=true&metadata=true")
         res = rr2.json()
-        print(i, res)
+        print(i, res, id)
         meta = res['metadata']['attributes']
         url = res['metadata']['image']
         print(url)
@@ -379,17 +379,17 @@ def reset_all_gyms():
 def import_equipments():
     with open('Zerpmon_Moves_-_Equipment.csv', 'r') as csvfile:
         collection = db['Equipment']
-        collection.drop()
+        # collection.drop()
         csvreader = csv.reader(csvfile)
         for row in csvreader:
             if row[1] == "":
                 continue
             # Insert the row data to MongoDB
-            collection.insert_one({
+            collection.update_one({'name': row[-1]}, {'$set': {
                 'type': row[0].lower().title(),
                 'name': row[-1],
                 'notes': [i for i in row[1:-1] if i != ""]
-            })
+            }})
 
 
 def switch_cached():

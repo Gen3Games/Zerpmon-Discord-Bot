@@ -5,6 +5,7 @@ import traceback
 import nextcord
 import config
 import db_query
+from utils import battle_function
 from utils.checks import get_next_ts, get_time_left_utc, get_days_left
 from utils.xrpl_ws import get_balance, send_zrp, send_txn, send_nft
 from xrpl_functions import get_zrp_balance
@@ -29,7 +30,7 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
     boss_zerp = boss_info.get('boss_zerpmon')
     top_10 = db_query.get_boss_leaderboard()
     embed = CustomEmbed(color=0x8f71ff,
-                        title=f"🦍 World boss summoned {boss_zerp['name']} 🦍 !")
+                        title=f"{boss_zerp['name']} (🌟) has been summoned as the World Boss!")
     embed.set_image(
         boss_zerp['image'] if "https:/" in boss_zerp['image'] else 'https://cloudflare-ipfs.com/ipfs/' + boss_zerp[
             'image'].replace("ipfs://", ""))
@@ -40,25 +41,30 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
     embed.add_field(name='\u200B', value=f"\u200B", inline=False)
 
     embed.add_field(name='Top damage dealers  🏹', value=f"\u200B", inline=False)
-    total_dmg = boss_info['total_weekly_dmg']
+    total_dmg = boss_info['total_weekly_dmg'] + boss_info['boss_hp']
     for idx, user in enumerate(top_10):
         dmg = user['boss_battle_stats'].get('weekly_dmg', 0)
         embed.add_field(name=f"#{idx + 1} {user['username']}",
                         value=f"> Damage dealt **{dmg}**\n"
                               f"> Max damage **{user['boss_battle_stats'].get('max_dmg', 0)}**\n"
-                              f"> **ZRP share {min(0, round(dmg * boss_info['reward'] / total_dmg, 1))}**", inline=False)
+                              f"> **ZRP share  `{max(0, round(dmg * boss_info['reward'] / total_dmg, 1))}`**",
+                        inline=False)
 
+    view = nextcord.ui.View(timeout=600)
+    b1 = nextcord.ui.Button(label=f"View {boss_zerp['name']}", style=nextcord.ButtonStyle.green, )
+    b1.callback = lambda i: battle_function.show_single_embed(i, boss_zerp['name'], omni=True)
+    view.add_item(b1)
     if boss_hp_cache is None or boss_info['boss_hp'] != boss_hp_cache:
         boss_hp_cache = boss_info['boss_hp']
         try:
             if config.BOSS_MSG_ID:
                 msg_ = await msg_channel.fetch_message(config.BOSS_MSG_ID)
             if edit_msg and config.BOSS_MSG_ID:
-                await msg_.edit(embed=embed)
+                await msg_.edit(embed=embed, view=view)
             else:
                 if config.BOSS_MSG_ID:
                     await msg_.delete()
-                n_msg = await msg_channel.send(content='@everyone', embed=embed)
+                n_msg = await msg_channel.send(content='everyone', embed=embed, view=view)
                 config.BOSS_MSG_ID = n_msg.id
                 db_query.set_boss_msg_id(n_msg.id)
         except Exception as e:
