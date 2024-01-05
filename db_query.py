@@ -1139,7 +1139,7 @@ def double_xp_24hr(user_id):
         return False
 
 
-def increase_lvl(user_id, zerpmon_name):
+def apply_lvl_candy(user_id, zerpmon_name):
     zerpmon_collection = db['MoveSets']
     users_collection = db['users']
     user = users_collection.find_one({'discord_id': str(user_id)})
@@ -1897,3 +1897,21 @@ def update_user_zerp_lure(user_id, lure_type):
     }
     users_collection.update_one({'discord_id': user_id},
                                 {'$push': {'zerp_lure': lure_value}})
+
+
+def apply_candy_24(user_id, zerp_name, candy_type):
+    candy_collection = db['active_candy_stats']
+    user_id = str(user_id)
+    zerp_value = {
+        'expire_ts': int(time.time() + 86400),
+        'type': candy_type
+    }
+    r = candy_collection.update_one({'discord_id': user_id},
+                                    {'$set': {f'active.{zerp_name}': zerp_value}})
+    return r.acknowledged
+
+
+def get_active_candies(user_id):
+    candy_collection = db['active_candy_stats']
+    doc = candy_collection.find_one({'discord_id': str(user_id)})
+    return doc.get('acive', {}) if doc else {}

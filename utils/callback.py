@@ -838,15 +838,8 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
             ephemeral=True)
         return
 
-    if 'white' in label.lower():
-        if 'white_candy' not in owned_nfts or int(owned_nfts['white_candy']) < amt:
-            return (await zrp_store_callback(interaction))
-    elif 'gold' in label.lower():
-        if 'gold_candy' not in owned_nfts or int(owned_nfts['gold_candy']) < amt:
-            return (await zrp_store_callback(interaction))
-    else:
-        if 'lvl_candy' not in owned_nfts or int(owned_nfts['lvl_candy']) < amt:
-            return (await zrp_store_callback(interaction))
+    if int(owned_nfts.get(label, 0)) < amt:
+        return await zrp_store_callback(interaction)
 
     await interaction.response.defer(ephemeral=True)
 
@@ -859,8 +852,14 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
             res = db_query.apply_white_candy(_i.user.id, selected_option, amt)
         elif 'gold' in label.lower():
             res = db_query.apply_gold_candy(_i.user.id, selected_option, amt)
+        elif 'lvl' in label.lower():
+            res = db_query.apply_lvl_candy(_i.user.id, selected_option)
         else:
-            res = db_query.increase_lvl(_i.user.id, selected_option)
+            active_zerps = db_query.get_active_candies(_i.user.id)
+            if selected_option in active_zerps:
+                await _i.edit_original_message(content=f"**Failed** {selected_option} already have an active {active_zerps[selected_option].replace('_', ' ').title()} buff!", view=View())
+                return
+            res = db_query.apply_candy_24(_i.user.id, selected_option, label)
 
         if res is False:
             await _i.edit_original_message(content="**Failed** Max candy usage reached!", view=View())

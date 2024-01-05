@@ -1329,7 +1329,7 @@ async def use_power_candy_white(interaction: nextcord.Interaction,
     """
             Deal with Power Candy (White)
             """
-    res = await callback.use_candy_callback(interaction, label='white', amt=qty)
+    res = await callback.use_candy_callback(interaction, label='white_candy', amt=qty)
 
 
 @use.subcommand(name="power_candy_gold",
@@ -1340,7 +1340,7 @@ async def use_power_candy_gold(interaction: nextcord.Interaction,
     """
             Deal with Power Candy (Gold)
             """
-    res = await callback.use_candy_callback(interaction, label='gold', amt=qty)
+    res = await callback.use_candy_callback(interaction, label='gold_candy', amt=qty)
 
 
 @use.subcommand(name="golden_liquorice",
@@ -1350,7 +1350,7 @@ async def use_golden_liquorice(interaction: nextcord.Interaction):
     """
             Deal with Golden Liquorice
             """
-    res = await callback.use_candy_callback(interaction, label='lvl')
+    res = await callback.use_candy_callback(interaction, label='lvl_candy')
 
 
 @use.subcommand(name="overcharge_candy",
@@ -1360,7 +1360,7 @@ async def use_overcharge_candy(interaction: nextcord.Interaction):
     """
             Deal with Golden Liquorice
             """
-    res = await callback.use_candy_callback(interaction, label='overcharge')
+    res = await callback.use_candy_callback(interaction, label='overcharge_candy')
 
 
 @use.subcommand(name="gummy_candy",
@@ -1370,7 +1370,7 @@ async def use_gummy_candy(interaction: nextcord.Interaction):
     """
             Deal with Golden Liquorice
             """
-    res = await callback.use_candy_callback(interaction, label='gummy')
+    res = await callback.use_candy_callback(interaction, label='gummy_candy')
 
 
 @use.subcommand(name="sour_candy",
@@ -1380,7 +1380,7 @@ async def use_sour_candy(interaction: nextcord.Interaction):
     """
             Deal with Golden Liquorice
             """
-    res = await callback.use_candy_callback(interaction, label='sour')
+    res = await callback.use_candy_callback(interaction, label='sour_candy')
 
 
 @use.subcommand(name="star_candy",
@@ -1390,7 +1390,7 @@ async def use_star_candy(interaction: nextcord.Interaction):
     """
             Deal with Golden Liquorice
             """
-    res = await callback.use_candy_callback(interaction, label='star')
+    res = await callback.use_candy_callback(interaction, label='star_candy')
 
 
 @use.subcommand(name="jawbreaker",
