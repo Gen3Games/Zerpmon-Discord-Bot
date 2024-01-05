@@ -34,14 +34,13 @@ SAFARI_REWARD_CHANCES = {
     "candy_white": 2.1667,
     "candy_gold": 2.1667,
     "candy_level_up": 0.8333,
-    "equipment": 0,# 0.7000,
+    "equipment": 0,  # 0.7000,
     "jackpot": 0.1833,
     "gym_refill": 2.6667,
     "revive_potion": 1.2667,
     "mission_refill": 1.2667,
     "zerpmon": 0.1333
 }
-
 
 print(sum(list(SAFARI_REWARD_CHANCES.values())))
 
@@ -904,7 +903,8 @@ async def send_general_message(guild, text, image):
 
 async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=1, defer=True):
     user_id = interaction.user.id
-    addr = db_query.get_owned(user_id)['address']
+    user_doc = db_query.get_owned(user_id)
+    addr = user_doc['address']
     amount = round(amount, 2)
     if defer:
         await interaction.response.defer(ephemeral=True)
@@ -1024,7 +1024,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             if purchased:
                 db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
                 db_query.add_gym_refill_potion(addr, 1, True, )
-        case "Buy Power Candy (White)" | "Buy Power Candy (Gold)" | "Buy Golden Liquorice":
+        case "Buy Power Candy (White)" | "Buy Power Candy (Gold)" | "Buy Golden Liquorice" | "Buy Overcharge Candy" | "Buy Gummy Candy" | "Buy Sour Candy" | "Buy Star Candy" | "Buy Jawbreaker":
             select_menu = nextcord.ui.StringSelect(placeholder="Select amount")
             for i in range(1, 11):
                 select_menu.add_option(label=str(i), value=str(i))
@@ -1040,12 +1040,25 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 addr, purchased = await zrp_purchase_callback(_i, amt, label.replace('Buy ', ''))
                 if purchased:
                     db_query.update_zrp_stats(burn_amount=amt, distributed_amount=0)
-                    if 'white' in label.lower():
+                    lower_label = label.lower()
+                    if 'white' in lower_label:
                         db_query.add_white_candy(addr, selected_option, purchased=True, amount=amt)
-                    elif 'liquorice' in label.lower():
-                        db_query.add_lvl_candy(addr, selected_option, purchased=True, amount=amt)
-                    else:
+                    elif 'gold' in lower_label:
                         db_query.add_gold_candy(addr, selected_option, purchased=True, amount=amt)
+                    elif 'liquorice' in lower_label:
+                        db_query.add_lvl_candy(addr, selected_option, purchased=True, amount=amt)
+                    elif 'liquorice' in lower_label:
+                        db_query.add_lvl_candy(addr, selected_option, purchased=True, amount=amt)
+                    elif 'jawbreaker' in lower_label:
+                        db_query.add_jawbreaker(addr, selected_option, purchased=True, amount=amt)
+                    elif 'overcharge' in lower_label:
+                        db_query.add_overcharge_candy(addr, selected_option, purchased=True, amount=amt)
+                    elif 'sour' in lower_label:
+                        db_query.add_sour_candy(addr, selected_option, purchased=True, amount=amt)
+                    elif 'star' in lower_label:
+                        db_query.add_star_candy(addr, selected_option, purchased=True, amount=amt)
+                    elif 'gummy' in lower_label:
+                        db_query.add_gummy_candy(addr, selected_option, purchased=True, amount=amt)
 
             select_menu.callback = handle_select_menu
 
@@ -1286,18 +1299,26 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
         #     else:
         #         embed.set_image(url=img)
         #         await interaction.send(embed=embed, view=view, ephemeral=True)
-        case "Buy Name Flair":
+        case "Buy Name Flair" | "Buy Zerpmon Name Flair":
             # Create a select menu with the dropdown options
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
             select_menu2 = nextcord.ui.StringSelect(placeholder="more options")
-            for i in config.name_flair_list:
+            type2 = 'Zerpmon' in label
+            if type2:
+                flair_list = db_query.get_available_zerp_flairs()
+                flair_update_fn = db_query.add_zerp_flair
+            else:
+                flair_list = config.name_flair_list
+                flair_update_fn = db_query.update_user_flair
+            for i in flair_list:
                 if len(select_menu.options) >= 25:
                     select_menu2.add_option(label=i, value=i)
                 else:
                     select_menu.add_option(label=i, value=i)
             view = View()
             view.add_item(select_menu)
-            view.add_item(select_menu2)
+            if len(flair_list) >= 25:
+                view.add_item(select_menu2)
 
             # Send a new message with the select menu
             await interaction.edit_original_message(content="Choose one **Name Flair**:", view=view, embeds=[])
@@ -1308,16 +1329,40 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 await _i.response.defer(ephemeral=True)
                 await _i.edit_original_message(content='Selected ✅', view=View(), embeds=[])
                 if user_id == 1017889758313197658:
-                    db_query.update_user_flair(user_id, selected_option)
+                    flair_update_fn(user_id, selected_option)
                 else:
                     addr, purchased = await zrp_purchase_callback(_i, amount, label.replace('Buy ', ''))
                     if purchased:
                         db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
-                        db_query.update_user_flair(user_id, selected_option)
+                        flair_update_fn(user_id, selected_option)
 
             # Register the event handler for the select menu
             select_menu.callback = handle_select_menu
             select_menu2.callback = handle_select_menu
+        case "Buy Zerpmon Lure":
+            active_type = user_doc.get('zerp_lure', {})
+            if active_type.get('expire_ts', 0) > time.time():
+                await interaction.edit_original_message(content=f"Sorry you already have **{active_type['type']}** Zerpmon Lure (expires <t:{active_type.get('expire_ts', 0)}:R>)", embeds=[], view=None)
+                return
+            select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
+            for i in config.TYPE_MAPPING:
+                if i:
+                    select_menu.add_option(label=i + f' {config.TYPE_MAPPING[i]}', value=i)
+            view = View()
+            view.add_item(select_menu)
+            await interaction.edit_original_message(content="Choose one **LURE TYPE**:", embeds=[], view=view)
+
+            async def handle_select_menu(_i: nextcord.Interaction):
+                print(_i.data)
+                selected_option = _i.data["values"][0]  # Get the selected option
+                await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
+                addr, purchased = await zrp_purchase_callback(_i, amount, label.replace('Buy ', ''))
+                if purchased:
+                    db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
+                    db_query.update_user_zerp_lure(user_id, selected_option)
+
+            # Register the event handler for the select menu
+            select_menu.callback = handle_select_menu
 
 
 async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextcord.Member, potion_key, potion, fn,

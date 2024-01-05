@@ -1195,7 +1195,6 @@ def add_white_candy(address, inc_by, purchased=False, amount=0):
     users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
-
     return True
 
 
@@ -1220,6 +1219,61 @@ def add_lvl_candy(address, inc_by, purchased=False, amount=0):
                                 {'$inc': query},
                                 upsert=True)
 
+    return True
+
+
+def add_overcharge_candy(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'overcharge_candy': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+    return True
+
+
+def add_gummy_candy(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'gummy_candy': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+    return True
+
+
+def add_sour_candy(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'sour_candy': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+    return True
+
+
+def add_star_candy(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'star_candy': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
+    return True
+
+
+def add_jawbreaker(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'jawbreaker': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    users_collection.update_one({'address': str(address)},
+                                {'$inc': query},
+                                upsert=True)
     return True
 
 
@@ -1812,3 +1866,34 @@ def verify_zerp_flairs():
     flair_doc = stats_col.find_one({'name': 'zerpmon_flairs'})
     if flair_doc is None:
         stats_col.insert_one({'name': 'zerpmon_flairs', 'flairs': {i: None for i in config.ZERPMON_FLAIRS}})
+
+
+def get_available_zerp_flairs():
+    stats_col = db['stats_log']
+    return [i for i, j in stats_col.find_one({'name': 'zerpmon_flairs'}).get('flairs', {}).items() if j is None]
+
+
+def add_zerp_flair(user_id, flair_name):
+    users_collection = db['users']
+    user_id = str(user_id)
+    users_collection.update_one({'discord_id': user_id},
+                                {'$push': {'z_flair': flair_name}})
+
+
+def update_zerp_flair(zerp_name, flair):
+    stats_col = db['stats_log']
+    r = stats_col.update_one({'name': 'zerpmon_flairs'}, {"$set": {f'flairs.{flair}': zerp_name}})
+    if r.acknowledged:
+        return True
+    return False
+
+
+def update_user_zerp_lure(user_id, lure_type):
+    users_collection = db['users']
+    user_id = str(user_id)
+    lure_value = {
+        'expire_ts': int(time.time() + 86400),
+        'type': lure_type
+    }
+    users_collection.update_one({'discord_id': user_id},
+                                {'$push': {'zerp_lure': lure_value}})

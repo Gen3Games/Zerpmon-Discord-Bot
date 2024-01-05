@@ -105,3 +105,15 @@ async def loan_autocomplete(interaction: nextcord.Interaction, item: str):
         choices[item['zerpmon_name']] = item['zerpmon_name']
 
     await interaction.response.send_autocomplete(choices)
+
+
+async def zerp_flair_autocomplete(interaction: nextcord.Interaction, item: str):
+    # Determine the choices for the trainer_name option based on a condition
+    user_owned = db_query.get_owned(interaction.user.id)
+    if user_owned is not None and 'z_flair' in user_owned:
+        vals = [i for i in user_owned['z_flair'] if item in i]
+        choices = {i: i for i in vals}
+    else:
+        choices = {}
+    choices = dict(sorted(choices.items()))
+    await interaction.response.send_autocomplete(choices)

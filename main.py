@@ -24,7 +24,7 @@ from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, che
 from xrpl.utils import xrp_to_drops
 from utils.trade import trade_item
 from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete, \
-    loan_autocomplete
+    loan_autocomplete, zerp_flair_autocomplete
 from utils.callback import wager_battle_r_callback
 
 intents = nextcord.Intents.all()
@@ -196,7 +196,7 @@ async def on_ready():
         print(guild.name)
     config.gym_main_reset = db_query.get_gym_reset()
     config.zerpmon_holders = zerpmon_players
-    config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(zerpmon_players*500)
+    config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(zerpmon_players * 500)
     if new:
         await reset_alert.send_boss_update_msg(boss_channel, not new, )
     if not check_auction.is_running():
@@ -1353,6 +1353,56 @@ async def use_golden_liquorice(interaction: nextcord.Interaction):
     res = await callback.use_candy_callback(interaction, label='lvl')
 
 
+@use.subcommand(name="overcharge_candy",
+                description="Use Overcharge Candy | Zerpmon selected is charged for 24 Hours (+25% damage/-10% miss")
+async def use_overcharge_candy(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    """
+            Deal with Golden Liquorice
+            """
+    res = await callback.use_candy_callback(interaction, label='overcharge')
+
+
+@use.subcommand(name="gummy_candy",
+                description="Use Gummy Candy | Zerpmon selected White moves increase by 10% each for 24 hours")
+async def use_gummy_candy(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    """
+            Deal with Golden Liquorice
+            """
+    res = await callback.use_candy_callback(interaction, label='gummy')
+
+
+@use.subcommand(name="sour_candy",
+                description="Use Sour Candy | Zerpmon selected Gold Moves increased by 10% each for 24 hours")
+async def use_sour_candy(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    """
+            Deal with Golden Liquorice
+            """
+    res = await callback.use_candy_callback(interaction, label='sour')
+
+
+@use.subcommand(name="star_candy",
+                description="Use Star Candy | Zerpmon selected Purple Moves increased by 10% each for 24 hours")
+async def use_star_candy(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    """
+            Deal with Golden Liquorice
+            """
+    res = await callback.use_candy_callback(interaction, label='star')
+
+
+@use.subcommand(name="jawbreaker",
+                description="Use Jawbreaker | Zerpmon selected Increase Blue moves by 15% for 24 hours")
+async def use_jawbreaker(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    """
+            Deal with Golden Liquorice
+            """
+    res = await callback.use_candy_callback(interaction, label='jawbreaker')
+
+
 @use.subcommand(name="candy_fragment",
                 description="Combine 7 Candy fragments into 1 White/Gold Candy")
 async def use_candy_fragment(interaction: nextcord.Interaction,
@@ -1382,14 +1432,30 @@ async def use_candy_fragment(interaction: nextcord.Interaction,
 
 @use.subcommand(name="zerpmon_flair",
                 description="Use Zerpmon Name Flair - a 1/1 name that appears after a Zerpmon's name")
-async def use_zerpmon_flair(interaction: nextcord.Interaction,
-                               zerpmon_sr: str = SlashOption("zerpmon_name", autocomplete_callback=zerpmon_autocomplete,
-                                                        required=True)):
+async def use_zerpmon_flair(interaction: nextcord.Interaction, flair: str = SlashOption("flair", autocomplete_callback=zerp_flair_autocomplete),
+                            zerpmon_sr: str = SlashOption("zerpmon_name", autocomplete_callback=zerpmon_autocomplete,
+                                                          required=True)):
     execute_before_command(interaction)
     """
             Deal with Zerpmon Name Flair
             """
-    res = await callback.use_zerpmon_flair(interaction, zerpmon_sr)
+
+    user = interaction.user
+    user_obj = db_query.get_owned(user.id)
+    if user_obj is None or len(user_obj.get('flair', [])) == 0:
+        await interaction.send(f"Sorry, you don't own any **Name Flair**",
+                               ephemeral=True)
+        return
+    try:
+        db_query.update_zerp_flair(user_obj['zerpmons'][zerpmon_sr]['name'], flair)
+        await interaction.send(
+            f"**Success**",
+            ephemeral=True)
+    except:
+        await interaction.send(
+            f"**Failed**, make sure you own this Zerpmon",
+            ephemeral=True)
+
 
 # @use.subcommand(description="Claim XRP earned from missions")
 # async def claim(interaction: nextcord.Interaction):
@@ -3776,7 +3842,8 @@ async def boss_battle(interaction: nextcord.Interaction):
     await callback.boss_callback(user.id, interaction)
 
 
-@client.slash_command(name="world_boss_dashboard", description="Shows player’s total damage done to the boss, and remaining World Boss health")
+@client.slash_command(name="world_boss_dashboard",
+                      description="Shows player’s total damage done to the boss, and remaining World Boss health")
 @commands.cooldown(rate=1, per=10, type=commands.BucketType.user)
 async def boss_stats(interaction: nextcord.Interaction):
     execute_before_command(interaction)
@@ -3787,7 +3854,8 @@ async def boss_stats(interaction: nextcord.Interaction):
     boss_zerp = boss_info.get('boss_zerpmon')
     boss_trainer = boss_info.get('boss_trainer')
     if not user_d:
-        await interaction.send("Please make sure you have verified your account and then try this command again", ephemeral=True)
+        await interaction.send("Please make sure you have verified your account and then try this command again",
+                               ephemeral=True)
         return
 
     embed = CustomEmbed(color=0x42b883,
@@ -3809,10 +3877,12 @@ async def boss_stats(interaction: nextcord.Interaction):
     embed.add_field(name="Total Damage dealt 🏹:", value=f"> **{stats.get('total_dmg', 0)}**", inline=False)
     embed.add_field(name="Current Boss Damage 🏹:", value=f"> **{dmg}**", inline=False)
     embed.add_field(name="Max Damage 🎯:", value=f"> **{stats.get('max_dmg', 0)}**", inline=False)
-    embed.add_field(name="ZRP share 💵:", value=f"> **{max(0, round(dmg * boss_info['reward'] / total_dmg, 1))}**", inline=False)
+    embed.add_field(name="ZRP share 💵:", value=f"> **{max(0, round(dmg * boss_info['reward'] / total_dmg, 1))}**",
+                    inline=False)
     embed.add_field(name="battle again ⏰:", value=f"> <t:{int(stats.get('next_battle_t', time.time()))}:R>",
                     inline=False)
     await interaction.send(embed=embed, ephemeral=True)
+
 
 # Boss Battle Commands
 
