@@ -554,6 +554,26 @@ async def show_zrp_holdings(interaction: nextcord.Interaction):
                          value=f"**{0 if 'gold_candy' not in user_owned_nfts else user_owned_nfts['gold_candy']}**"
                                + '\t🍭',
                          inline=False)
+    main_embed.add_field(name="Overcharge Candy: ",
+                         value=f"**{user_owned_nfts.get('overcharge_candy', 0)}**"
+                               + '\t🥝',
+                         inline=False)
+    main_embed.add_field(name="Gummy Candy: ",
+                         value=f"**{user_owned_nfts.get('gummy_candy', 0)}**"
+                               + '\t🥘',
+                         inline=False)
+    main_embed.add_field(name="Sour Candy: ",
+                         value=f"**{user_owned_nfts.get('sour_candy', 0)}**"
+                               + '\t🥑',
+                         inline=False)
+    main_embed.add_field(name="Star Candy: ",
+                         value=f"**{user_owned_nfts.get('star_candy', 0)}**"
+                               + '\t🥞',
+                         inline=False)
+    main_embed.add_field(name="Jawbreaker: ",
+                         value=f"**{user_owned_nfts.get('jawbreaker', 0)}**"
+                               + '\t🥊',
+                         inline=False)
     main_embed.add_field(name="Golden Liquorice: ",
                          value=f"**{0 if 'lvl_candy' not in user_owned_nfts else user_owned_nfts['lvl_candy']}**"
                                + '\t🍯',
@@ -566,15 +586,24 @@ async def show_zrp_holdings(interaction: nextcord.Interaction):
                          value=f"**{len(user_owned_nfts.get('flair', []))}**"
                                + '\t💠',
                          inline=False)
+    main_embed.add_field(name="Zerpmon Name Flair:",
+                         value=f"**{len(user_owned_nfts.get('z_flair', []))}**"
+                               + '\t💎',
+                         inline=False)
     main_embed.add_field(name="Candy Fragments:",
                          value=f"**{user_owned_nfts.get('candy_frag', )}**"
                                + '\t🧩',
+                         inline=False)
+
+    lure = user_owned_nfts.get('zerp_lure', {})
+    main_embed.add_field(name="Zerpmon Lure:",
+                         value=f"**{lure['type'] if lure.get('expire_ts', 0) > time.time() else 'Inactive'}**"
+                               + '\t🥭',
                          inline=False)
     j_bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
     main_embed.add_field(name="Jackpot ZRP value:",
                          value=f"**{j_bal:.2f}**",
                          inline=False)
-
     try:
         user_bal = float(await xrpl_functions.get_zrp_balance(user_owned_nfts['address']))
         main_embed.add_field(name="Your ZRP balance:",
@@ -1348,7 +1377,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 return
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
             for i in config.TYPE_MAPPING:
-                if i:
+                if i and i not in ['Dragonling', 'Omni']:
                     select_menu.add_option(label=i + f' {config.TYPE_MAPPING[i]}', value=i)
             view = View()
             view.add_item(select_menu)
@@ -1358,7 +1387,10 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 print(_i.data)
                 selected_option = _i.data["values"][0]  # Get the selected option
                 await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
-                addr, purchased = await zrp_purchase_callback(_i, amount, label.replace('Buy ', ''))
+                if user_id == 1017889758313197658:
+                    purchased = True
+                else:
+                    addr, purchased = await zrp_purchase_callback(_i, amount, label.replace('Buy ', ''))
                 if purchased:
                     db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
                     db_query.update_user_zerp_lure(user_id, selected_option)

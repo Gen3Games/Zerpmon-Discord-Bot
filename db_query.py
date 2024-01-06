@@ -247,9 +247,17 @@ def save_zerpmon_winrate(winner_name, loser_name):
     return True
 
 
-def get_rand_zerpmon(level):
+def get_rand_zerpmon(level, lure_type=None):
     zerpmon_collection = db['MoveSets2']
-    random_doc = list(zerpmon_collection.aggregate([{'$sample': {'size': 1}}, {'$limit': 1}]))
+    if lure_type:
+        query = {'$match': {'attributes': {'$elemMatch': {'trait_type': 'Type', 'value': lure_type}}}}
+    else:
+        query = {'$match': {}}
+    random_doc = list(zerpmon_collection.aggregate([
+        query,
+        {'$sample': {'size': 1}},
+        {'$limit': 1}
+    ]))
     zerp = random_doc[0]
     zerp['level'] = level
     for i in range(level // 10):
@@ -1913,7 +1921,7 @@ def update_user_zerp_lure(user_id, lure_type):
         'type': lure_type
     }
     users_collection.update_one({'discord_id': user_id},
-                                {'$push': {'zerp_lure': lure_value}})
+                                {'$set': {'zerp_lure': lure_value}})
 
 
 def apply_candy_24(user_id, addr, zerp_name, candy_type):

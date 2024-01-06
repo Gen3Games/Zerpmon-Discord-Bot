@@ -2017,9 +2017,9 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             buffed_zerp = i
             break
 
-    z2 = db_query.get_rand_zerpmon(level=z1_level)
+    z2 = db_query.get_rand_zerpmon(level=z1_level, lure_type=_data1.get('zerp_lure', {}).get('type'))
     while z2['name'] == z1['name']:
-        z2 = db_query.get_rand_zerpmon(level=z1_level)
+        z2 = db_query.get_rand_zerpmon(level=z1_level, lure_type=_data1.get('zerp_lure', {}).get('type'))
     z2_moves = z2['moves']
     z2_type = [i['value'] for i in z2['attributes'] if i['trait_type'] == 'Type']
     # Dealing with Equipment
