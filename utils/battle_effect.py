@@ -82,7 +82,7 @@ def update_purple_stars(total, status_affect_solo):
     return total, status_affect_solo
 
 
-def update_array(arr, index, value, own=False, is_boss=False):
+def update_array(arr, index, value, own=False, is_boss=False, index2=None):
     caller_name = inspect.currentframe().f_back.f_code.co_name
     print("Caller function:", caller_name)
     print('ARR RECV: ', arr, value)
@@ -114,10 +114,15 @@ def update_array(arr, index, value, own=False, is_boss=False):
 
     # if value > 0 and value
     _i = len([i for i in arr if i is not None]) - 1
+    check_arr = [index]
+    if index2:
+        remaining_value *= 2
+        _i -= 1
+        check_arr.append(index2)
     for i in range(len(arr)):
         if arr[i] is None:
             continue
-        if i != index:
+        if i not in check_arr:
             delta = remaining_value / _i
             _i -= 1
             arr[i] = round(arr[i] + delta, 2)
@@ -128,7 +133,8 @@ def update_array(arr, index, value, own=False, is_boss=False):
             remaining_value -= delta
 
     # Set the index value to the desired value
-    arr[index] += value
+    for i in check_arr:
+        arr[i] += value
     if arr[index] >= 100:
         arr = [0 if (i != index and i is not None) else (100 if i == index else arr[i]) for i in range(len(arr))]
     else:

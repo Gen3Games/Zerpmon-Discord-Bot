@@ -203,6 +203,7 @@ async def on_ready():
         check_auction.start()
     if len(config.loaners) == 0:
         db_query.set_loaners()
+    db_query.verify_zerp_flairs()
 
 
 @client.event
@@ -1442,12 +1443,12 @@ async def use_zerpmon_flair(interaction: nextcord.Interaction, flair: str = Slas
 
     user = interaction.user
     user_obj = db_query.get_owned(user.id)
-    if user_obj is None or len(user_obj.get('flair', [])) == 0:
-        await interaction.send(f"Sorry, you don't own any **Name Flair**",
+    if user_obj is None or user_obj.get('z_flair', {}).get(flair, 1) == 1:
+        await interaction.send(f"Sorry, you don't own any  such **Name Flair**",
                                ephemeral=True)
         return
     try:
-        db_query.update_zerp_flair(user_obj['zerpmons'][zerpmon_sr]['name'], flair)
+        db_query.update_zerp_flair(str(user.id), user_obj['zerpmons'][zerpmon_sr]['name'], user_obj['z_flair'][flair], flair)
         await interaction.send(
             f"**Success**",
             ephemeral=True)
@@ -3097,6 +3098,10 @@ async def view_rank(interaction: nextcord.Interaction):
 @commands.has_permissions(administrator=True)
 async def auction(interaction: nextcord.Interaction, nftid: str, price: int, duration: int,
                   duration_type: Literal["hours", "days"], currency: Literal["XRP", "ZRP"], quick: bool = False):
+    admin_role = nextcord.utils.get(interaction.guild.roles, id=config.ELITE_ROLE)
+    if admin_role not in interaction.user.roles:
+        await interaction.send(content=f"Sorry you don't have access to this command.", ephemeral=True)
+        return
     await interaction.response.defer(ephemeral=True)
     nftid = nftid.strip()
     nftData = xrpl_functions.get_nft_metadata_by_id(nftid)

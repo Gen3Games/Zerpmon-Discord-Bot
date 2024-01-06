@@ -3,7 +3,7 @@ import json
 import logging
 import random
 import time
-
+from utils import battle_effect
 import pymongo
 import pytz
 from pymongo import MongoClient, ReturnDocument, DESCENDING, UpdateOne
@@ -203,17 +203,23 @@ def get_move(name):
     return result
 
 
-def get_zerpmon(name, mission=False):
+def get_zerpmon(name, mission=False, user_id=None):
+    candy = None
     if mission:
         zerpmon_collection = db['MoveSets2']
     else:
         zerpmon_collection = db['MoveSets']
+        if user_id:
+            candy = get_active_candies(user_id).get(name)
     # print(name)
 
     result = zerpmon_collection.find_one({"name": name})
     if result is None:
         result = zerpmon_collection.find_one({"nft_id": str(name).upper()})
-
+    flair = result.get('z_flair', None)
+    result['name2'] = result['name'] + (f' | {flair}' if flair else '')
+    if candy and candy['expire_ts'] > time.time():
+        update_stats_candy(result, candy['type'])
     # print(f"Found Zerpmon {result}")
 
     return result
@@ -248,6 +254,7 @@ def get_rand_zerpmon(level):
     zerp['level'] = level
     for i in range(level // 10):
         zerp = update_moves(zerp, False)
+    zerp['name2'] = zerp['name']
     # print(random_doc[0])
     return zerp
 
@@ -909,6 +916,8 @@ def get_random_doc_with_type(type_value):
     documents = list(collection.find(query))
     if documents:
         random_documents = random.sample(documents, 5)
+        for doc in random_documents:
+            doc['name2'] = doc['name']
         return random_documents
     else:
         return None
@@ -1865,27 +1874,35 @@ def verify_zerp_flairs():
     stats_col = db['stats_log']
     flair_doc = stats_col.find_one({'name': 'zerpmon_flairs'})
     if flair_doc is None:
-        stats_col.insert_one({'name': 'zerpmon_flairs', 'flairs': {i: None for i in config.ZERPMON_FLAIRS}})
+        stats_col.insert_one({'name': 'zerpmon_flairs', 'z_flairs': {i: None for i in config.ZERPMON_FLAIRS}})
 
 
-def get_available_zerp_flairs():
+def get_available_zerp_flairs(reverse=False):
     stats_col = db['stats_log']
-    return [i for i, j in stats_col.find_one({'name': 'zerpmon_flairs'}).get('flairs', {}).items() if j is None]
+    return {i: j for i, j in stats_col.find_one({'name': 'zerpmon_flairs'}).get('z_flairs', {}).items() if
+            (j is None and not reverse) or (j is not None and reverse)}
 
 
 def add_zerp_flair(user_id, flair_name):
     users_collection = db['users']
+    stats_col = db['stats_log']
     user_id = str(user_id)
     users_collection.update_one({'discord_id': user_id},
-                                {'$push': {'z_flair': flair_name}})
+                                {'$set': {f'z_flair.{flair_name}': None}})
+    r = stats_col.update_one({'name': 'zerpmon_flairs'}, {"$set": {f'z_flairs.{flair_name}': user_id, }})
+    return r.acknowledged
 
 
-def update_zerp_flair(zerp_name, flair):
-    stats_col = db['stats_log']
-    r = stats_col.update_one({'name': 'zerpmon_flairs'}, {"$set": {f'flairs.{flair}': zerp_name}})
-    if r.acknowledged:
-        return True
-    return False
+def update_zerp_flair(discord_id, zerp_name, old_zerp_name, flair_name):
+    users_collection = db['users']
+    zerpmon_collection = db['MoveSets']
+
+    r = users_collection.update_one({'discord_id': discord_id},
+                                {'$set': {f'z_flair.{flair_name}': zerp_name}})
+    if old_zerp_name:
+        zerpmon_collection.update_one({'name': old_zerp_name}, {'$unset': {'z_flair': ""}})
+    zerpmon_collection.update_one({'name': zerp_name}, {'$set': {'z_flair': flair_name}})
+    return r.acknowledged
 
 
 def update_user_zerp_lure(user_id, lure_type):
@@ -1899,19 +1916,59 @@ def update_user_zerp_lure(user_id, lure_type):
                                 {'$push': {'zerp_lure': lure_value}})
 
 
-def apply_candy_24(user_id, zerp_name, candy_type):
+def apply_candy_24(user_id, addr, zerp_name, candy_type):
     candy_collection = db['active_candy_stats']
     user_id = str(user_id)
     zerp_value = {
         'expire_ts': int(time.time() + 86400),
         'type': candy_type
     }
+    adder_fn = globals().get(f'add_{candy_type}')
+
     r = candy_collection.update_one({'discord_id': user_id},
-                                    {'$set': {f'active.{zerp_name}': zerp_value}})
+                                    {'$set': {f'active.{zerp_name}': zerp_value}}, upsert=True)
+    adder_fn(addr, -1)
     return r.acknowledged
 
 
 def get_active_candies(user_id):
     candy_collection = db['active_candy_stats']
     doc = candy_collection.find_one({'discord_id': str(user_id)})
-    return doc.get('acive', {}) if doc else {}
+    return doc.get('active', {}) if doc else {}
+
+
+def update_stats_candy(doc, candy_type):
+    old_p = [(i.get('percent', None) if i['color'] != 'blue' else None) for i in doc['moves']]
+    match candy_type:
+        case 'overcharge_candy':
+            new_p = battle_effect.update_array(old_p, 7, -10, own=True)
+            for i, move in enumerate(doc['moves']):
+                if move['color'] == 'blue':
+                    continue
+                if move.get('dmg', None):
+                    move['dmg'] = round(move['dmg'] * 1.25, 2)
+                move['percent'] = new_p[i]
+        case 'gummy_candy':
+            new_p = battle_effect.update_array(old_p, 0, 10, own=True, index2=1)
+            for i, move in enumerate(doc['moves']):
+                if move['color'] == 'blue':
+                    continue
+                move['percent'] = new_p[i]
+        case 'sour_candy':
+            new_p = battle_effect.update_array(old_p, 2, 10, own=True, index2=3)
+            for i, move in enumerate(doc['moves']):
+                if move['color'] == 'blue':
+                    continue
+                move['percent'] = new_p[i]
+        case 'star_candy':
+            new_p = battle_effect.update_array(old_p, 4, 10, own=True, index2=5)
+            print(sum([i for i in new_p if i]))
+            for i, move in enumerate(doc['moves']):
+                if move['color'] == 'blue':
+                    continue
+                move['percent'] = new_p[i]
+        case 'jawbreaker':
+            for i, move in enumerate(doc['moves']):
+                if move['color'] == 'blue':
+                    move['percent'] += 15
+
