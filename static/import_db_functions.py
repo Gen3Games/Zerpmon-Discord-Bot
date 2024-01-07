@@ -171,6 +171,42 @@ def import_level():
             })
 
 
+def import_ascend_levels():
+    collection = db['levels']
+    t_xp = 7900
+    s_xp = 750
+    rewards = ['jawbreaker', 'star_candy', 'sour_candy', 'gummy_candy', 'overcharge_candy']
+    temp_rewards = rewards.copy()
+    gym_refills = 1
+    for i in range(31, 61):
+        s_xp += 50
+        t_xp += s_xp
+        candy_slot, candy_frags = 0, 0
+        reward = None, 0
+        if len(temp_rewards) == 0:
+            temp_rewards = rewards.copy()
+            candy_slot, candy_frags = 1, 6
+            gym_refills += 1
+        else:
+            reward = temp_rewards.pop(), gym_refills
+        print(i, t_xp, s_xp, reward, candy_slot, candy_frags)
+        obj = {
+            'level': i,
+            'xp_required': s_xp,
+            'total_xp': t_xp,
+            'wins_needed': int(s_xp/10),
+            'revive_potion_reward': 0,
+            'mission_potion_reward': 0,
+            'candy_slot': candy_slot,
+            'candy_frags': candy_frags
+        }
+        if reward[0]:
+            obj['gym_refill_reward'] = reward[1]
+            obj[f'{reward[0]}'] = 1
+        collection.insert_one(obj)
+
+
+import_ascend_levels()
 def check_nft_cached(id, data):
     for i in data:
         if i['nftid'] == id:
@@ -407,13 +443,15 @@ def switch_cached():
 
 # switch_cached()
 # import_boxes()
-import_moves()
-import_movesets()
-# import_level()
-import_attrs_img()
-clean_attrs()
-update_all_zerp_moves()
-cache_data()
-import_equipments()
+
+# import_moves()
+# import_movesets()
+# # import_level()
+# import_attrs_img()
+# clean_attrs()
+# update_all_zerp_moves()
+# cache_data()
+# import_equipments()
+
 
 # reset_all_gyms()

@@ -1433,7 +1433,8 @@ async def use_candy_fragment(interaction: nextcord.Interaction,
 
 @use.subcommand(name="zerpmon_flair",
                 description="Use Zerpmon Name Flair - a 1/1 name that appears after a Zerpmon's name")
-async def use_zerpmon_flair(interaction: nextcord.Interaction, flair: str = SlashOption("flair", autocomplete_callback=zerp_flair_autocomplete),
+async def use_zerpmon_flair(interaction: nextcord.Interaction,
+                            flair: str = SlashOption("flair", autocomplete_callback=zerp_flair_autocomplete),
                             zerpmon_sr: str = SlashOption("zerpmon_name", autocomplete_callback=zerpmon_autocomplete,
                                                           required=True)):
     execute_before_command(interaction)
@@ -1448,7 +1449,8 @@ async def use_zerpmon_flair(interaction: nextcord.Interaction, flair: str = Slas
                                ephemeral=True)
         return
     try:
-        db_query.update_zerp_flair(str(user.id), user_obj['zerpmons'][zerpmon_sr]['name'], user_obj['z_flair'][flair], flair)
+        db_query.update_zerp_flair(str(user.id), user_obj['zerpmons'][zerpmon_sr]['name'], user_obj['z_flair'][flair],
+                                   flair)
         await interaction.send(
             f"**Success**",
             ephemeral=True)
@@ -2966,8 +2968,12 @@ async def ranked_battle_instant(interaction: nextcord.Interaction,
         return
     recent_deck = 'recent_deck' if b_type == 3 else f'recent_deck{b_type}'
     recent_eq_deck = recent_deck + '_eq'
+
+    def deck_getter(user):
+        return {i: j for i, j in user.get('battle_deck', {}).get('0', {}).items() if j}
+
     valid_opponents = [i for i in opponents if
-                       len(i.get(recent_deck, i.get('battle_deck', {'0': {}}).get('0', {}))) >= b_type + 1]
+                       len(i.get(recent_deck, deck_getter(i))) >= b_type + 1]
     if len(valid_opponents) == 0:
         await interaction.send("Sorry, can't find anyone within the same Rank and with a compatible Battle deck.",
                                ephemeral=True)
@@ -3890,6 +3896,33 @@ async def boss_stats(interaction: nextcord.Interaction):
 
 
 # Boss Battle Commands
+
+
+# Ascend CMD
+
+@client.slash_command(name="ascend",
+                      description="Unlock level 31-60 for your maxed out Zerpmon",
+                      )
+async def ascend(interaction: nextcord.Interaction, zerpmon_sr: str = SlashOption("zerpmon_name", autocomplete_callback=zerpmon_autocomplete),):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    user_doc = db_query.get_owned(interaction.user.id)
+    # Sanity checks
+    if user_doc is None or user_doc['zerpmons'].get(zerpmon_sr, None) is None:
+        await interaction.edit_original_message(
+            content=f"Sorry, you don't own this zerpmon",)
+        return
+    zerp_name = user_doc['zerpmons'][zerpmon_sr]['name']
+    zerp_doc = db_query.get_zerpmon(zerp_name, )
+    if zerp_doc.get('level', 0) < 30:
+        await interaction.edit_original_message(
+            content=f"**Failed**, you haven't yet maxed out your {zerp_name} yet")
+        return
+
+    await callback.ascend_callback(interaction, user_doc, zerp_doc)
+
+
+# Ascend CMD
 
 # Reaction Tracker
 

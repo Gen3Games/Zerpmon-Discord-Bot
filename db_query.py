@@ -472,7 +472,17 @@ def get_same_ranked_p(user_id, rank_tier, field='rank'):
             ]
         }
     else:
-        query = {f'{field}.tier': rank_tier}
+        rank_list = list(config.RANKS.keys())
+        c_idx = rank_list.index(rank_tier)
+        l_tier, h_tier = c_idx - 1, c_idx + 1
+        print(c_idx)
+        query = {
+            '$or': [
+                {f'{field}.tier': rank_tier},
+                {f'{field}.tier': rank_list[l_tier]},
+                {f'{field}.tier': rank_list[h_tier]},
+            ]
+        }
     top_users = users_collection.find(query).sort(f'{field}.points', DESCENDING)
     return [i for i in top_users if i['discord_id'] != user_id]
 
@@ -1007,10 +1017,10 @@ def add_gp(discord_id, gym_obj, gym_type, stage):
             gym_obj['won'] = {}
         if 'gp' not in gym_obj:
             gym_obj['gp'] = 0
-        if stage + 1 == 10:
-            log_user_gym(discord_id, gym_type)
+        if stage + 1 >= 11:
+            log_user_gym(discord_id, gym_type, stage)
         gym_obj['won'][gym_type] = {
-            'stage': stage + 1 if stage < 10 else 1,
+            'stage': stage + 1 if stage < 20 else 1,
             'next_battle_t': config.gym_main_reset,
             'lose_streak': 0
         }
@@ -1497,19 +1507,28 @@ def get_battle_log(user1_id):
     return battle_log.find_one({'discord_id': str(user1_id)})
 
 
-def log_user_gym(user_id, gym_type):
+def log_user_gym(user_id, gym_type, stage=10):
     battle_log = db['battle_logs']
-    return battle_log.update_one({'discord_id': str(user_id)},
-                                 {'$push': {'gym_clear_history': {
-                                     'time': int(time.time()),
-                                     'gym_type': gym_type,
-                                 }}}, upsert=True)
+    battle_log.update_one(
+        {'discord_id': str(user_id)},
+        {
+            '$push': {
+                'gym_clear_history': {
+                    '$each': [
+                        {'time': int(time.time()), 'gym_type': gym_type, 'stage': stage}
+                    ],
+                    '$slice': -10
+                }
+            }
+        },
+        upsert=True
+    )
 
 
 def log_get_gym_cleared(user_id):
     battle_log = db['battle_logs']
     log = battle_log.find_one({'discord_id': str(user_id)})
-    return log['gym_clear_history'] if log is not None and 'gym_clear_history' in log else None
+    return log.get('gym_clear_history', None)
 
 
 """EQUIPMENT"""
@@ -1906,7 +1925,7 @@ def update_zerp_flair(discord_id, zerp_name, old_zerp_name, flair_name):
     zerpmon_collection = db['MoveSets']
 
     r = users_collection.update_one({'discord_id': discord_id},
-                                {'$set': {f'z_flair.{flair_name}': zerp_name}})
+                                    {'$set': {f'z_flair.{flair_name}': zerp_name}})
     if old_zerp_name:
         zerpmon_collection.update_one({'name': old_zerp_name}, {'$unset': {'z_flair': ""}})
     zerpmon_collection.update_one({'name': zerp_name}, {'$set': {'z_flair': flair_name}})
@@ -1980,3 +1999,12 @@ def update_stats_candy(doc, candy_type):
                 if move['color'] == 'blue':
                     move['percent'] += 15
 
+
+"""ascend fn"""
+
+
+def ascend_zerpmon(zerp_name):
+    zerpmon_collection = db['MoveSets']
+    result = zerpmon_collection.update_one({"name": zerp_name}, {'$set': {'ascended': True}})
+
+    return result.acknowledged

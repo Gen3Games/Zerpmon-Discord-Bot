@@ -1,12 +1,14 @@
 import asyncio
 import logging
 import math
+import os
 import random
 import time
 import traceback
 from collections import Counter
 from functools import partial
 import nextcord
+from PIL import Image
 from nextcord import ButtonStyle
 from nextcord.ui import Button, View
 
@@ -774,12 +776,11 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     await interaction.edit_original_message(embeds=[main_embed, sec_embed], view=view)
 
 
-async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=False, buy_offer=False, offerId='',
-                                token_id='', fee=False, loan=False):
-    user_owned_nfts = db_query.get_owned(_i.user.id)
-
+async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amount, item, safari=False, buy_offer=False, offerId='',
+                                token_id='', fee=False, loan=False, ascend=False):
     # Sanity checks
-
+    if _i.user.id == 1017889758313197658:
+        return user_owned_nfts['address'], True
     if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
@@ -816,7 +817,7 @@ async def zrp_purchase_callback(_i: nextcord.Interaction, amount, item, safari=F
                     del track_list[user_id]
                     await _i.edit_original_message(embed=CustomEmbed(title="**Success**",
                                                                      description=item if fee or loan else (
-                                                                         f"Bought {item}." if 'Equipment' not in item else f'Sent `{amount} ZRP`\nCreating Sell Offer...'))
+                                                                         f"Ascending **{ascend}** ..." if ascend else (f"Bought {item}." if 'Equipment' not in item else f'Sent `{amount} ZRP`\nCreating Sell Offer...')))
                                                    )
                 else:
                     return user_address, True
@@ -886,7 +887,9 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
         else:
             active_zerps = db_query.get_active_candies(_i.user.id)
             if selected_option in active_zerps:
-                await _i.edit_original_message(content=f"**Failed** {selected_option} already has an active {active_zerps[selected_option]['type'].replace('_', ' ').title()} buff!", view=View())
+                await _i.edit_original_message(
+                    content=f"**Failed** {selected_option} already has an active {active_zerps[selected_option]['type'].replace('_', ' ').title()} buff!",
+                    view=View())
                 return
             res = db_query.apply_candy_24(_i.user.id, addr, selected_option, label)
 
@@ -913,7 +916,7 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
         for i in card_obj:
             select_menu.add_option(label=cards[i]['name'], value=cards[i]['name'])
         view.add_item(select_menu)
-        select_menu.callback = lambda i : handle_select_menu(i, owned_nfts['address'])
+        select_menu.callback = lambda i: handle_select_menu(i, owned_nfts['address'])
     if len(key_list) > 80:
         b1 = Button(label='Show more', style=ButtonStyle.green)
         view.add_item(b1)
@@ -921,10 +924,33 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
     await interaction.edit_original_message(content="Choose one **zerpmon**:", view=view)
 
 
-async def send_general_message(guild, text, image):
+def join_images(image1_path, image2_path, output_path):
+    # Open and resize the images to 720p
+    img1 = Image.open(image1_path).resize((1280, 720))
+    img2 = Image.open(image2_path).resize((1280, 720))
+
+    # Create a new image with double the width (side by side)
+    combined_img = Image.new('RGB', (img1.width * 2, img1.height))
+
+    # Paste the resized images onto the new image
+    combined_img.paste(img1, (0, 0))
+    combined_img.paste(img2, (img1.width, 0))
+
+    # Resize the combined image to 1440p
+    combined_img = combined_img.resize((2560, 1440))
+
+    # Save the final image
+    combined_img.save(output_path)
+
+
+async def send_general_message(guild, text, image, embed=None, file=None):
     try:
         channel = nextcord.utils.get(guild.channels, name='🌐│zerpmon-center')
-        await channel.send(content=text + '\n' + image)
+        # channel = nextcord.utils.get(guild.channels, id=1184751747349086258)
+        if embed:
+            await channel.send(content=text + '\n' + image, embed=embed, file=file)
+        else:
+            await channel.send(content=text + '\n' + image)
     except Exception as e:
         logging.error(f'ERROR: {traceback.format_exc()}')
 
@@ -958,7 +984,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             view.add_item(select_menu)
             await interaction.edit_original_message(content="Choose one **equipment**:", embeds=[], view=view)
 
-            async def handle_select_menu(_i: nextcord.Interaction, addr, amt):
+            async def handle_select_menu(_i: nextcord.Interaction, addr, amt, user_d):
                 # print(_i.data, holdings)
                 selected_option = _i.data["values"][0]  # Get the selected option
                 await _i.response.defer(ephemeral=True)
@@ -995,7 +1021,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                         # Make 0 XRP sell offer of equipment NFT
                         # XUMM txn for buying the NFT using ZRP
                         db_query.save_bought_eq(addr, selected_option)
-                        addr, success = await zrp_purchase_callback(_i, amount=amt, item=label, buy_offer=True,
+                        addr, success = await zrp_purchase_callback(user_d, _i, amount=amt, item=label, buy_offer=True,
                                                                     offerId=data[-1], token_id=data[-2])
                         if success:
                             db_query.update_zrp_stats(burn_amount=amt, distributed_amount=0)
@@ -1027,7 +1053,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                         db_query.remove_bought_eq(addr, selected_option)
 
             # Register the event handler for the select menu
-            select_menu.callback = lambda interact: handle_select_menu(interact, addr, amount)
+            select_menu.callback = lambda interact: handle_select_menu(interact, addr, amount, user_doc)
         case "Buy Battle Zones":
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
             for i in config.GYMS:
@@ -1036,19 +1062,19 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             view.add_item(select_menu)
             await interaction.edit_original_message(content="Choose one **battle zone**:", embeds=[], view=view)
 
-            async def handle_select_menu(_i: nextcord.Interaction):
+            async def handle_select_menu(_i: nextcord.Interaction, user_d):
                 print(_i.data)
                 selected_option = _i.data["values"][0]  # Get the selected option
                 await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
-                addr, purchased = await zrp_purchase_callback(_i, amount, label.replace('Buy ', ''))
+                addr, purchased = await zrp_purchase_callback(user_d, _i, amount, label.replace('Buy ', ''))
                 if purchased:
                     db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
                     db_query.update_user_bg(user_id, selected_option)
 
             # Register the event handler for the select menu
-            select_menu.callback = handle_select_menu
+            select_menu.callback = lambda i: handle_select_menu(i, user_doc)
         case "Buy Gym Refill":
-            addr, purchased = await zrp_purchase_callback(interaction, amount, label.replace('Buy ', ''))
+            addr, purchased = await zrp_purchase_callback(user_doc, interaction, amount, label.replace('Buy ', ''))
             if purchased:
                 db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
                 db_query.add_gym_refill_potion(addr, 1, True, )
@@ -1060,7 +1086,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             view.add_item(select_menu)
             await interaction.edit_original_message(content="Choose:", embeds=[], view=view)
 
-            async def handle_select_menu(_i: nextcord.Interaction):
+            async def handle_select_menu(_i: nextcord.Interaction, user_d):
                 print(_i.data)
                 selected_option = int(_i.data["values"][0])  # Get the selected option
                 await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
@@ -1068,7 +1094,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 if user_id == 1017889758313197658:
                     addr, purchased = 'x', True
                 else:
-                    addr, purchased = await zrp_purchase_callback(_i, amt, label.replace('Buy ', ''))
+                    addr, purchased = await zrp_purchase_callback(user_d, _i, amt, label.replace('Buy ', ''))
                 if purchased:
                     db_query.update_zrp_stats(burn_amount=amt, distributed_amount=0)
                     lower_label = label.lower()
@@ -1091,10 +1117,10 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                     elif 'gummy' in lower_label:
                         db_query.add_gummy_candy(addr, selected_option, purchased=True, amount=amt)
 
-            select_menu.callback = handle_select_menu
+            select_menu.callback = lambda i: handle_select_menu(i, user_doc)
 
         case "Buy Safari Trip":
-            addr, purchased = await zrp_purchase_callback(interaction, amount * qty,
+            addr, purchased = await zrp_purchase_callback(user_doc, interaction, amount * qty,
                                                           label.replace('Buy ', '' if qty == 1 else f'{qty} '),
                                                           safari=True)
             if purchased:
@@ -1354,7 +1380,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             # Send a new message with the select menu
             await interaction.edit_original_message(content="Choose one **Name Flair**:", view=view, embeds=[])
 
-            async def handle_select_menu(_i: nextcord.Interaction):
+            async def handle_select_menu(_i: nextcord.Interaction, user_d):
                 print(_i.data)
                 selected_option = _i.data["values"][0]  # Get the selected option
                 await _i.response.defer(ephemeral=True)
@@ -1362,18 +1388,20 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                 if user_id == 1017889758313197658:
                     flair_update_fn(user_id, selected_option)
                 else:
-                    addr, purchased = await zrp_purchase_callback(_i, amount, label.replace('Buy ', ''))
+                    addr, purchased = await zrp_purchase_callback(user_d, _i, amount, label.replace('Buy ', ''))
                     if purchased:
                         db_query.update_zrp_stats(burn_amount=amount, distributed_amount=0)
                         flair_update_fn(user_id, selected_option)
 
             # Register the event handler for the select menu
-            select_menu.callback = handle_select_menu
-            select_menu2.callback = handle_select_menu
+            select_menu.callback = lambda i: handle_select_menu(i, user_doc)
+            select_menu2.callback = lambda i: handle_select_menu(i, user_doc)
         case "Buy Zerpmon Lure":
             active_type = user_doc.get('zerp_lure', {})
             if active_type.get('expire_ts', 0) > time.time():
-                await interaction.edit_original_message(content=f"Sorry you already have **{active_type['type']}** Zerpmon Lure (expires <t:{active_type.get('expire_ts', 0)}:R>)", embeds=[], view=None)
+                await interaction.edit_original_message(
+                    content=f"Sorry you already have **{active_type['type']}** Zerpmon Lure (expires <t:{active_type.get('expire_ts', 0)}:R>)",
+                    embeds=[], view=None)
                 return
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
             for i in config.TYPE_MAPPING:
@@ -1383,7 +1411,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
             view.add_item(select_menu)
             await interaction.edit_original_message(content="Choose one **LURE TYPE**:", embeds=[], view=view)
 
-            async def handle_select_menu(_i: nextcord.Interaction):
+            async def handle_select_menu(_i: nextcord.Interaction, user_d):
                 print(_i.data)
                 selected_option = _i.data["values"][0]  # Get the selected option
                 await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
@@ -1396,7 +1424,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                     db_query.update_user_zerp_lure(user_id, selected_option)
 
             # Register the event handler for the select menu
-            select_menu.callback = handle_select_menu
+            select_menu.callback = lambda i: handle_select_menu(i, user_doc)
 
 
 async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextcord.Member, potion_key, potion, fn,
@@ -1500,7 +1528,7 @@ async def loan_listing(interaction: nextcord.Interaction, zerpmon, price, in_xrp
         user_d = config.loan_listings[user_address].copy()
         del config.loan_listings[user_address]
         zrp_value = round(price if not in_xrp else price / (await xrpl_functions.get_zrp_price_api()), 2)
-        addr, status = await zrp_purchase_callback(interaction, zrp_value, item='', fee=True)
+        addr, status = await zrp_purchase_callback(user_obj, interaction, zrp_value, item='', fee=True)
         if not status:
             await interaction.edit_original_message(
                 content=f"**Failed**\nListing fee transaction not signed", embeds=[],
@@ -1630,7 +1658,7 @@ async def initiate_loan(interaction: nextcord.Interaction, listing):
             if listing['xrp']:
                 zrp_p = await xrpl_functions.get_zrp_price_api()
                 fee_amount = round(listing['per_day_cost'] / zrp_p, 2)
-                addr, status = await zrp_purchase_callback(i, item='Loan fee paid', amount=fee_amount, fee=True)
+                addr, status = await zrp_purchase_callback(user_obj, i, item='Loan fee paid', amount=fee_amount, fee=True)
                 if not status:
                     await i.edit_original_message(
                         content=f"**Failed**\nLoan fee transaction not signed", embeds=[],
@@ -1648,7 +1676,7 @@ async def initiate_loan(interaction: nextcord.Interaction, listing):
                         db_query.inc_loan_burn(-fee_amount)
                         return
             else:
-                addr, status = await zrp_purchase_callback(i, item='Loan payment + fee paid',
+                addr, status = await zrp_purchase_callback(user_obj, i, item='Loan payment + fee paid',
                                                            amount=amount + listing['per_day_cost'], loan=True)
                 if not status:
                     await i.edit_original_message(
@@ -1723,6 +1751,7 @@ async def loan_marketplace_filter(interaction: nextcord.Interaction):
 
 
 async def cancel_loan(interaction: nextcord.Interaction, listing: dict, is_listing: bool):
+    user_d = db_query.get_owned(interaction.user.id)
     amount = round(listing['per_day_cost'] * 5 if not listing['xrp'] else listing['per_day_cost'] * 5 / (
         await xrpl_functions.get_zrp_price_api()), 2)
     if listing['accepted_by']['id']:
@@ -1730,7 +1759,7 @@ async def cancel_loan(interaction: nextcord.Interaction, listing: dict, is_listi
             content=f"You will need to pay 5 day fee (`{amount:.2f}`) for an early cancellation of a loan" + (
                 ' listing' if is_listing else ''))
         await asyncio.sleep(1)
-        addr, success = await zrp_purchase_callback(interaction, amount, 'Loan cancellation fee paid', fee=True)
+        addr, success = await zrp_purchase_callback(user_d, interaction, amount, 'Loan cancellation fee paid', fee=True)
     else:
         success = True
     sent, addr = False, None
@@ -1795,3 +1824,35 @@ async def boss_callback(user_id, interaction: nextcord.Interaction):
     except Exception as e:
         db_query.set_boss_battle_t(user_id, reset_next_t=True)
         logging.error(f'ERROR in gym battle: {traceback.format_exc()}')
+
+
+"""Ascend callback"""
+
+
+async def ascend_callback(interaction: nextcord.Interaction, user_d, zerp_d):
+    addr, success = await zrp_purchase_callback(user_d, interaction, amount=99, item='', ascend=zerp_d['name'])
+    if success:
+        db_query.update_zrp_stats(burn_amount=99, distributed_amount=0)
+        db_query.ascend_zerpmon(zerp_d['name'])
+        sr, first_t = user_d['trainer_cards'].popitem()
+        # print(sr, first_t)
+        def_trainer = user_d.get('battle_deck', {}).get('0', {}).get('trainer')
+        timg = user_d['trainer_cards'][def_trainer if def_trainer else sr]
+
+        embed = CustomEmbed(title=zerp_d['name'], colour=0x42b883)
+
+        path2 = f"./static/images/{zerp_d['name']}.png"
+        path1 = f"./static/images/{timg['name']}.png"
+        output = f"./{interaction.id}.png"
+        join_images(path1, path2, output)
+        file = nextcord.File(f"{interaction.id}.png", filename="image.png")
+        embed.set_image(url=f'attachment://image.png')
+
+        await send_general_message(interaction.guild, f"{interaction.user.mention} just ascended **{zerp_d['name']}**!\nCongratulations to this hard-working Trainer",
+                                   image='', embed=embed, file=file)
+        file.close()
+        os.remove(f"{interaction.id}.png")
+    else:
+        await interaction.edit_original_message(
+            content="Failed, please make sure to sign the **TXN** within a few minutes", embeds=[],
+            view=View())

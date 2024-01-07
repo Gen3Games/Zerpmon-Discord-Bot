@@ -11,7 +11,11 @@ from utils.checks import get_type_emoji
 
 async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
     user_owned = get_owned(interaction.user.id)
-    params = interaction.data['options'][0]['options']
+    params = []
+    try:
+        params = interaction.data['options'][0]['options']
+    except:
+        pass
     main_type = ''
     # if params[1]['name'] == 'use_on':
     #     main_type = user_owned['equipments'][params[0]['value']]['attributes'][-1]['value']

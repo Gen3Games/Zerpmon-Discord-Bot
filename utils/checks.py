@@ -241,9 +241,9 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
             await interaction.send(
                 f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing {battle_nickname} battles")
             return False
-        if (battle_nickname == 'Ranked' or user_d['discord_id'] == str(user_id)) and 'battle_deck' in user_d and len(
-                user_d['battle_deck']) > 0 and len(user_d['battle_deck']['0']) < battle_type + 1:
-            def_deck = user_d['battle_deck']['0']
+        def_deck = user_d.get('battle_deck', {}).get('0', {})
+        entries = [i for i, j in def_deck.items() if j]
+        if (battle_nickname == 'Ranked' or user_d['discord_id'] == str(user_id)) and len(entries) < battle_type + 1:
             if not def_deck.get('trainer', None):
                 await interaction.send(
                     f"**{owned_nfts['user']}** you haven't set your Trainer in default deck, "
@@ -251,7 +251,7 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
                 return False
             else:
                 await interaction.send(
-                    f"**{owned_nfts['user']}** your default deck contains {len(def_deck) - 1} Zerpmon, "
+                    f"**{owned_nfts['user']}** your default deck contains {len(entries) - 1} Zerpmon, "
                     f"need {battle_type} to do {battle_nickname} battles.")
                 return False
         elif battle_nickname == 'Instant Ranked' and user_d['discord_id'] != str(user_id):
@@ -306,14 +306,14 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
             f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing Gym battles",
             ephemeral=True)
         return False
-    if 'gym_deck' in user_d and len(user_d['gym_deck']) > 0 and len(user_d['gym_deck']['0']) < 2:
+    if 'gym_deck' in user_d and len(user_d['gym_deck']) > 0:
         def_deck = user_d['gym_deck']['0']
         if not def_deck.get('trainer', None):
             await interaction.send(
                 f"**{owned_nfts['user']}** you haven't set your Trainer in default gym deck, "
                 f"please set it and try again", ephemeral=True)
             return False
-        else:
+        elif len([i for i, j in def_deck.items() if j]) == 0:
             await interaction.send(
                 f"**{owned_nfts['user']}** your default gym deck contains 0 Zerpmon, "
                 f"need 1 to do Gym battles.", ephemeral=True)
