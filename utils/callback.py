@@ -371,35 +371,50 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
             reset_str = f' reset time **{_hours}**h **{_minutes}**m'
 
     sr, nft = _battle_z[0]
-    lvl, xp, xp_req, _r, _m = db_query.get_lvl_xp(nft['name'], in_mission=True if loser == 2 else False,
-                                                  double_xp=_user_owned_nfts['data'].get('double_xp', 0) > time.time())
+    (lvl, xp, xp_req, _r, _m), zerp_doc = db_query.get_lvl_xp(nft['name'], in_mission=True if loser == 2 else False,
+                                                  double_xp=_user_owned_nfts['data'].get('double_xp', 0) > time.time(), ret_doc=True)
     embed = CustomEmbed(title=f"Level Up ⬆{lvl}" if stats[1] else f"\u200B",
                         color=0xff5252,
                         )
     my_button = f"https://xrp.cafe/nft/{nft['token_id']}"
     nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] == 'Type'])
+    ascended = zerp_doc.get("ascended", False)
     embed.add_field(
-        name=f"**{nft['name']}** ({nft_type})",
-        value=f'> Level: **{lvl}/30**\n'
+        name=f"**{nft['name']}** ({nft_type})" + (f' (**Ascended** ☄️)' if ascended else ''),
+        value=f'> Level: **{lvl}/{"30" if not ascended else "60"}**\n'
               f'> XP: **{xp}/{xp_req}**\n'
               f'> [view]({my_button})', inline=False)
+    reward_list = stats[2]
     if stats[1]:
         embed.add_field(name="Level Up Rewards: ",
                         value=f"\u200B"
                         ,
                         inline=False)
-        embed.add_field(name="Revive All Potions: ",
-                        value=f"**{_r}**"
-                              + '\t🍶',
-                        inline=False)
-        embed.add_field(name="Mission Refill Potions: ",
-                        value=f"**{_m}**"
-                              + '\t🍶',
-                        inline=False),
-        if not stats[2]:
+        if 'rp' in reward_list:
+            embed.add_field(name="Revive All Potions: ",
+                            value=f"**{reward_list['rp']}**"
+                                  + '\t🍶',
+                            inline=False)
+            embed.add_field(name="Mission Refill Potions: ",
+                            value=f"**{reward_list['mp']}**"
+                                  + '\t🍶',
+                            inline=False)
+        elif 'cf' in reward_list:
             embed.add_field(name="Candy Fragment: ",
-                            value=f"**{1}**"
+                            value=f"**{reward_list['cf']}**"
                                   + '\t🧩',
+                            inline=False)
+            embed.add_field(name="Candy Slot: ",
+                            value=f"**{reward_list.get('cs', 0)}**"
+                                  + '\t📥',
+                            inline=False)
+        elif 'grp' in reward_list:
+            embed.add_field(name="Gym Refill Potions: ",
+                            value=f"**{reward_list['grp']}**"
+                                  + '\t🍵',
+                            inline=False)
+            embed.add_field(name=f"{reward_list['extra_candy'].replace('_', ' ').title()}: ",
+                            value=f"**1**",
                             inline=False)
     embed.set_image(
         url=nft['image'] if "https:/" in nft['image'] else 'https://cloudflare-ipfs.com/ipfs/' + nft[

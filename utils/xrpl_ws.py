@@ -416,19 +416,18 @@ async def get_balance(address):
     return bal
 
 
-async def reward_user(user_id, zerpmon_name, double_xp=False, lvl=1, xp_mode=None):
+async def reward_user(user_id, addr, zerpmon_name, double_xp=False, lvl=1, xp_mode=None, ascended=False):
     reward = random.choices(list(config.MISSION_REWARD_CHANCES.keys()), list(config.MISSION_REWARD_CHANCES.values()))[0]
-    user_address = db_query.get_owned(user_id)['address']
+    user_address = addr
     xp_gain = 10
     responses = []
     if (lvl > 10 and xp_mode is None) or xp_mode:
         xp_gain = random.choices(list(xp_chances.keys()), list(xp_chances.values()))[0]
     if double_xp:
         xp_gain = 2 * xp_gain
-    success, lvl_up, got_potion = db_query.add_xp(zerpmon_name, user_address, xp_gain, double_xp=double_xp)
-    responses.append([success, lvl_up, got_potion, xp_gain])
-    if len(user_address) < 5:
-        return
+    success, lvl_up, reward_list = db_query.add_xp(zerpmon_name, user_address, xp_gain, ascended=ascended)
+    responses.append([success, lvl_up, reward_list, xp_gain])
+
     if (lvl < 10 and xp_mode is None) or xp_mode == False:
         bal = await get_balance(Reward_address)
         amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)

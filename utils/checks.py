@@ -377,11 +377,21 @@ async def check_boss_battle(user_id, interaction: nextcord.Interaction):
     return True
 
 
+def get_temp_candy(zerp_doc):
+    for candY_key, emj in config.TEMP_CANDIES.items():
+        if zerp_doc.get(candY_key, 0) > time.time():
+            return emj
+    return ''
+
+
 def get_show_zerp_embed(zerpmon, interaction, omni=False):
     lvl, xp, w_candy, g_candy, l_candy = db_query.get_lvl_xp(zerpmon['name'], get_candies=True)
-    embed = CustomEmbed(title=f"**{zerpmon['name']}**:\n",
-                        color=0xff5252,
-                        )
+    temP_candy_emj = get_temp_candy(zerpmon)
+    embed = CustomEmbed(
+        title=f"{temP_candy_emj} **{zerpmon['name']}** {temP_candy_emj}" + (
+            f' (**Ascended** ☄️)' if zerpmon.get("ascended", False) else ''),
+        color=0xff5252,
+    )
     my_button = f"https://xrp.cafe/nft/{zerpmon['nft_id']}"
     if omni:
         nft_type = '🌟'
@@ -417,7 +427,8 @@ def get_show_zerp_embed(zerpmon, interaction, omni=False):
                   (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
                   (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
-                  (f"> Type: {'🌟' if omni else config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
+                  (
+                      f"> Type: {'🌟' if omni else config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
                   f"> Percentage: {move['percent']}%\n",
             inline=False)
     if interaction is not None:

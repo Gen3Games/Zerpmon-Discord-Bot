@@ -507,10 +507,11 @@ def add_mission_potion(address, inc_by, purchased=False, amount=0):
     if purchased:
         query['xrp_spent'] = amount
         query['mission_purchase'] = inc_by
-    users_collection.update_one({'address': str(address)},
+    res=users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
     # print(r)
+    return res.acknowledged
 
 
 def add_gym_refill_potion(address, inc_by, purchased=False, amount=0):
@@ -816,37 +817,60 @@ def combine_candy_frag(addr, combine_to_key):
     return res.acknowledged
 
 
-def add_xp(zerpmon_name, user_address, xp_add, double_xp=False):
+def add_candy_slot(zerp_name):
+    zerpmon_collection = db['MoveSets']
+    res = zerpmon_collection.update_one({'name': zerp_name}, {'$inc': {'extra_candy_slot': 1}})
+    return res.acknowledged
+
+
+def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
     zerpmon_collection = db['MoveSets']
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
-    lvl_up, reward_is_potion = False, False
+    lvl_up, rewards = False, {}
     if old:
         level = old.get('level', 0)
         xp = old.get('xp', 0)
-        next_lvl = level_collection.find_one({'level': level + 1}) if level < 30 else None
+        next_lvl = level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
 
-        if next_lvl and xp + xp_add >= next_lvl['xp_required'] and level != 30:
+        if next_lvl and xp + xp_add >= next_lvl['xp_required']:
             doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {
                 '$set': {'level': next_lvl['level'], 'xp': (xp + xp_add) - next_lvl['xp_required']}},
                                                          return_document=ReturnDocument.AFTER)
             r_potion = next_lvl['revive_potion_reward']
             m_potion = next_lvl['mission_potion_reward']
+            gym_r_potion = next_lvl.get('gym_refill_reward', 0)
+            candy_slot = next_lvl.get('candy_slot', 0)
+            candy_frags = next_lvl.get('candy_frags', 0)
+            candy_reward = next_lvl.get('extra_candy', None)
             lvl_up = True
-            if r_potion + m_potion == 0:
+            if r_potion + m_potion + gym_r_potion + candy_slot == 0:
                 add_candy_fragment(user_address)
+                rewards['cf'] = 1
             else:
-                add_revive_potion(user_address, r_potion)
-                add_mission_potion(user_address, m_potion)
-                reward_is_potion = r_potion, m_potion
+                if r_potion + m_potion > 0:
+                    add_revive_potion(user_address, r_potion)
+                    add_mission_potion(user_address, m_potion)
+                    rewards['rp'] = r_potion
+                    rewards['mp'] = m_potion
+                elif gym_r_potion:
+                    add_gym_refill_potion(user_address, gym_r_potion)
+                    globals().get(f'add_{candy_reward}')(user_address, 1)
+                    rewards['grp'] = gym_r_potion
+                    rewards['extra_candy'] = candy_reward
+                else:
+                    add_candy_fragment(user_address, candy_frags)
+                    add_candy_slot(zerpmon_name)
+                    rewards['cs'] = 1
+                    rewards['cf'] = candy_frags
             if (level + 1) >= 10 and (level + 1) % 10 == 0:
                 update_moves(doc)
 
         else:
             maxed = old.get('maxed_out', 0)
-            if level != 30:
+            if level < 30 or (ascended and level < 60):
                 zerpmon_collection.update_one({'name': zerpmon_name}, {'$inc': {'xp': xp_add}})
-            elif level == 30 and maxed == 0:
+            elif (level == 30 or level == 60) and maxed == 0:
                 zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'maxed_out': 1}})
     else:
         # Zerpmon not found, handle the case accordingly
@@ -854,10 +878,10 @@ def add_xp(zerpmon_name, user_address, xp_add, double_xp=False):
         return False, False, False
 
     # Rest of the code for successful operation
-    return True, lvl_up, reward_is_potion
+    return True, lvl_up, rewards
 
 
-def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=False) -> tuple:
+def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=False, ret_doc=False) -> tuple:
     zerpmon_collection = db['MoveSets']
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
@@ -866,8 +890,8 @@ def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=Fals
     # if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (
     #         old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
     #     update_moves(old)
-    if level > 30:
-        level = 30
+    if level > 60:
+        level = 60
     last_lvl = level_collection.find_one({'level': (level - 1) if level > 1 else 1})
     next_lvl = level_collection.find_one({'level': level})
     if 'level' in old and 'xp' in old:
@@ -881,7 +905,8 @@ def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=Fals
             next_lvl['xp_required'], old.get('white_candy', 0)), \
                last_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
                last_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
-
+    if ret_doc:
+        vals = vals, old
     return vals
 
 
@@ -1310,9 +1335,10 @@ def apply_white_candy(user_id, zerp_name, amt=1):
     user = users_collection.find_one({'discord_id': str(user_id)})
     zerp = z_collection.find_one({'name': zerp_name})
     cnt = zerp.get('white_candy', 0)
-    if cnt >= 5 or int(user.get('white_candy', 0)) < amt:
+    limit = 5 + zerp.get('extra_candy_slot', 0)
+    if cnt >= limit or int(user.get('white_candy', 0)) < amt:
         return False
-    amt = min(amt, 5 - cnt)
+    amt = min(amt, limit - cnt)
     print(amt)
 
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
@@ -1333,10 +1359,11 @@ def apply_gold_candy(user_id, zerp_name, amt=1):
     users_collection = db['users']
     user = users_collection.find_one({'discord_id': str(user_id)})
     zerp = z_collection.find_one({'name': zerp_name})
+    limit = 5 + zerp.get('extra_candy_slot', 0)
     cnt = zerp.get('gold_candy', 0)
-    if cnt >= 5 or int(user.get('gold_candy', 0)) < amt:
+    if cnt >= limit or int(user.get('gold_candy', 0)) < amt:
         return False
-    amt = min(amt, 5 - cnt)
+    amt = min(amt, limit - cnt)
 
     original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
@@ -1945,9 +1972,11 @@ def update_user_zerp_lure(user_id, lure_type):
 
 def apply_candy_24(user_id, addr, zerp_name, candy_type):
     candy_collection = db['active_candy_stats']
+    zerpmon_collection = db['MoveSets']
     user_id = str(user_id)
+    exp_ts = int(time.time() + 86400)
     zerp_value = {
-        'expire_ts': int(time.time() + 86400),
+        'expire_ts': exp_ts,
         'type': candy_type
     }
     adder_fn = globals().get(f'add_{candy_type}')
@@ -1955,6 +1984,7 @@ def apply_candy_24(user_id, addr, zerp_name, candy_type):
     r = candy_collection.update_one({'discord_id': user_id},
                                     {'$set': {f'active.{zerp_name}': zerp_value}}, upsert=True)
     adder_fn(addr, -1)
+    zerpmon_collection.update_one({'name': zerp_name}, {'$set': {candy_type: exp_ts}})
     return r.acknowledged
 
 

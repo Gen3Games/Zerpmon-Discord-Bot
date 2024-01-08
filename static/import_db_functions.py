@@ -142,6 +142,7 @@ def import_movesets():
                 #     ],
                 #     'nft_id': row[39]
                 # }
+                collection.update_one({'name': row[1]}, {'$unset': {'moves': ''}})
                 collection.update_one({'name': row[1]}, {'$set': doc}, upsert=True)
                 # c2.insert_one(document=doc)
             except Exception as e:
@@ -158,17 +159,20 @@ def import_level():
         header = next(reader)  # Skip the header row
         for row in reader:
             # Replace empty values with ""
-            row = ["" if x.strip() == "" else x for x in row]
-            print(row)
-            # Convert XP Required per level, Total XP Earned, Wins, Mission Refreshes and EXP Per Win to integers
-            collection.insert_one({
-                'level': int(row[0]),
-                'xp_required': int(row[1]),
-                'total_xp': int(row[2]),
-                'wins_needed': int(row[3]),
-                'revive_potion_reward': 0 if row[4].strip() == "" else int(row[4]),
-                'mission_potion_reward': 0 if row[5].strip() == "" else int(row[5]),
-            })
+            try:
+                row = ["" if x.strip() == "" else x for x in row]
+                print(row)
+                # Convert XP Required per level, Total XP Earned, Wins, Mission Refreshes and EXP Per Win to integers
+                collection.insert_one({
+                    'level': int(row[0]),
+                    'xp_required': int(row[1]),
+                    'total_xp': int(row[2]),
+                    'wins_needed': int(row[3]),
+                    'revive_potion_reward': 0 if row[4].strip() == "" else int(row[4]),
+                    'mission_potion_reward': 0 if row[5].strip() == "" else int(row[5]),
+                })
+            except:
+                pass
 
 
 def import_ascend_levels():
@@ -202,11 +206,11 @@ def import_ascend_levels():
         }
         if reward[0]:
             obj['gym_refill_reward'] = reward[1]
-            obj[f'{reward[0]}'] = 1
+            obj['extra_candy'] = reward[0]
         collection.insert_one(obj)
 
 
-import_ascend_levels()
+
 def check_nft_cached(id, data):
     for i in data:
         if i['nftid'] == id:
@@ -260,6 +264,9 @@ def clean_attrs():
     c2.drop()
     for doc in zerpmon_collection.find():
         del doc['_id']
+        if 'z_flair' in doc:
+            del doc['z_flair']
+
         c2.insert_one(doc)
 
 
@@ -445,10 +452,11 @@ def switch_cached():
 # import_boxes()
 
 # import_moves()
-# import_movesets()
-# # import_level()
-# import_attrs_img()
-# clean_attrs()
+import_movesets()
+# import_level()
+# import_ascend_levels()
+import_attrs_img()
+clean_attrs()
 # update_all_zerp_moves()
 # cache_data()
 # import_equipments()

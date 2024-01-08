@@ -383,14 +383,15 @@ async def show(interaction: nextcord.Interaction):
                 view.timeout = 300
                 button.callback = lambda i: show_callback(i, sorted_dict[start + 15:], start=start + 15)
                 break
-            lvl, xp, w_candy, g_candy, l_candy = db_query.get_lvl_xp(nft['name'], get_candies=True)
+            (lvl, xp, w_candy, g_candy, l_candy), zerp_doc = db_query.get_lvl_xp(nft['name'], get_candies=True, ret_doc=True)
 
             my_button = f"https://xrp.cafe/nft/{nft['token_id']}"
-            nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] == 'Type'])
+            nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] in ['Type', 'Affinity']])
             active = "🟢" if 'active_t' not in nft or nft['active_t'] < time.time() else "🔴"
             embed2.add_field(
-                name=f"{active}    #{serial}  **{nft['name']}** ({nft_type})" + (
-                    f' (**loaned**)' if nft.get("loaned", False) else ''),
+                name=f"{active}    #{serial}  **{nft['name']}** ({nft_type})" +
+                     (f' (**loaned**)' if nft.get("loaned", False) else '') +
+                (f' (**Ascended** ☄️)' if zerp_doc.get("ascended", False) else ''),
                 value=f'> White Candy: **{w_candy[1]}**\n'
                       f'> Gold Candy: **{g_candy}**\n'
                 # f'> Liquorice: **{l_candy}**\n'
@@ -1555,8 +1556,8 @@ async def mission_refill(interaction: nextcord.Interaction, quantity: int):
 
 
 @client.slash_command(name="show_gym_cleared",
-                      description="Shows a list of Gym's cleared (level 10) by a User (admins only)")
-async def show_zerpmon(interaction: nextcord.Interaction, user: Optional[nextcord.Member] = SlashOption(required=True)):
+                      description="Shows a list of Gym's cleared (level 10+) by a User (admins only)")
+async def show_gym_cleared(interaction: nextcord.Interaction, user: Optional[nextcord.Member] = SlashOption(required=True)):
     execute_before_command(interaction)
     msg = await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in config.ADMINS:
@@ -1564,7 +1565,7 @@ async def show_zerpmon(interaction: nextcord.Interaction, user: Optional[nextcor
         return
     gym_history = db_query.log_get_gym_cleared(user.id)
     if gym_history is None:
-        await interaction.edit_original_message(content=f"Sorry, {user.name} hasn't cleared any **level 10** Gym yet")
+        await interaction.edit_original_message(content=f"Sorry, {user.name} hasn't cleared any **level 10+** Gym yet")
     else:
         csv_file_name = f'{user.name}_{user.id}.csv'
         checks.save_csv(gym_history, name=csv_file_name)
@@ -3916,7 +3917,7 @@ async def ascend(interaction: nextcord.Interaction, zerpmon_sr: str = SlashOptio
     zerp_doc = db_query.get_zerpmon(zerp_name, )
     if zerp_doc.get('level', 0) < 30:
         await interaction.edit_original_message(
-            content=f"**Failed**, you haven't yet maxed out your {zerp_name} yet")
+            content=f"**Failed**, you haven't yet maxed out your {zerp_name}")
         return
 
     await callback.ascend_callback(interaction, user_doc, zerp_doc)

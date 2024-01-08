@@ -225,7 +225,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
 
     url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
     main_embed.add_field(
-        name=f"{z1_obj['name2']} ({', '.join(z1_type)})\t`{w_candy1}x🍬\t{g_candy1}x🍭`",
+        name=f"{z1_obj['name2']} ({', '.join(z1_type)})\t`{w_candy1}x🍬\t{g_candy1}x🍭`\t" + (f' (**Ascended** ☄️)' if z1_obj.get("ascended", False) else ''),
         value=f"{config.TYPE_MAPPING[buffed_zerp1]} **Trainer buff**" if buffed_zerp1 != '' else "\u200B",
         inline=False)
     if eq1_note != {}:
@@ -259,7 +259,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
 
     url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
     main_embed.add_field(
-        name=f"{z2['name2']} ({', '.join(z2_type)})\t`{w_candy2}x🍬\t{g_candy2}x🍭`",
+        name=f"{z2['name2']} ({', '.join(z2_type)})\t`{w_candy2}x🍬\t{g_candy2}x🍭`\t" + (f' (**Ascended** ☄️)' if z2_obj.get("ascended", False) else ''),
         value=f"{config.TYPE_MAPPING[buffed_zerp2]} **Trainer buff**" if buffed_zerp2 != '' else "\u200B",
         inline=False)
     if eq2_note != {}:
@@ -2344,8 +2344,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             db_query.update_battle_count(user_id, old_num)
             # Reward user on a Win
             double_xp = 'double_xp' in _data1 and _data1['double_xp'] > time.time()
-            responses = await xrpl_ws.reward_user(user_id, z1['name'], double_xp=double_xp, lvl=z1_level,
-                                                  xp_mode=xp_mode)
+            responses = await xrpl_ws.reward_user(user_id, _data1['address'], z1['name'], double_xp=double_xp, lvl=z1_level,
+                                                  xp_mode=xp_mode, ascended=z1_obj.get('ascended', False))
             stats_arr = responses[0]
             embed = CustomEmbed(title=f"🏆 Mission Victory 🏆",
                                 color=0x8ef6e4)
@@ -2369,15 +2369,15 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             await interaction.send(
                 embed=embed,
                 ephemeral=private)
-            if responses[0][1] in ["XRP", "NFT"]:
-                if not responses[0][0]:
+            if responses[1][1] in ["XRP", "NFT"]:
+                if not responses[1][0]:
 
                     await interaction.send(
                         f"**Failed**, something went wrong.",
                         ephemeral=True)
                 else:
                     await interaction.send(
-                        f"**Successfully** sent `{responses[0][2]}` {responses[0][1]}",
+                        f"**Successfully** sent `{responses[1][2]}` {responses[1][1]}",
                         ephemeral=True)
             move_counter += 1
 
