@@ -445,3 +445,58 @@ def get_show_zerp_embed(zerpmon, interaction, omni=False):
         url=zerpmon['image'] if "https:/" in zerpmon['image'] else 'https://cloudflare-ipfs.com/ipfs/' + zerpmon[
             'image'].replace("ipfs://", ""))
     return embed
+
+
+def populate_lvl_up_embed(zerp_doc, lvl_obj, is_lvl_up, reward_list):
+    embed = CustomEmbed(title=f"Level Up ⬆{lvl_obj['level']}" if is_lvl_up else f"\u200B",
+                        color=0xff5252,
+                        )
+    my_button = f"https://xrp.cafe/nft/{zerp_doc.get('token_id', zerp_doc['nft_id'])}"
+    nft_type = ', '.join([i['value'] for i in zerp_doc['attributes'] if i['trait_type'] == 'Type'])
+    ascended = zerp_doc.get("ascended", False)
+    embed.add_field(
+        name=f"**{zerp_doc['name']}** ({nft_type})" + (f' (**Ascended** ☄️)' if ascended else ''),
+        value=f"> Level: **{lvl_obj['level']}/{'30' if not ascended else '60'}**\n"
+              f"> XP: **{lvl_obj['xp']}/{lvl_obj['xp_required']}**\n"
+              f'> [view]({my_button})', inline=False)
+    if is_lvl_up:
+        embed.add_field(name="Level Up Rewards: ",
+                        value=f"\u200B"
+                        ,
+                        inline=False)
+        if 'rp' in reward_list:
+            embed.add_field(name="Revive All Potions: ",
+                            value=f"**{reward_list['rp']}**"
+                                  + '\t🍶',
+                            inline=False)
+            embed.add_field(name="Mission Refill Potions: ",
+                            value=f"**{reward_list['mp']}**"
+                                  + '\t🍶',
+                            inline=False)
+        if 'cf' in reward_list:
+            embed.add_field(name="Candy Fragment: ",
+                            value=f"**{reward_list['cf']}**"
+                                  + '\t🧩',
+                            inline=False)
+            embed.add_field(name="Candy Slot: ",
+                            value=f"**{reward_list.get('cs', 0)}**"
+                                  + '\t📥',
+                            inline=False)
+        if 'grp' in reward_list:
+            embed.add_field(name="Gym Refill Potions: ",
+                            value=f"**{reward_list['grp']}**"
+                                  + '\t🍵',
+                            inline=False)
+            cndy = reward_list.get('extra_candy')
+            if cndy:
+                del reward_list['extra_candy']
+                reward_list[cndy] = 1
+            for i, emj in config.TEMP_CANDIES.items():
+                if i in reward_list:
+                    embed.add_field(name=f"{(i.replace('_', ' ').title())}: ",
+                                    value=f"**{reward_list[i]}**\t{emj}",
+                                    inline=False)
+    embed.set_image(
+        url=zerp_doc['image'] if "https:/" in zerp_doc['image'] else 'https://cloudflare-ipfs.com/ipfs/' + zerp_doc[
+            'image'].replace("ipfs://", ""))
+    return embed

@@ -507,9 +507,9 @@ def add_mission_potion(address, inc_by, purchased=False, amount=0):
     if purchased:
         query['xrp_spent'] = amount
         query['mission_purchase'] = inc_by
-    res=users_collection.update_one({'address': str(address)},
-                                {'$inc': query},
-                                upsert=True)
+    res = users_collection.update_one({'address': str(address)},
+                                      {'$inc': query},
+                                      upsert=True)
     # print(r)
     return res.acknowledged
 
@@ -827,6 +827,7 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
     zerpmon_collection = db['MoveSets']
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
+    xp = old.get('xp')
     lvl_up, rewards = False, {}
     if old:
         level = old.get('level', 0)
@@ -837,6 +838,7 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
             doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {
                 '$set': {'level': next_lvl['level'], 'xp': (xp + xp_add) - next_lvl['xp_required']}},
                                                          return_document=ReturnDocument.AFTER)
+            xp = doc.get('xp')
             r_potion = next_lvl['revive_potion_reward']
             m_potion = next_lvl['mission_potion_reward']
             gym_r_potion = next_lvl.get('gym_refill_reward', 0)
@@ -869,7 +871,8 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
         else:
             maxed = old.get('maxed_out', 0)
             if level < 30 or (ascended and level < 60):
-                zerpmon_collection.update_one({'name': zerpmon_name}, {'$inc': {'xp': xp_add}})
+                doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {'$inc': {'xp': xp_add}}, return_document=ReturnDocument.AFTER)
+                xp = doc.get('xp')
             elif (level == 30 or level == 60) and maxed == 0:
                 zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'maxed_out': 1}})
     else:
@@ -878,7 +881,7 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
         return False, False, False
 
     # Rest of the code for successful operation
-    return True, lvl_up, rewards
+    return True, lvl_up, rewards, xp
 
 
 def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=False, ret_doc=False) -> tuple:
@@ -1959,6 +1962,13 @@ def update_zerp_flair(discord_id, zerp_name, old_zerp_name, flair_name):
     return r.acknowledged
 
 
+def add_zerp_lure(user_addr, qty=1):
+    users_collection = db['users']
+    r = users_collection.update_one({'address': user_addr},
+                                    {'$inc': {'lure_cnt': qty}})
+    return r.acknowledged
+
+
 def update_user_zerp_lure(user_id, lure_type):
     users_collection = db['users']
     user_id = str(user_id)
@@ -2038,3 +2048,11 @@ def ascend_zerpmon(zerp_name):
     result = zerpmon_collection.update_one({"name": zerp_name}, {'$set': {'ascended': True}})
 
     return result.acknowledged
+
+
+"""Recycle"""
+
+
+def get_higher_lvls(lvl=1):
+    res = level_collection.find({'level': {'$gt': lvl}})
+    return [i for i in res]

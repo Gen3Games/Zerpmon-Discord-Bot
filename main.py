@@ -34,11 +34,22 @@ logging.basicConfig(filename='logfile_wrapper.log', level=logging.ERROR,
                     format='%(asctime)s %(levelname)s %(module)s %(funcName)s %(message)s %(lineno)d')
 
 deck_options = []
+cooldowns = {'store': {}, 'boss': {}, 'recycle': {}}
 
 
 def start_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
+
+
+async def verify_cooldown(type_, interaction, v):
+    user_id = interaction.user.id
+    last_t = time.time() - cooldowns[type_].get(user_id, 0)
+    if last_t < v:
+        await interaction.send(f"Command is on cooldown. Please wait **{v - last_t:.2f}**s.", ephemeral=True)
+        return False
+    cooldowns[type_][user_id] = time.time()
+    return True
 
 
 @tasks.loop(seconds=10)
@@ -103,17 +114,24 @@ new_loop = asyncio.new_event_loop()
 # start a new thread to run the event loop
 t = threading.Thread(target=start_loop, args=(new_loop,))
 t.start()
+task1, task2 = None, None
 
 new_loop.call_soon_threadsafe(new_loop.create_task, xrpl_ws.main())
 
 
-async def updater():
-    await asyncio.create_task(nft_holding_updater.update_nft_holdings(client))
-    pass
+def check_and_restart(task_handle: asyncio.Task, fn, arg):
+    if task_handle is None or task_handle.done() or task_handle.cancelled():
+        logging.error(f"Task is not running. Restarting... {fn.__name__}")
+        return asyncio.create_task(fn(arg))
+    else:
+        logging.error("Task is still running.")
+        return task_handle
 
 
-client.loop.create_task(updater())
-client.loop.create_task(reset_alert.send_reset_message(client))
+async def setup_tasks():
+    global task1, task2
+    task1 = check_and_restart(task1, nft_holding_updater.update_nft_holdings, client)
+    task2 = check_and_restart(task2, reset_alert.send_reset_message, client)
 
 
 class CustomEmbed(nextcord.Embed):
@@ -201,6 +219,7 @@ async def on_ready():
         await reset_alert.send_boss_update_msg(boss_channel, not new, )
     if not check_auction.is_running():
         check_auction.start()
+    await setup_tasks()
     if len(config.loaners) == 0:
         db_query.set_loaners()
     db_query.verify_zerp_flairs()
@@ -383,7 +402,8 @@ async def show(interaction: nextcord.Interaction):
                 view.timeout = 300
                 button.callback = lambda i: show_callback(i, sorted_dict[start + 15:], start=start + 15)
                 break
-            (lvl, xp, w_candy, g_candy, l_candy), zerp_doc = db_query.get_lvl_xp(nft['name'], get_candies=True, ret_doc=True)
+            (lvl, xp, w_candy, g_candy, l_candy), zerp_doc = db_query.get_lvl_xp(nft['name'], get_candies=True,
+                                                                                 ret_doc=True)
 
             my_button = f"https://xrp.cafe/nft/{nft['token_id']}"
             nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] in ['Type', 'Affinity']])
@@ -391,7 +411,7 @@ async def show(interaction: nextcord.Interaction):
             embed2.add_field(
                 name=f"{active}    #{serial}  **{nft['name']}** ({nft_type})" +
                      (f' (**loaned**)' if nft.get("loaned", False) else '') +
-                (f' (**Ascended** ☄️)' if zerp_doc.get("ascended", False) else ''),
+                     (f' (**Ascended** ☄️)' if zerp_doc.get("ascended", False) else ''),
                 value=f'> White Candy: **{w_candy[1]}**\n'
                       f'> Gold Candy: **{g_candy}**\n'
                 # f'> Liquorice: **{l_candy}**\n'
@@ -1461,6 +1481,23 @@ async def use_zerpmon_flair(interaction: nextcord.Interaction,
             ephemeral=True)
 
 
+@use.subcommand(name="zerpmon_lure",
+                description="Applies for 24 Hours, results in finding only a specific type of Zerpmon in Missions")
+async def use_zerpmon_lure(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    """
+            Deal with Zerpmon Lure
+            """
+    user = interaction.user
+    await interaction.response.defer(ephemeral=True)
+    user_obj = db_query.get_owned(user.id)
+    if user_obj is None or user_obj.get('lure_cnt', 0) <= 0:
+        await interaction.edit_original_message(
+            content=f"Sorry, you don't have any **Zerpmon Lure** in your Inventory", )
+        return
+    await callback.lure_callback(interaction, user_obj)
+
+
 # @use.subcommand(description="Claim XRP earned from missions")
 # async def claim(interaction: nextcord.Interaction):
 #     """
@@ -1502,7 +1539,9 @@ async def use_zerpmon_flair(interaction: nextcord.Interaction,
 @client.slash_command(name="store", description="Show available items inside the Zerpmon store")
 async def store(interaction: nextcord.Interaction):
     execute_before_command(interaction)
-    await callback.store_callback(interaction)
+
+    if await verify_cooldown('store', interaction, 15):
+        await callback.store_callback(interaction)
 
 
 @client.slash_command(name="buy",
@@ -1557,7 +1596,8 @@ async def mission_refill(interaction: nextcord.Interaction, quantity: int):
 
 @client.slash_command(name="show_gym_cleared",
                       description="Shows a list of Gym's cleared (level 10+) by a User (admins only)")
-async def show_gym_cleared(interaction: nextcord.Interaction, user: Optional[nextcord.Member] = SlashOption(required=True)):
+async def show_gym_cleared(interaction: nextcord.Interaction,
+                           user: Optional[nextcord.Member] = SlashOption(required=True)):
     execute_before_command(interaction)
     msg = await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in config.ADMINS:
@@ -3611,7 +3651,8 @@ async def zrp(interaction: nextcord.Interaction):
 @zrp.subcommand(name="store", description="Show ZRP store")
 async def zrp_store(interaction: nextcord.Interaction):
     execute_before_command(interaction)
-    await callback.zrp_store_callback(interaction)
+    if await verify_cooldown('store', interaction, 15):
+        await callback.zrp_store_callback(interaction)
 
 
 @zrp.subcommand(name="stats", description="Show ZRP stats")
@@ -3845,22 +3886,21 @@ async def loan_cancel(interaction: nextcord.Interaction,
 @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
 async def boss_battle(interaction: nextcord.Interaction):
     execute_before_command(interaction)
-    user = interaction.user
+    if await verify_cooldown('boss', interaction, 120):
+        user = interaction.user
 
-    # proceed = await checks.check_boss_battle(user.id, interaction)
-    # if not proceed:
-    #     return
+        # proceed = await checks.check_boss_battle(user.id, interaction)
+        # if not proceed:
+        #     return
 
-    await callback.boss_callback(user.id, interaction)
+        await callback.boss_callback(user.id, interaction)
 
 
 @client.slash_command(name="world_boss_dashboard",
                       description="Shows player’s total damage done to the boss, and remaining World Boss health")
-@commands.cooldown(rate=1, per=10, type=commands.BucketType.user)
 async def boss_stats(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     user = interaction.user
-
     user_d = db_query.get_owned(str(user.id))
     boss_info = db_query.get_boss_stats()
     boss_zerp = boss_info.get('boss_zerpmon')
@@ -3904,14 +3944,15 @@ async def boss_stats(interaction: nextcord.Interaction):
 @client.slash_command(name="ascend",
                       description="Unlock level 31-60 for your maxed out Zerpmon",
                       )
-async def ascend(interaction: nextcord.Interaction, zerpmon_sr: str = SlashOption("zerpmon_name", autocomplete_callback=zerpmon_autocomplete),):
+async def ascend(interaction: nextcord.Interaction,
+                 zerpmon_sr: str = SlashOption("zerpmon_name", autocomplete_callback=zerpmon_autocomplete), ):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
     user_doc = db_query.get_owned(interaction.user.id)
     # Sanity checks
     if user_doc is None or user_doc['zerpmons'].get(zerpmon_sr, None) is None:
         await interaction.edit_original_message(
-            content=f"Sorry, you don't own this zerpmon",)
+            content=f"Sorry, you don't own this zerpmon", )
         return
     zerp_name = user_doc['zerpmons'][zerpmon_sr]['name']
     zerp_doc = db_query.get_zerpmon(zerp_name, )
@@ -3924,6 +3965,39 @@ async def ascend(interaction: nextcord.Interaction, zerpmon_sr: str = SlashOptio
 
 
 # Ascend CMD
+
+# Recycle CMD
+
+
+@client.slash_command(name="recycle",
+                      description="Recycle Items in Inventory and earn XP | added to your selected Zerpmon(+levelup rewards)")
+async def recycle(interaction: nextcord.Interaction,
+                  item: str = SlashOption("item", choices=config.INVENTORY_ITEMS),
+                  qty: int = SlashOption("quantity", min_value=10, max_value=1000),
+                  zerpmon_sr: str = SlashOption("add_xp_to", autocomplete_callback=zerpmon_autocomplete), ):
+    execute_before_command(interaction)
+    if await verify_cooldown('recycle', interaction, 10):
+        await interaction.response.defer(ephemeral=True)
+        user_doc = db_query.get_owned(interaction.user.id)
+        # Sanity checks
+        if user_doc is None or user_doc['zerpmons'].get(zerpmon_sr, None) is None:
+            await interaction.edit_original_message(
+                content=f"Sorry, you don't own this zerpmon", )
+            return
+        if 'gym_refill' in item:
+            owned_count = user_doc.get('gym', {}).get('refill_potion', 0)
+        else:
+            owned_count = user_doc.get(item, 0)
+        if owned_count < qty:
+            await interaction.edit_original_message(
+                content=f"**Failed**, you don't have enough items in your Inventory", )
+            return
+        zerp_name = user_doc['zerpmons'][zerpmon_sr]['name']
+        zerp_doc = db_query.get_zerpmon(zerp_name, )
+        await callback.recycle_callback(interaction, user_doc, zerp_doc, item, qty)
+
+
+# Recycle CMD
 
 # Reaction Tracker
 

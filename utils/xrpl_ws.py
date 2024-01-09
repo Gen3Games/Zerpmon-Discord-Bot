@@ -425,7 +425,7 @@ async def reward_user(user_id, addr, zerpmon_name, double_xp=False, lvl=1, xp_mo
         xp_gain = random.choices(list(xp_chances.keys()), list(xp_chances.values()))[0]
     if double_xp:
         xp_gain = 2 * xp_gain
-    success, lvl_up, reward_list = db_query.add_xp(zerpmon_name, user_address, xp_gain, ascended=ascended)
+    success, lvl_up, reward_list, _ = db_query.add_xp(zerpmon_name, user_address, xp_gain, ascended=ascended)
     responses.append([success, lvl_up, reward_list, xp_gain])
 
     if (lvl < 10 and xp_mode is None) or xp_mode == False:
