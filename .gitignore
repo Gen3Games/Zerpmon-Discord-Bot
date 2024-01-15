@@ -4,6 +4,7 @@ __pycache__/
 logfile_wrapper.log
 config.py
 tests
+helpers
 static/images
 static/bgs
 static/gym

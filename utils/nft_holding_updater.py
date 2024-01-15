@@ -151,4 +151,4 @@ async def update_nft_holdings(client: nextcord.Client):
                 logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
 
             await asyncio.sleep(2)
-        await asyncio.sleep(900)
+        await asyncio.sleep(3600)

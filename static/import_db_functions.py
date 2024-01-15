@@ -84,6 +84,7 @@ def import_movesets():
         # c2.drop()
         csvreader = csv.reader(csvfile)
         header = next(csvreader)  # Skip the header row
+        print(header)
         header = [field.lower().split()[0] for field in header if field]
         print(header)
 
@@ -182,6 +183,7 @@ def import_ascend_levels():
     rewards = ['jawbreaker', 'star_candy', 'sour_candy', 'gummy_candy', 'overcharge_candy']
     temp_rewards = rewards.copy()
     gym_refills = 1
+    cndy_cnt = 1
     for i in range(31, 61):
         s_xp += 50
         t_xp += s_xp
@@ -191,6 +193,10 @@ def import_ascend_levels():
             temp_rewards = rewards.copy()
             candy_slot, candy_frags = 1, 6
             gym_refills += 1
+            if gym_refills == 3:
+                cndy_cnt += 1
+            elif gym_refills == 5:
+                cndy_cnt += 1
         else:
             reward = temp_rewards.pop(), gym_refills
         print(i, t_xp, s_xp, reward, candy_slot, candy_frags)
@@ -207,7 +213,9 @@ def import_ascend_levels():
         if reward[0]:
             obj['gym_refill_reward'] = reward[1]
             obj['extra_candy'] = reward[0]
-        collection.insert_one(obj)
+            obj['extra_candy_cnt'] = cndy_cnt
+        # collection.insert_one(obj)
+        collection.update_one({'level': obj['level']}, {'$set': obj})
 
 
 
@@ -303,10 +311,10 @@ def update_all_zerp_moves():
             print(document)
             for i, move in enumerate(document['moves']):
                 if move['color'] == 'miss':
-                    move['percent'] = str(round(float(move['percent']) - percent_change, 2))
+                    move['percent'] = round(float(move['percent']) - percent_change, 2)
                     document['moves'][i] = move
                 elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
-                    move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
+                    move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
                     document['moves'][i] = move
             save_new_zerpmon(document)
         w_candy = document.get('white_candy', 0)
@@ -452,13 +460,13 @@ def switch_cached():
 # import_boxes()
 
 # import_moves()
-import_movesets()
+# import_movesets()
 # import_level()
 # import_ascend_levels()
-import_attrs_img()
-clean_attrs()
+# import_attrs_img()
+# clean_attrs()
 # update_all_zerp_moves()
-# cache_data()
+cache_data()
 # import_equipments()
 
 

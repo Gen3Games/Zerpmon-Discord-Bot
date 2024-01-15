@@ -20,7 +20,7 @@ import xrpl_functions
 import db_query
 from db_query import add_bg, add_flair
 from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, checks, callback, reset_alert, \
-    auction_functions, post_rank_fn, br_helper
+    auction_functions, post_rank_fn, br_helper, refresh_fn
 from xrpl.utils import xrp_to_drops
 from utils.trade import trade_item
 from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete, \
@@ -28,13 +28,13 @@ from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocom
 from utils.callback import wager_battle_r_callback
 
 intents = nextcord.Intents.all()
-client = commands.Bot(command_prefix="/", intents=intents)
+client = commands.AutoShardedBot(command_prefix="/", intents=intents)
 
 logging.basicConfig(filename='logfile_wrapper.log', level=logging.ERROR,
                     format='%(asctime)s %(levelname)s %(module)s %(funcName)s %(message)s %(lineno)d')
 
 deck_options = []
-cooldowns = {'store': {}, 'boss': {}, 'recycle': {}}
+cooldowns = {'store': {}, 'boss': {}, 'recycle': {}, 'refresh': {}}
 
 
 def start_loop(loop):
@@ -128,6 +128,7 @@ def check_and_restart(task_handle: asyncio.Task, fn, arg):
         return task_handle
 
 
+
 async def setup_tasks():
     global task1, task2
     task1 = check_and_restart(task1, nft_holding_updater.update_nft_holdings, client)
@@ -150,6 +151,11 @@ def execute_before_command(ctx: nextcord.Interaction):
 
 
 br_channel, br_battle_channel = None, None
+
+
+@tasks.loop(seconds=20)
+async def check_tasks():
+    await setup_tasks()
 
 
 @client.event
@@ -214,11 +220,13 @@ async def on_ready():
         print(guild.name)
     config.gym_main_reset = db_query.get_gym_reset()
     config.zerpmon_holders = zerpmon_players
-    config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(zerpmon_players * 500)
+    config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(zerpmon_players * config.BOSS_HP_PER_USER)
     if new:
         await reset_alert.send_boss_update_msg(boss_channel, not new, )
     if not check_auction.is_running():
         check_auction.start()
+    if not check_tasks.is_running():
+        check_tasks.start()
     await setup_tasks()
     if len(config.loaners) == 0:
         db_query.set_loaners()
@@ -235,15 +243,18 @@ async def on_resumed():
     print('Bot resumed connection with Discord.')
     if not check_auction.is_running():
         check_auction.start()
+    await setup_tasks()
 
 
 @client.slash_command(name="ping", description="Ping the bot to check if it's online",
                       name_localizations={'en-US': 'ping', 'fr': 'fr_ping'},
                       description_localizations={'en-US': 'ping the bot', 'fr': 'fr_ping bot'})
 async def ping(interaction: nextcord.Interaction):
-    execute_before_command(interaction)
-    await interaction.send("Pong!")
-    # print(interaction.locale)
+    lat = client.latency
+    await interaction.send(content=f'Pong! Latency: {lat*1000:.2f} ms', ephemeral=True)
+
+
+# print(interaction.locale)
 
 
 @client.event
@@ -310,7 +321,7 @@ async def wallet(interaction: nextcord.Interaction):
 
                     metadata = xrpl_functions.get_nft_metadata(nft['URI'])
                     serial = nft["nft_serial"]
-                    if "Zerpmon Trainers" in metadata['description']:
+                    if metadata and "Zerpmon Trainers" in metadata['description']:
                         # Add to MongoDB here
                         user_obj["trainer_cards"][serial] = {"name": metadata['name'],
                                                              "image": metadata['image'],
@@ -321,7 +332,7 @@ async def wallet(interaction: nextcord.Interaction):
                 if nft["Issuer"] == config.ISSUER["Zerpmon"]:
                     metadata = xrpl_functions.get_nft_metadata(nft['URI'])
                     serial = nft["nft_serial"]
-                    if "Zerpmon " in metadata['description']:
+                    if metadata and "Zerpmon " in metadata['description']:
                         # Add to MongoDB here
                         user_obj["zerpmons"][serial] = {"name": metadata['name'],
                                                         "image": metadata['image'],
@@ -331,7 +342,7 @@ async def wallet(interaction: nextcord.Interaction):
                 if nft["Issuer"] == config.ISSUER["Equipment"]:
                     metadata = xrpl_functions.get_nft_metadata(nft['URI'])
                     serial = nft["nft_serial"]
-                    if "Zerpmon Equipment" in metadata['description']:
+                    if metadata and "Zerpmon Equipment" in metadata['description']:
                         # Add to MongoDB here
                         user_obj["equipments"][serial] = {"name": metadata['name'],
                                                           "image": metadata['image'],
@@ -1380,7 +1391,7 @@ async def use_golden_liquorice(interaction: nextcord.Interaction):
 async def use_overcharge_candy(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     """
-            Deal with Golden Liquorice
+            Deal with Overcharge Candy
             """
     res = await callback.use_candy_callback(interaction, label='overcharge_candy')
 
@@ -1390,7 +1401,7 @@ async def use_overcharge_candy(interaction: nextcord.Interaction):
 async def use_gummy_candy(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     """
-            Deal with Golden Liquorice
+            Deal with Gummy Candy
             """
     res = await callback.use_candy_callback(interaction, label='gummy_candy')
 
@@ -1400,7 +1411,7 @@ async def use_gummy_candy(interaction: nextcord.Interaction):
 async def use_sour_candy(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     """
-            Deal with Golden Liquorice
+            Deal with Sour Candy
             """
     res = await callback.use_candy_callback(interaction, label='sour_candy')
 
@@ -1410,7 +1421,7 @@ async def use_sour_candy(interaction: nextcord.Interaction):
 async def use_star_candy(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     """
-            Deal with Golden Liquorice
+            Deal with Star Candy
             """
     res = await callback.use_candy_callback(interaction, label='star_candy')
 
@@ -1420,7 +1431,7 @@ async def use_star_candy(interaction: nextcord.Interaction):
 async def use_jawbreaker(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     """
-            Deal with Golden Liquorice
+            Deal with Jawbreaker
             """
     res = await callback.use_candy_callback(interaction, label='jawbreaker')
 
@@ -3889,9 +3900,9 @@ async def boss_battle(interaction: nextcord.Interaction):
     if await verify_cooldown('boss', interaction, 120):
         user = interaction.user
 
-        # proceed = await checks.check_boss_battle(user.id, interaction)
-        # if not proceed:
-        #     return
+        proceed = await checks.check_boss_battle(user.id, interaction)
+        if not proceed:
+            return
 
         await callback.boss_callback(user.id, interaction)
 
@@ -3960,7 +3971,10 @@ async def ascend(interaction: nextcord.Interaction,
         await interaction.edit_original_message(
             content=f"**Failed**, you haven't yet maxed out your {zerp_name}")
         return
-
+    if zerp_doc.get('ascended', False):
+        await interaction.edit_original_message(
+            content=f"**Failed**, {zerp_name} has already been ascended")
+        return
     await callback.ascend_callback(interaction, user_doc, zerp_doc)
 
 
@@ -3998,6 +4012,34 @@ async def recycle(interaction: nextcord.Interaction,
 
 
 # Recycle CMD
+
+# Refresh CMD
+
+@client.slash_command(name="refresh",
+                      description="Refresh your NFT holdings")
+async def refresh(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    if await verify_cooldown('refresh', interaction, 300):
+        await interaction.response.defer(ephemeral=True)
+        user_doc = db_query.get_owned(interaction.user.id)
+        # Sanity checks
+        if user_doc is None:
+            await interaction.edit_original_message(
+                content=f"Sorry, you haven't verified your wallet yet, \n Please use `/wallet` to verify your wallet.", )
+            return
+        await interaction.edit_original_message(
+            content=f"**Fetching** all your NFTs, should take a few mins....", )
+        success = await refresh_fn.refresh_nfts(interaction, user_doc)
+        if success:
+            await interaction.edit_original_message(
+                content=f"**Success**", )
+        else:
+            await interaction.edit_original_message(
+                content=f"**Failed**, please try again after some time", )
+
+
+
+# Refresh CMD
 
 # Reaction Tracker
 

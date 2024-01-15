@@ -5,8 +5,47 @@ import re
 import config
 
 
-def get_crit_chance(eqs):
+def apply_reroll_to_msg(is_reroll, result, s1, s2, move1_cached, move2_cached):
+    if is_reroll == 1:
+        result['move2']['idx'] = move2_cached['idx']
+        result['move2']['mul'] = move2_cached['mul']
+        result['move2']['dmg'] = move2_cached['dmg']
+        return s1
+    elif is_reroll == 2:
+        result['move1']['idx'] = move1_cached['idx']
+        result['move1']['mul'] = move1_cached['mul']
+        result['move1']['dmg'] = move1_cached['dmg']
+        return s2
+    else:
+        return s1 + s2 + "Calculating Battle results..."
+
+
+async def set_reroll(msg_hook, pre_text, result, is_reroll, move1_cached, move2_cached, is_pvp=False, hidden=True,
+               pvp_fn=None):
+    old_status = None
+    if 'reset_roll1' in result or 'reset_roll2' in result:
+        old_status = is_reroll
+        if 'reset_roll1' in result:
+            is_reroll = 1
+            move2_cached.update(
+                {'idx': result['move2']['idx'], 'mul': result['move2']['mul'], 'dmg': result['move2']['dmg']})
+        else:
+            is_reroll = 2
+            move1_cached.update(
+                {'idx': result['move1']['idx'], 'mul': result['move1']['mul'], 'dmg': result['move1']['dmg']})
+
+        if is_reroll != old_status:
+            if is_pvp:
+                await pvp_fn(msg_hook, hidden, embeds=[], files=[], content=pre_text)
+            else:
+                await msg_hook.send(content=pre_text, ephemeral=hidden)
+        return True, old_status, is_reroll
+    return False, old_status, is_reroll
+
+
+def get_crit_chance(eqs, extra=0):
     crit_chance = config.CRIT_CHANCES.copy()
+    crit_chance[True] += extra
     for effect in eqs:
         if 'increase' in effect and 'crit' in effect:
             match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
@@ -19,21 +58,22 @@ def get_crit_chance(eqs):
 def update_dmg(dmg1, dmg2, status_affect_solo):
     changed_1, changed_2 = False, False
     for effect in status_affect_solo.copy():
-        if not changed_2 and dmg2 != '' and dmg2 != 0 and 'next attack' in effect and 'damage' in effect and (
-                'oppo' in effect or 'enemy' in effect):
-            match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
-            val = int(float(match.group()))
-            dmg2 = (1 - (val / 100)) * dmg2
-            changed_2 = True
-            status_affect_solo.remove(effect)
-        elif not changed_1 and dmg1 != '' and dmg1 != 0 and 'next attack' in effect and 'damage' in effect and not (
-                'oppo' in effect or 'enemy' in effect):
-            match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
-            count = status_affect_solo.count(effect)
-            val = int(float(match.group()))
-            dmg1 = (1 + (val * count / 100)) * dmg1
-            changed_1 = True
-            status_affect_solo = [i for i in status_affect_solo if i != effect]
+        if 'next attack' in effect and 'damage' in effect:
+            if not changed_2 and dmg2 != '' and dmg2 != 0 and (
+                    'oppo' in effect or 'enemy' in effect):
+                match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
+                val = int(float(match.group()))
+                dmg2 = (1 - (val / 100)) * dmg2
+                changed_2 = True
+                status_affect_solo.remove(effect)
+            elif not changed_1 and dmg1 != '' and dmg1 != 0 and not (
+                    'oppo' in effect or 'enemy' in effect):
+                match = re.search(r'\b(\d+(\.\d+)?)\b', effect)
+                count = status_affect_solo.count(effect)
+                val = int(float(match.group()))
+                dmg1 = (1 + (val * count / 100)) * dmg1
+                changed_1 = True
+                status_affect_solo = [i for i in status_affect_solo if i != effect]
     return dmg1, dmg2, status_affect_solo
 
 
@@ -201,7 +241,7 @@ def apply_status_effects(p1, p2, status_e, is_boss=False):
             val = + val
             if "oppo" in effect:
                 (index, m1) = (7, f'@op⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect or "miss" in effect else (
-                None, '0')
+                    None, '0')
                 if index is None:
                     continue
                 p2 = update_array(p2, index, val, is_boss=is_boss)
@@ -296,7 +336,7 @@ def apply_status_effects(p1, p2, status_e, is_boss=False):
             val = + val
             if "oppo" in effect:
                 (index, m2) = (7, f'@op⬆️{config.COLOR_MAPPING["miss"]}') if "red" in effect or "miss" in effect else (
-                None, '0')
+                    None, '0')
                 if index is None:
                     continue
                 p1 = update_array(p1, index, val)

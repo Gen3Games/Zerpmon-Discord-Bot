@@ -47,7 +47,7 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
         embed.add_field(name=f"#{idx + 1} {user['username']}",
                         value=f"> Damage dealt **{dmg}**\n"
                               f"> Max damage **{user['boss_battle_stats'].get('max_dmg', 0)}**\n"
-                              f"> **ZRP share  `{max(0, round(dmg * boss_info['reward'] / total_dmg, 1))}`**",
+                              f"> **ZRP share  `{max(0, round(dmg * boss_info['reward'] / total_dmg, 1)) if total_dmg > 0 else 0}`**",
                         inline=False)
 
     view = nextcord.ui.View(timeout=600)
@@ -64,7 +64,7 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
             else:
                 if config.BOSS_MSG_ID:
                     await msg_.delete()
-                n_msg = await msg_channel.send(content='everyone', embed=embed, view=view)
+                n_msg = await msg_channel.send(content='@everyone', embed=embed, view=view)
                 config.BOSS_MSG_ID = n_msg.id
                 db_query.set_boss_msg_id(n_msg.id)
         except Exception as e:
@@ -162,7 +162,7 @@ async def send_reset_message(client: nextcord.Client):
                         if config.zerpmon_holders > 0:
                             boss_channel = nextcord.utils.get(guild.channels, id=config.BOSS_CHANNEL)
                             config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(
-                                config.zerpmon_holders * 500)
+                                config.zerpmon_holders * config.BOSS_HP_PER_USER)
                             await send_boss_update_msg(boss_channel, not new, )
                         # RANKED EMBED
                         top_players_1 = db_query.get_ranked_players(0, field='rank1')

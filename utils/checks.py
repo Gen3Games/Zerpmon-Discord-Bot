@@ -378,18 +378,24 @@ async def check_boss_battle(user_id, interaction: nextcord.Interaction):
 
 
 def get_temp_candy(zerp_doc):
+    overcharge_c, normal_candy = False, ''
     for candY_key, emj in config.TEMP_CANDIES.items():
         if zerp_doc.get(candY_key, 0) > time.time():
-            return emj
-    return ''
+            if candY_key == 'overcharge_candy':
+                overcharge_c = True
+            else:
+                normal_candy = candY_key
+                break
+    return overcharge_c, normal_candy
 
 
 def get_show_zerp_embed(zerpmon, interaction, omni=False):
     lvl, xp, w_candy, g_candy, l_candy = db_query.get_lvl_xp(zerpmon['name'], get_candies=True)
-    temP_candy_emj = get_temp_candy(zerpmon)
+    overcharge_c, temP_candy = get_temp_candy(zerpmon)
+    ascended = zerpmon.get("ascended", False)
     embed = CustomEmbed(
-        title=f"{temP_candy_emj} **{zerpmon['name']}** {temP_candy_emj}" + (
-            f' (**Ascended** ☄️)' if zerpmon.get("ascended", False) else ''),
+        title=f"**{zerpmon['name']}**" + (
+            f' (**Ascended** ☄️)' if ascended else ''),
         color=0xff5252,
     )
     my_button = f"https://xrp.cafe/nft/{zerpmon['nft_id']}"
@@ -408,12 +414,18 @@ def get_show_zerp_embed(zerpmon, interaction, omni=False):
     embed.add_field(
         name=f"**Gold Candy 🍭: {g_candy}**",
         value=f"\u200B", inline=False)
+    embed.add_field(
+        name=f"**Overcharge Candy: {config.TEMP_CANDIES['overcharge_candy'] + 'active' if overcharge_c else 'inactive'}**",
+        value=f"\u200B", inline=False)
+    embed.add_field(
+        name=f"**Consumable Candy: {config.TEMP_CANDIES[temP_candy] + ' active' if temP_candy else 'inactive'}**",
+        value=f"\u200B", inline=False)
     # embed.add_field(
     #     name=f"**Liquorice 🍵: {l_candy}**",
     #     value=f"\u200B", inline=True)
     embed.add_field(
         name=f"**Level:**",
-        value=f"**{lvl}/30**", inline=True)
+        value=f"**{lvl}/{60 if ascended else 30}**", inline=True)
     embed.add_field(
         name=f"**XP:**",
         value=f"**{xp}/{w_candy[0]}**", inline=True)
@@ -488,9 +500,10 @@ def populate_lvl_up_embed(zerp_doc, lvl_obj, is_lvl_up, reward_list):
                                   + '\t🍵',
                             inline=False)
             cndy = reward_list.get('extra_candy')
+            cndy_cnt = reward_list.get('extra_candy_cnt')
             if cndy:
                 del reward_list['extra_candy']
-                reward_list[cndy] = 1
+                reward_list[cndy] = cndy_cnt
             for i, emj in config.TEMP_CANDIES.items():
                 if i in reward_list:
                     embed.add_field(name=f"{(i.replace('_', ' ').title())}: ",

@@ -203,7 +203,7 @@ def get_move(name):
     return result
 
 
-def get_zerpmon(name, mission=False, user_id=None):
+def get_zerpmon(name, mission=False, user_id=None, pvp=False):
     candy = None
     if mission:
         zerpmon_collection = db['MoveSets2']
@@ -217,9 +217,12 @@ def get_zerpmon(name, mission=False, user_id=None):
     if result is None:
         result = zerpmon_collection.find_one({"nft_id": str(name).upper()})
     flair = result.get('z_flair', None)
-    result['name2'] = result['name'] + (f' | {flair}' if flair else '')
-    if candy and candy['expire_ts'] > time.time():
-        update_stats_candy(result, candy['type'])
+    result['name2'] = result['name'] + (f' {flair}' if flair else '')
+    if candy:
+        if candy.get('type1', {}).get('expire_ts', 0) > time.time():
+            update_stats_candy(result, candy['type1']['type'])
+        if not pvp and candy.get('type2', {}).get('expire_ts', 0) > time.time():
+            update_stats_candy(result, candy['type2']['type'])
     # print(f"Found Zerpmon {result}")
 
     return result
@@ -835,8 +838,11 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
         next_lvl = level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
 
         if next_lvl and xp + xp_add >= next_lvl['xp_required']:
+            left_xp = (xp + xp_add) - next_lvl['xp_required']
+            if (next_lvl['level'] == 30 and not ascended) or (next_lvl['level'] == 60 and ascended):
+                left_xp = 0
             doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {
-                '$set': {'level': next_lvl['level'], 'xp': (xp + xp_add) - next_lvl['xp_required']}},
+                '$set': {'level': next_lvl['level'], 'xp': left_xp}},
                                                          return_document=ReturnDocument.AFTER)
             xp = doc.get('xp')
             r_potion = next_lvl['revive_potion_reward']
@@ -845,6 +851,7 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
             candy_slot = next_lvl.get('candy_slot', 0)
             candy_frags = next_lvl.get('candy_frags', 0)
             candy_reward = next_lvl.get('extra_candy', None)
+            candy_reward_cnt = next_lvl.get('extra_candy_cnt', 0)
             lvl_up = True
             if r_potion + m_potion + gym_r_potion + candy_slot == 0:
                 add_candy_fragment(user_address)
@@ -857,9 +864,10 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
                     rewards['mp'] = m_potion
                 elif gym_r_potion:
                     add_gym_refill_potion(user_address, gym_r_potion)
-                    globals().get(f'add_{candy_reward}')(user_address, 1)
+                    globals().get(f'add_{candy_reward}')(user_address, candy_reward_cnt)
                     rewards['grp'] = gym_r_potion
                     rewards['extra_candy'] = candy_reward
+                    rewards['extra_candy_cnt'] = candy_reward_cnt
                 else:
                     add_candy_fragment(user_address, candy_frags)
                     add_candy_slot(zerpmon_name)
@@ -1390,10 +1398,10 @@ def update_moves(document, save_z=True):
         print(document)
         for i, move in enumerate(document['moves']):
             if move['color'] == 'miss':
-                move['percent'] = str(round(float(move['percent']) - percent_change, 2))
+                move['percent'] = round(float(move['percent']) - percent_change, 2)
                 document['moves'][i] = move
             elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
-                move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
+                move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
                 document['moves'][i] = move
         if save_z:
             del document['_id']
@@ -1458,7 +1466,7 @@ def get_loan_burn():
 def get_gym_reset():
     stats_col = db['stats_log']
     reset_t = stats_col.find_one({'name': 'zrp_stats'}).get('gym_reset_t', 0)
-    if reset_t < time.time() - 3600:
+    if reset_t < time.time() - 120:
         stats_col.update_one({
             'name': 'zrp_stats'
         },
@@ -1990,9 +1998,9 @@ def apply_candy_24(user_id, addr, zerp_name, candy_type):
         'type': candy_type
     }
     adder_fn = globals().get(f'add_{candy_type}')
-
+    query = {'$set': {f'active.{zerp_name}': {("type1" if candy_type == "overcharge_candy" else "type2"): zerp_value}}}
     r = candy_collection.update_one({'discord_id': user_id},
-                                    {'$set': {f'active.{zerp_name}': zerp_value}}, upsert=True)
+                                    query, upsert=True)
     adder_fn(addr, -1)
     zerpmon_collection.update_one({'name': zerp_name}, {'$set': {candy_type: exp_ts}})
     return r.acknowledged
@@ -2006,38 +2014,39 @@ def get_active_candies(user_id):
 
 def update_stats_candy(doc, candy_type):
     old_p = [(i.get('percent', None) if i['color'] != 'blue' else None) for i in doc['moves']]
-    match candy_type:
-        case 'overcharge_candy':
-            new_p = battle_effect.update_array(old_p, 7, -10, own=True)
-            for i, move in enumerate(doc['moves']):
-                if move['color'] == 'blue':
-                    continue
-                if move.get('dmg', None):
-                    move['dmg'] = round(move['dmg'] * 1.25, 2)
-                move['percent'] = new_p[i]
-        case 'gummy_candy':
-            new_p = battle_effect.update_array(old_p, 0, 10, own=True, index2=1)
-            for i, move in enumerate(doc['moves']):
-                if move['color'] == 'blue':
-                    continue
-                move['percent'] = new_p[i]
-        case 'sour_candy':
-            new_p = battle_effect.update_array(old_p, 2, 10, own=True, index2=3)
-            for i, move in enumerate(doc['moves']):
-                if move['color'] == 'blue':
-                    continue
-                move['percent'] = new_p[i]
-        case 'star_candy':
-            new_p = battle_effect.update_array(old_p, 4, 10, own=True, index2=5)
-            print(sum([i for i in new_p if i]))
-            for i, move in enumerate(doc['moves']):
-                if move['color'] == 'blue':
-                    continue
-                move['percent'] = new_p[i]
-        case 'jawbreaker':
-            for i, move in enumerate(doc['moves']):
-                if move['color'] == 'blue':
-                    move['percent'] += 15
+    if candy_type == 'overcharge_candy':
+        new_p = battle_effect.update_array(old_p, 7, -10, own=True)
+        for i, move in enumerate(doc['moves']):
+            if move['color'] == 'blue':
+                continue
+            if move.get('dmg', None):
+                move['dmg'] = round(move['dmg'] * 1.25, 2)
+            move['percent'] = new_p[i]
+    else:
+        match candy_type:
+            case 'gummy_candy':
+                new_p = battle_effect.update_array(old_p, 0, 10, own=True, index2=1)
+                for i, move in enumerate(doc['moves']):
+                    if move['color'] == 'blue':
+                        continue
+                    move['percent'] = new_p[i]
+            case 'sour_candy':
+                new_p = battle_effect.update_array(old_p, 2, 10, own=True, index2=3)
+                for i, move in enumerate(doc['moves']):
+                    if move['color'] == 'blue':
+                        continue
+                    move['percent'] = new_p[i]
+            case 'star_candy':
+                new_p = battle_effect.update_array(old_p, 4, 10, own=True, index2=5)
+                print(sum([i for i in new_p if i]))
+                for i, move in enumerate(doc['moves']):
+                    if move['color'] == 'blue':
+                        continue
+                    move['percent'] = new_p[i]
+            case 'jawbreaker':
+                for i, move in enumerate(doc['moves']):
+                    if move['color'] == 'blue':
+                        move['percent'] += 15
 
 
 """ascend fn"""
@@ -2056,3 +2065,58 @@ def ascend_zerpmon(zerp_name):
 def get_higher_lvls(lvl=1):
     res = level_collection.find({'level': {'$gt': lvl}})
     return [i for i in res]
+
+# c = db['users']
+# c.update_one({'address': 'rUpucKVa5Rvjmn8nL5aTKpEaBQUbXrZAcV'}, {'$set': {"gym": {
+#     "won": {
+#       "Cosmic": {
+#         "stage": 11,
+#         "next_battle_t": 17017340,
+#         "lose_streak": 1
+#       },
+#       "Bug": {
+#         "stage": 12,
+#         "next_battle_t": 170190700,
+#         "lose_streak": 0
+#       },
+#       "Fairy": {
+#         "stage": 13,
+#         "next_battle_t": 170134400,
+#         "lose_streak": 1
+#       },
+#       "Normal": {
+#         "stage": 14,
+#         "next_battle_t": 17019000,
+#         "lose_streak": 0
+#       },
+# "Fire": {
+#         "stage": 15,
+#         "next_battle_t": 17019000,
+#         "lose_streak": 0
+#       },
+# "Ice": {
+#         "stage": 16,
+#         "next_battle_t": 17019000,
+#         "lose_streak": 0
+#       },
+# "Ghost": {
+#         "stage": 17,
+#         "next_battle_t": 17019000,
+#         "lose_streak": 0
+#       },
+# "Dragon": {
+#         "stage": 18,
+#         "next_battle_t": 17019000,
+#         "lose_streak": 0
+#       },
+# "Water": {
+#         "stage": 19,
+#         "next_battle_t": 17019000,
+#         "lose_streak": 0
+#       },
+# "Grass": {
+#         "stage": 20,
+#         "next_battle_t": 17019000,
+#         "lose_streak": 0
+#       }
+#     }, 'active_t': 0, 'gp': 0}}})

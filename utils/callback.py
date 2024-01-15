@@ -572,7 +572,7 @@ async def show_zrp_holdings(interaction: nextcord.Interaction):
                          inline=False)
 
     lure = user_owned_nfts.get('zerp_lure', {})
-    main_embed.add_field(name="Zerpmon Lure:",
+    main_embed.add_field(name=f"Zerpmon Lure: {user_owned_nfts.get('lure_cnt', 0)}",
                          value=f"**{lure['type'] if lure.get('expire_ts', 0) > time.time() else 'Inactive'}**"
                                + '\t🥭',
                          inline=False)
@@ -754,15 +754,17 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
                                 offerId='',
                                 token_id='', fee=False, loan=False, ascend=False, recycle_fee=False):
     # Sanity checks
-    if _i.user.id == 1017889758313197658:
+    if _i.user.id in config.ADMINS:
         return user_owned_nfts['address'], True
+        amount = round(amount/100, 2)
     if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
             embeds=[], view=View())
         return
     await _i.edit_original_message(content="Generating transaction QR code..." + (
-        '\n(**fee transaction**)' if fee or recycle_fee else ('(**loan payment + fee transaction**)' if loan else '')), embeds=[],
+        '\n(**fee transaction**)' if fee or recycle_fee else ('(**loan payment + fee transaction**)' if loan else '')),
+                                   embeds=[],
                                    view=View())
     user_id = str(_i.user.id)
     user_address = user_owned_nfts['address']
@@ -863,10 +865,17 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
         else:
             active_zerps = db_query.get_active_candies(_i.user.id)
             if selected_option in active_zerps:
-                await _i.edit_original_message(
-                    content=f"**Failed** {selected_option} already has an active {active_zerps[selected_option]['type'].replace('_', ' ').title()} buff!",
-                    view=View())
-                return
+                cur_zerp = active_zerps[selected_option]
+                failed = False
+                if label == 'overcharge_candy' and cur_zerp.get('type1', {}).get('expire_ts', 0) > time.time():
+                    failed = True
+                elif label != 'overcharge_candy' and cur_zerp.get('type2', {}).get('expire_ts', 0) > time.time():
+                    failed = True
+                if failed:
+                    await _i.edit_original_message(
+                        content=f"**Failed** {selected_option} already has an active {active_zerps[selected_option]['type'].replace('_', ' ').title()} buff!",
+                        view=View())
+                    return
             res = db_query.apply_candy_24(_i.user.id, addr, selected_option, label)
 
         if res is False:
@@ -906,11 +915,14 @@ def join_images(image1_path, image2_path, output_path):
     img2 = Image.open(image2_path).resize((1280, 720))
 
     # Create a new image with double the width (side by side)
-    combined_img = Image.new('RGB', (img1.width * 2, img1.height))
+    bg_img = Image.open('./static/bgs/ascend.png').resize((img1.width * 2, img1.height))
+    combined_img = Image.new('RGBA', bg_img.size, (0, 0, 0, 0))
 
+    # Paste the background image onto the new image
+    combined_img.paste(bg_img, (0, 0))
     # Paste the resized images onto the new image
-    combined_img.paste(img1, (0, 0))
-    combined_img.paste(img2, (img1.width, 0))
+    combined_img.paste(img1, (0, 0), mask=img1)
+    combined_img.paste(img2, (img1.width, 0), mask=img2)
 
     # Resize the combined image to 1440p
     combined_img = combined_img.resize((2560, 1440))
@@ -922,7 +934,7 @@ def join_images(image1_path, image2_path, output_path):
 async def send_general_message(guild, text, image, embed=None, file=None):
     try:
         channel = nextcord.utils.get(guild.channels, name='🌐│zerpmon-center')
-        # channel = nextcord.utils.get(guild.channels, id=1184751747349086258)
+        channel = nextcord.utils.get(guild.channels, id=1184751747349086258) if channel is None else channel
         if embed:
             await channel.send(content=text + '\n' + image, embed=embed, file=file)
         else:
@@ -1403,63 +1415,136 @@ async def lure_callback(interaction: nextcord.Interaction, user_doc):
         await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
         db_query.add_zerp_lure(user_d['address'], -1)
         db_query.update_user_zerp_lure(user_d['discord_id'], selected_option)
-
+        await interaction.edit_original_message(content="**Success**", embeds=[], view=view)
     # Register the event handler for the select menu
     select_menu.callback = lambda i: handle_select_menu(i, user_doc)
 
 
 async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc, item, cnt):
-    recycle_p = [p for i, p in config.RECYCLE_P if i > cnt][0]
+    recycle_p = [p for i, p in config.RECYCLE_P if i >= cnt][0]
     xp_gain = int(cnt * config.RECYCLE_XP[item] * (recycle_p / 100))
     xrp_fee = 0.111508861 * xp_gain * 0.05
-    zrp_amt = round(xrp_fee / (await xrpl_functions.get_zrp_price_api()), 2)
+    zrp_price = await xrpl_functions.get_zrp_price_api()
+    zrp_amt = round(xrp_fee / zrp_price, 2)
+    asc_amt = round(90 / zrp_price, 2)
 
-    addr, purchased = await zrp_purchase_callback(user_doc, interaction, zrp_amt, 'Recycle fee Transaction **confirmed**')
-    if purchased:
-        ascended = zerp_doc.get('ascended', False)
-        logging.error(f"Recycle: {xp_gain, recycle_p, config.RECYCLE_XP[item], cnt}")
-        higher_lvls = db_query.get_higher_lvls(zerp_doc.get('level', 0))
-        lvl_up_list = []
-        gain_left = xp_gain
-        idx = 0
-        pending_lvls = len(higher_lvls)
-        while idx < pending_lvls:
-            cur_lvl = higher_lvls[idx]
-            if cur_lvl['level'] > 30 and not ascended:
-                await interaction.edit_original_message(
-                    content=f"**Failed**, your **{zerp_doc['name']}** hasn't **Ascended** yet and this would waste `{gain_left} XP`.")
-                return False
-            gain_left -= cur_lvl['xp_required']
-            if gain_left < 0:
-                break
-            lvl_up_list.append(cur_lvl)
-            idx += 1
-        gain_left = xp_gain
-        l_up, reward_list = False, defaultdict(int)
-        for idx, lvl in enumerate(lvl_up_list):
-            print(gain_left)
-            res, lvl_up, rewards, _ = db_query.add_xp(zerp_doc['name'], user_doc['address'], lvl['xp_required'], ascended=ascended)
-            l_up |= lvl_up
-            for key, val in rewards.items():
-                if type(val) is str:
-                    reward_list[val] += 1
-                else:
-                    reward_list[key] += val
-            gain_left -= lvl['xp_required']
-        _, _, _, xp_rn = db_query.add_xp(zerp_doc['name'], user_doc['address'], gain_left, ascended=ascended)
-        fn = getattr(db_query, f"add_{item}") if item != 'lure_cnt' else db_query.add_zerp_lure
-        fn(user_doc['address'], -cnt)
-        if idx + 1 >= pending_lvls:
-            higher_lvls[idx+1]= higher_lvls[idx]
-        higher_lvls[idx + 1]['xp'] = xp_rn
-        higher_lvls[idx + 1]['level'] -= 1
-        embed = checks.populate_lvl_up_embed(zerp_doc, higher_lvls[idx+1], l_up, reward_list)
+    ascended = zerp_doc.get('ascended', False)
+    logging.error(f"Recycle: {xp_gain, recycle_p, config.RECYCLE_XP[item], cnt}")
+    higher_lvls = db_query.get_higher_lvls(zerp_doc.get('level', 0))
+    lvl_up_list = []
+    gain_left = xp_gain
+    idx = 0
+    pending_lvls = len(higher_lvls)
+    failed = False
+    while idx < pending_lvls:
+        cur_lvl = higher_lvls[idx]
+        if not failed and cur_lvl['level'] > 30 and not ascended:
+            failed = gain_left
+            lvl_up_list.append(None)
+        gain_left -= cur_lvl['xp_required']
+        if gain_left < 0:
+            break
+        lvl_up_list.append(cur_lvl)
+        idx += 1
+
+    embed = CustomEmbed(title=f"Would you like to proceed?",
+                        color=0xff5252,
+                        )
+    embed.add_field(name="XP gain: ",
+                    value=f"{xp_gain}",
+                    inline=False)
+    embed.add_field(name="Fee: ",
+                    value=f"{zrp_amt} ZRP",
+                    inline=False)
+    # print(idx, higher_lvls, '\n', lvl_up_list)
+    f_lvl = higher_lvls[idx - 1]['level'] if idx else zerp_doc.get('level')
+    if f_lvl > 30 and not ascended:
+        embed.add_field(name="Ascension Fee: ",
+                        value=f"{asc_amt} XRP",
+                        inline=False)
+    embed.add_field(name=f"{zerp_doc['name']} will reach:",
+                    value=f"{f_lvl} LvL",
+                    inline=False)
+    view = View()
+    b1 = Button(label="Yes", style=ButtonStyle.success, emoji='✅')
+    b2 = Button(label="No", style=ButtonStyle.success, emoji='❌')
+    view.add_item(b1)
+    view.add_item(b2)
+
+    async def handle_cancel(_i: nextcord.Interaction):
+        await _i.response.defer(ephemeral=True)
         await interaction.edit_original_message(
-            content=f"**Success**, **{zerp_doc['name']}** gained `{xp_gain} XP`.", embed=embed)
-    else:
-        await interaction.edit_original_message(
-            content="**Failed**, please make sure to sign the **TXN** within a few minutes", embeds=[],
-            view=View())
+            content=f"**Cancelled**",
+            view=None, embeds=[])
+
+    async def handle_click(_i: nextcord.Interaction, force=False, ascend=False):
+        await _i.response.defer(ephemeral=True)
+        if failed and not force:
+            view = View()
+            b1 = Button(label="Continue without ascending", style=ButtonStyle.success)
+            b2 = Button(label="Ascend and claim xp", style=ButtonStyle.success)
+            b3 = Button(label="Cancel", style=ButtonStyle.red, emoji='❌')
+            view.add_item(b1)
+            view.add_item(b2)
+            view.add_item(b3)
+            b1.callback = lambda i: handle_click(i, force=True)
+            b2.callback = lambda i: handle_click(i, force=True, ascend=True)
+            b3.callback = lambda i: handle_cancel(i)
+            await interaction.edit_original_message(
+                content=f"**⚠️ Warning⚠️ **, your **{zerp_doc['name']}** hasn't **Ascended** yet and this would waste `{failed} XP`.\n\nWould you like to Ascend your Zerpmon?",
+                view=view, embeds=[])
+            return
+        amt = round(zrp_amt + (asc_amt if ascend else 0), 2)
+        addr, purchased = await zrp_purchase_callback(user_doc, _i, amt,
+                                                      'Recycle fee ' + ('Ascend ' if ascend else '') + 'Transaction **confirmed**', recycle_fee=True)
+        if purchased:
+            if ascend:
+                await ascend_callback(interaction, user_doc, zerp_doc, payment_done=True)
+                db_query.update_zrp_stats(burn_amount=amt, distributed_amount=0)
+            gain_left = xp_gain
+            l_up, reward_list = False, defaultdict(int)
+            dec_idx = False
+            idx = -1
+            for idx, lvl in enumerate(lvl_up_list):
+                if lvl is None:
+                    dec_idx = True
+                    if ascend:
+                        zerp_doc['ascended'] = True
+                        continue
+                    else:
+                        break
+                print(gain_left)
+                res, lvl_up, rewards, _ = db_query.add_xp(zerp_doc['name'], user_doc['address'], lvl['xp_required'],
+                                                          ascended=ascended or ascend)
+                l_up |= lvl_up
+                for key, val in rewards.items():
+                    if type(val) is str:
+                        reward_list[val] += 1
+                    else:
+                        reward_list[key] += val
+                gain_left -= lvl['xp_required']
+            _, _, _, xp_rn = db_query.add_xp(zerp_doc['name'], user_doc['address'], gain_left, ascended=ascended or ascend)
+            fn = getattr(db_query, f"add_{item}") if item != 'lure_cnt' else db_query.add_zerp_lure
+            fn(user_doc['address'], -cnt)
+            if dec_idx:
+                idx -= 1
+            if idx + 1 >= pending_lvls:
+                higher_lvls[idx + 1] = higher_lvls[idx]
+            higher_lvls[idx + 1]['xp'] = xp_rn
+            higher_lvls[idx + 1]['level'] -= 1
+            embed = checks.populate_lvl_up_embed(zerp_doc, higher_lvls[idx + 1], l_up, reward_list)
+            await _i.edit_original_message(
+                content=f"**Success**, **{zerp_doc['name']}** gained `{xp_gain} XP`.", embed=embed, view=None)
+
+        else:
+            await interaction.edit_original_message(
+                content="**Failed**, please make sure to sign the **TXN** within a few minutes", embeds=[],
+                view=View())
+
+    await interaction.edit_original_message(content='', embed=embed, view=view)
+    b1.callback = lambda i: handle_click(i)
+    b2.callback = lambda i: handle_cancel(i)
+
 
 async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextcord.Member, potion_key, potion, fn,
                         item=False):
@@ -1864,15 +1949,25 @@ async def boss_callback(user_id, interaction: nextcord.Interaction):
 """Ascend callback"""
 
 
-async def ascend_callback(interaction: nextcord.Interaction, user_d, zerp_d):
-    addr, success = await zrp_purchase_callback(user_d, interaction, amount=99, item='', ascend=zerp_d['name'])
+async def ascend_callback(interaction: nextcord.Interaction, user_d, zerp_d, payment_done=False):
+    if payment_done:
+        addr, success = user_d['address'], True
+    else:
+        zrp_price = await xrpl_functions.get_zrp_price_api()
+        zrp_amt = round(99 / zrp_price, 2)
+        addr, success = await zrp_purchase_callback(user_d, interaction, amount=zrp_amt, item='', ascend=zerp_d['name'])
     if success:
-        db_query.update_zrp_stats(burn_amount=99, distributed_amount=0)
+        if not payment_done:
+            db_query.update_zrp_stats(burn_amount=zrp_amt, distributed_amount=0)
         db_query.ascend_zerpmon(zerp_d['name'])
+        await interaction.edit_original_message(
+            content=f"**Success**, {zerp_d['name']} ascended!", embeds=[],
+            view=View())
         sr, first_t = user_d['trainer_cards'].popitem()
+
         # print(sr, first_t)
         def_trainer = user_d.get('battle_deck', {}).get('0', {}).get('trainer')
-        timg = user_d['trainer_cards'][def_trainer if def_trainer else sr]
+        timg = user_d['trainer_cards'].get(def_trainer, first_t) if def_trainer else first_t
 
         embed = CustomEmbed(title=zerp_d['name'], colour=0x42b883)
 
