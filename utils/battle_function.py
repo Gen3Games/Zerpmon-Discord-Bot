@@ -157,13 +157,13 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
             if not rage or 'oppo' not in eq1_lower:
                 z1['eq_applied'] = z2['name']
                 status_affects[0].append(eq1_lower)
-        elif ('opponent blue chance' in eq1_lower and z1.get('eq_applied', '') != z2['name']) or \
+        elif ('opponent blue chance' in eq1_lower and z1.get('op_eq_applied', '') != z2['name']) or \
                 ('eq_applied' not in z1 and 'own blue chance' in eq1_lower):
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             percent_c = float(match.group()) if match is not None else 0
             if 'oppo' in eq1_lower:
                 blue_dict['new_b2'] = z2_blue_percent - percent_c
-                z1['eq_applied'] = z2['name']
+                z1['op_eq_applied'] = z2['name']
             else:
                 # z1['eq_applied'] = z2['name']
                 blue_dict['new_b1'] = z1_blue_percent + percent_c
@@ -190,17 +190,17 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
             #     z2['buffer_miss'] = 0
             z2['eq_applied'] = z1['name']
             status_affects[1].append(eq2_lower)
-        elif ('opponent blue chance' in eq2_lower and z2.get('eq_applied2', '') != z1['name']) or \
-                ('eq_applied2' not in z2 and 'own blue chance' in eq2_lower):
+        elif ('opponent blue chance' in eq2_lower and z2.get('op_eq_applied', '') != z1['name']) or \
+                ('eq_applied' not in z2 and 'own blue chance' in eq2_lower):
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             percent_c = float(match.group()) if match is not None else 0
             if 'oppo' in eq2_lower:
                 blue_dict['new_b1'] = z1_blue_percent - percent_c
-                z2['eq_applied2'] = z1['name']
+                z2['op_eq_applied'] = z1['name']
             else:
                 # z2['eq_applied'] = z1['name']
                 blue_dict['new_b2'] = z2_blue_percent + percent_c
-                z2['eq_applied2'] = ''
+                z2['eq_applied'] = ''
         else:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             eq_val = int(float(match.group())) if match is not None else 0
@@ -1544,7 +1544,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                         temp_zerp2['buff_eq'], temp_zerp2['eq'] = eq_['name'], eq
                     user2_z.append(temp_zerp2)
                 except:
-                    print(f'{traceback.format_exc()}')
+                    # print(f'{traceback.format_exc()}')
+                    pass
                 i += 1
             user2_z.reverse()
             user2_zerpmons = user2_z if len(user2_z) <= low_z else user2_z[-low_z:]

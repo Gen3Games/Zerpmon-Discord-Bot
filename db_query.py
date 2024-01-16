@@ -340,20 +340,25 @@ def update_user_wr(user_id, win):
 def update_pvp_user_wr(user_id, win, recent_deck=None, b_type=None):
     users_collection = db['users']
 
-    r = None
     query = {'$inc': {'pvp_win': win, 'pvp_loss': abs(1 - win)}}
     if recent_deck is not None:
-        z1_deck, eq1_deck = recent_deck.get('z'), recent_deck.get('e')
+        deck, e_deck = recent_deck.get('z'), recent_deck.get('e')
+        if b_type != 5:
+            z1_deck, eq1_deck = {}, {}
+            for i in range(b_type):
+                z1_deck[str(i)] = deck[str(i)]
+                eq1_deck[str(i)] = e_deck[str(i)]
+            if 'trainer' in deck:
+                z1_deck['trainer'] = deck['trainer']
+        else:
+            z1_deck, eq1_deck = deck, e_deck
         recent_key = 'recent_deck' + (f'{b_type}' if b_type != 3 else '')
         query['$set'] = {recent_key: z1_deck, recent_key + '_eq': eq1_deck}
     r = users_collection.update_one({'discord_id': str(user_id)},
                                     query,
                                     upsert=True)
 
-    if r.acknowledged:
-        return True
-    else:
-        return False
+    return r.acknowledged
 
 
 def save_mission_mode(user_id, mode):
