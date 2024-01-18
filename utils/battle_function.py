@@ -130,6 +130,8 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
         'licorice', 0)
     print(z1.get('buff_eq', None), z2.get('buff_eq', None))
     eq1_note = db_query.get_eq_by_name(z1.get('buff_eq', None)) if z1.get('buff_eq', None) is not None else {}
+    if hp:
+        z2['buff_eq'] = 'Fairy Dust'
     eq2_note = db_query.get_eq_by_name(z2.get('buff_eq', None)) if z2.get('buff_eq', None) is not None else {}
     extra_star1, extra_star2, dmg_f1, dmg_f2 = 0, 0, 1, 1
     eq1_lower_list = [i.lower() for i in eq1_note.get('notes', [])]
@@ -309,9 +311,11 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
     return main_embed, file, p1, p2, eq1_lower_list, eq2_lower_list, blue_dict
 
 
-def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None):
+def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None, ascend=False):
     if gym_bg and gym_bg is not None:
         bg_img = Image.open(gym_bg)
+    elif ascend:
+        bg_img = Image.open(f'./static/bgs/ascend.png')
     else:
         randomImage = f'BattleBackground{random.randint(1, 68)}.png'
         # Load the background image and resize it
@@ -323,7 +327,8 @@ def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=
     download_image(url2, path3)
 
     img1 = Image.open(path1)
-    img2 = Image.open(path2)
+    if not ascend:
+        img2 = Image.open(path2)
     img3 = Image.open(path3)
 
     img1 = img1.resize((1200, 1200))
@@ -348,7 +353,8 @@ def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=
 
     # Paste the three images onto the new image
     combined_img.paste(img1, (50, 100), mask=img1)  # adjust the coordinates as needed
-    combined_img.paste(img2, (1150, 200), mask=img2)
+    if not ascend:
+        combined_img.paste(img2, (1150, 200), mask=img2)
     combined_img.paste(img3, (1350, 100), mask=img3)
 
     # Resize the combined image to be 50% of its original size
@@ -513,7 +519,7 @@ def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, buff_eq
         if is_boss:
             if rage:
                 move2['dmg'] += 150
-            d2m = 1.25
+            d2m = 1.0
         else:
             d2m = 1.0
 
@@ -2121,10 +2127,9 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             await interaction.send(
                 content=f"Out of nowhere, a giant **meteor** lands right on top of 💀 {rand_loser} 💀!", ephemeral=True)
             lost = r_int
-            break
 
         # purple attacks
-        if 'status_effect' in result:
+        if 'status_effect' in result and lost == 0:
             effect = result['status_effect']
             if result['winner'] == '1':
                 if 'next' in effect:

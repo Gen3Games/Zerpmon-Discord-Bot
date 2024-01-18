@@ -911,8 +911,8 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
 
 def join_images(image1_path, image2_path, output_path):
     # Open and resize the images to 720p
-    img1 = Image.open(image1_path).resize((1280, 720))
-    img2 = Image.open(image2_path).resize((1280, 720))
+    img1 = Image.open(image1_path).resize((1200, 1200))
+    img2 = Image.open(image2_path).resize((1200, 1200))
 
     # Create a new image with double the width (side by side)
     bg_img = Image.open('./static/bgs/ascend.png').resize((img1.width * 2, img1.height))
@@ -1973,9 +1973,9 @@ async def ascend_callback(interaction: nextcord.Interaction, user_d, zerp_d, pay
 
         path2 = f"./static/images/{zerp_d['name']}.png"
         path1 = f"./static/images/{timg['name']}.png"
-        output = f"./{interaction.id}.png"
-        join_images(path1, path2, output)
-        file = nextcord.File(f"{interaction.id}.png", filename="image.png")
+        output = f"{interaction.id}.png"
+        battle_function.gen_image(interaction.id, '', '', path1, '', path2, ascend=True)
+        file = nextcord.File(output, filename="image.png")
         embed.set_image(url=f'attachment://image.png')
 
         await send_general_message(interaction.guild,
