@@ -8,7 +8,7 @@ import time
 import traceback
 from copy import deepcopy
 from utils.battle_effect import apply_status_effects, update_next_atk, update_next_dmg, update_purple_stars, update_dmg, \
-    get_crit_chance, apply_reroll_to_msg, set_reroll
+    get_crit_chance, apply_reroll_to_msg, set_reroll, remove_effects
 import nextcord
 import requests
 from PIL import Image
@@ -1331,11 +1331,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                     'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
-            for eq1_lower in eq1_list:
-                if 'opponent miss chance' in eq1_lower:
-                    p1, p2, _, __ = apply_status_effects(p1, p2, [[], [
-                        eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')]])
-
+            p2 = remove_effects(p2, p1, eq1_list, type_=2)
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
@@ -1346,10 +1342,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                         result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
 
-            for eq2_lower in eq2_list:
-                if 'opponent miss chance' in eq2_lower:
-                    p1, p2, _, __ = apply_status_effects(p1, p2, [
-                        [eq2_lower.replace('opponent', 'own').replace('increase', 'decrease')], []])
+            p1 = remove_effects(p1, p2, eq2_list, type_=1)
             p2 = None
             p2_temp = None
         file.close()
@@ -1920,10 +1913,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                     'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
-            for eq1_lower in eq1_list:
-                if 'opponent miss chance' in eq1_lower:
-                    p1, p2, _, __ = apply_status_effects(p1, p2, [[], [
-                        eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')]])
+            p2 = remove_effects(p2, p1, eq1_list, type_=2)
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
@@ -1933,10 +1923,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                     'ko_move': result['move1']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
-            for eq2_lower in eq2_list:
-                if 'opponent miss chance' in eq2_lower:
-                    p1, p2, _, __ = apply_status_effects(p1, p2, [
-                        [eq2_lower.replace('opponent', 'own').replace('increase', 'decrease')], []])
+            p1 = remove_effects(p1, p2, eq2_list, type_=1)
             p2 = None
             p2_temp = None
         file.close()
@@ -2773,10 +2760,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                     'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
-            for eq1_lower in eq1_list:
-                if 'opponent miss chance' in eq1_lower:
-                    p1, p2, _, __ = apply_status_effects(p1, p2, [[], [
-                        eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')]])
+            p2 = remove_effects(p2, p1, eq1_list, type_=2)
 
             p1 = None
             p1_temp = None
@@ -2787,10 +2771,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                     'ko_move': result['move1']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
-            for eq2_lower in eq2_list:
-                if 'opponent miss chance' in eq2_lower:
-                    p1, p2, _, __ = apply_status_effects(p1, p2, [
-                        [eq2_lower.replace('opponent', 'own').replace('increase', 'decrease')], []])
+            p1 = remove_effects(p1, p2, eq2_list, type_=1)
             p2 = None
             p2_temp = None
         file.close()

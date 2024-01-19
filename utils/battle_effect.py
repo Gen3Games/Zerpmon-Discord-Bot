@@ -5,6 +5,23 @@ import re
 import config
 
 
+def remove_effects(p, _p, eq_list, type_=1):
+    for eq1_lower in eq_list:
+        if 'opponent miss chance' in eq1_lower:
+            b = eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')
+            buffs = [[], []]
+            if type_ == 1:
+                buffs[0].append(b)
+            else:
+                buffs[1].append(b)
+            p, _p, _, __ = apply_status_effects(p, _p, buffs)
+        elif 'opponent blue chance' in eq1_lower:
+            match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
+            percent_c = float(match.group()) if match is not None else 0
+            p[6] += percent_c
+    return p
+
+
 def apply_reroll_to_msg(is_reroll, result, s1, s2, move1_cached, move2_cached):
     if is_reroll == 1:
         result['move2']['idx'] = move2_cached['idx']
