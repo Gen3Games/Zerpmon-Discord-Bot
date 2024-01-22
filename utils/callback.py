@@ -1959,7 +1959,7 @@ async def ascend_callback(interaction: nextcord.Interaction, user_d, zerp_d, pay
     if success:
         if not payment_done:
             db_query.update_zrp_stats(burn_amount=zrp_amt, distributed_amount=0)
-        db_query.ascend_zerpmon(zerp_d['name'])
+        db_query.ascend_zerpmon(addr, zerp_d['name'])
         await interaction.edit_original_message(
             content=f"**Success**, {zerp_d['name']} ascended!", embeds=[],
             view=View())

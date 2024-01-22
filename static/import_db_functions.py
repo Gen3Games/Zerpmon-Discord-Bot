@@ -14,7 +14,6 @@ db = client['Zerpmon']
 
 
 # users_c = db['users']
-# users_c.drop()
 
 
 def get_all_z():
@@ -115,8 +114,10 @@ def import_movesets():
                          'color': header[23]},
                         {'name': row[28], 'stars': row[29], 'id': row[30], 'percent': float(row[31].replace("%", "")),
                          'color': header[27]},
-                        {'name': row[32], 'id': row[33], 'percent': float(row[34].replace("%", "")), 'color': header[31]},
-                        {'name': 'Miss', 'id': row[36], 'percent': float(row[37].replace("%", "")), 'color': header[34]},
+                        {'name': row[32], 'id': row[33], 'percent': float(row[34].replace("%", "")),
+                         'color': header[31]},
+                        {'name': 'Miss', 'id': row[36], 'percent': float(row[37].replace("%", "")),
+                         'color': header[34]},
                     ],
                     'nft_id': row[38]
                 }
@@ -184,6 +185,10 @@ def import_ascend_levels():
     temp_rewards = rewards.copy()
     gym_refills = 1
     cndy_cnt = 1
+    r_m_potion = {31: 0, 32: 0, 33: 0, 34: 1, 35: 1, 36: 5, 37: 1, 38: 5, 39: 1, 40: 5, 41: 1, 42: 1, 43: 1, 44: 1,
+                  45: 1, 46: 8,
+                  47: 1, 48: 8, 49: 1, 50: 8, 51: 1, 52: 1, 53: 1, 54: 1, 55: 1, 56: 10, 57: 1, 58: 10, 59: 1, 60: 15}
+
     for i in range(31, 61):
         s_xp += 50
         t_xp += s_xp
@@ -204,9 +209,9 @@ def import_ascend_levels():
             'level': i,
             'xp_required': s_xp,
             'total_xp': t_xp,
-            'wins_needed': int(s_xp/10),
-            'revive_potion_reward': 0,
-            'mission_potion_reward': 0,
+            'wins_needed': int(s_xp / 10),
+            'revive_potion_reward': r_m_potion[i],
+            'mission_potion_reward': r_m_potion[i],
             'candy_slot': candy_slot,
             'candy_frags': candy_frags
         }
@@ -216,7 +221,6 @@ def import_ascend_levels():
             obj['extra_candy_cnt'] = cndy_cnt
         # collection.insert_one(obj)
         collection.update_one({'level': obj['level']}, {'$set': obj})
-
 
 
 def check_nft_cached(id, data):
@@ -229,6 +233,7 @@ def check_nft_cached(id, data):
 def get_cached():
     with open("./metadata.json", "r") as f:
         return json.load(f)
+
 
 # print(requests.get('https://bithomp.com/api/cors/v2/nft/0008138874D997D20619837CF3C7E1050A785E9F9AC53D7EEC38D87C048F1DE1?uri=true&metadata=true').text)
 def import_attrs_img():
@@ -302,20 +307,29 @@ def update_all_zerp_moves():
     for document in db['MoveSets'].find():
         del document['_id']
         if 'level' in document and document['level'] / 10 >= 1:
-            miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
-            percent_change = 3.33 * (document['level'] // 10)
-            if percent_change == 9.99:
-                percent_change = 10
-            percent_change = percent_change if percent_change < miss_percent else miss_percent
-            count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
-            print(document)
-            for i, move in enumerate(document['moves']):
-                if move['color'] == 'miss':
-                    move['percent'] = round(float(move['percent']) - percent_change, 2)
-                    document['moves'][i] = move
-                elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
-                    move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
-                    document['moves'][i] = move
+            if document['level'] > 30:
+                if int(document.get('number', 0)) < 100000:
+                    lvl = document['level'] - 30
+                    percent_change = 6 * (lvl // 10)
+                    for i, move in enumerate(document['moves']):
+                        if move['color'] == 'blue':
+                            move['percent'] = move['percent'] + percent_change
+                            document['moves'][i] = move
+            else:
+                miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
+                percent_change = 3.33 * (document['level'] // 10)
+                if percent_change == 9.99:
+                    percent_change = 10
+                percent_change = percent_change if percent_change < miss_percent else miss_percent
+                count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
+                print(document)
+                for i, move in enumerate(document['moves']):
+                    if move['color'] == 'miss':
+                        move['percent'] = round(float(move['percent']) - percent_change, 2)
+                        document['moves'][i] = move
+                    elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
+                        move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
+                        document['moves'][i] = move
             save_new_zerpmon(document)
         w_candy = document.get('white_candy', 0)
         g_candy = document.get('gold_candy', 0)
@@ -412,7 +426,6 @@ def get_collab_nfts():
         return nfts
 
 
-
 def reset_all_gyms():
     users_collection = db['users']
     old = users_collection.find()
@@ -456,6 +469,24 @@ def switch_cached():
         with open("./metadata.json", "w") as fw:
             json.dump(new_t, fw, indent=2)
 
+
+def gift_ascension_reward():
+    users_c = db['users']
+    collection = db['MoveSets']
+    for user in users_c.find():
+        reward_c = 0
+        if len(user.get('zerpmons', [])) > 0:
+            for idx, zerp in user['zerpmons'].items():
+                zerp_obj = collection.find_one({'name': zerp['name']})
+                if zerp_obj.get('ascended'):
+                    reward_c += 10
+                    # print(zerp['name'], zerp_obj['level'])
+            if reward_c > 0:
+                print(user['username'], 'revive_potion:', reward_c, 'mission_potion:', reward_c)
+                users_c.update_one({'address': user['address']}, {'$inc': {'revive_potion': reward_c, 'mission_potion': reward_c}})
+
+
+# gift_ascension_reward()
 # switch_cached()
 # import_boxes()
 
@@ -463,11 +494,11 @@ def switch_cached():
 # import_movesets()
 # import_level()
 # import_ascend_levels()
+# gift_ascension_reward()
 # import_attrs_img()
 # clean_attrs()
 # update_all_zerp_moves()
-cache_data()
+# cache_data()
 # import_equipments()
-
 
 # reset_all_gyms()

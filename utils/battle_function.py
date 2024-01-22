@@ -128,11 +128,11 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
         'licorice', 0)
     w_candy2, g_candy2, lvl_candy2 = z2_obj.get('white_candy', 0), z2_obj.get('gold_candy', 0), z2_obj.get(
         'licorice', 0)
-    print(z1.get('buff_eq', None), z2.get('buff_eq', None))
-    eq1_note = db_query.get_eq_by_name(z1.get('buff_eq', None)) if z1.get('buff_eq', None) is not None else {}
-    if hp:
+    print(z1.get('buff_eq'), z2.get('buff_eq'))
+    eq1_note = db_query.get_eq_by_name(z1.get('buff_eq')) if z1.get('buff_eq') is not None else {}
+    if hp and z2.get('buff_eq') is None:
         z2['buff_eq'] = 'Fairy Dust'
-    eq2_note = db_query.get_eq_by_name(z2.get('buff_eq', None)) if z2.get('buff_eq', None) is not None else {}
+    eq2_note = db_query.get_eq_by_name(z2.get('buff_eq')) if z2.get('buff_eq') is not None else {}
     extra_star1, extra_star2, dmg_f1, dmg_f2 = 0, 0, 1, 1
     eq1_lower_list = [i.lower() for i in eq1_note.get('notes', [])]
     eq2_lower_list = [i.lower() for i in eq2_note.get('notes', [])]
@@ -217,8 +217,6 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
     dmg_f2 += z2_obj.get('extra_dmg_p', 0) / 100
     print(extra_star1, extra_star2)
     p1, p2, m1, m2 = apply_status_effects(percentages1.copy(), percentages2.copy(), status_affects)
-    z1_moves[6]['percent'] = blue_dict['new_b1']
-    z2_moves[6]['percent'] = blue_dict['new_b2']
 
     main_embed = CustomEmbed(title="Zerpmon rolling attacks...", color=0x35bcbf)
     path1 = f"./static/images/{z1_obj['name']}.png"
@@ -246,7 +244,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                 elif 'stars' in move:
                     move['stars'] = (len(move['stars']) + extra_star1)
         notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
-
+        _p = move['percent'] if move['color'] != 'blue' else blue_dict['new_b1']
         main_embed.add_field(
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
             value=f"> **{move['name']}** \n" + \
@@ -254,7 +252,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
                   (f"> Stars: {move['stars'] * '★'}\n" if 'stars' in move else "") + \
                   (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                  f"> Percentage: {move['percent']}%\n",
+                  f"> Percentage: {_p}%\n",
             inline=True)
     main_embed.add_field(name="\u200B", value="\u200B", inline=False)
     main_embed.add_field(name=f"🆚", value="\u200B", inline=False)
@@ -285,6 +283,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                 elif 'stars' in move:
                     move['stars'] = (len(move['stars']) + extra_star2)
         notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
+        _p = move['percent'] if move['color'] != 'blue' else blue_dict['new_b1']
         main_embed.add_field(
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
             value=f"> **{move['name']}** \n" + \
@@ -292,7 +291,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
                   (f"> Stars: {move['stars'] * '★'}\n" if 'stars' in move else "") + \
                   (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
-                  f"> Percentage: {move['percent']}%\n",
+                  f"> Percentage: {_p}%\n",
             inline=True)
     if hp is not None:
         main_embed.add_field(
@@ -519,7 +518,7 @@ def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, buff_eq
         if is_boss:
             if rage:
                 move2['dmg'] += 150
-            d2m = 1.0
+            d2m = 0.75
         else:
             d2m = 1.0
 
@@ -1331,7 +1330,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                     'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
-            p2 = remove_effects(p2, p1, eq1_list, type_=2)
+            p2 = remove_effects(p2, p1, eq1_list, z2=z2)
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
@@ -1342,7 +1341,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                         result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
 
-            p1 = remove_effects(p1, p2, eq2_list, type_=1)
+            p1 = remove_effects(p1, p2, eq2_list, z1=z1_obj)
             p2 = None
             p2_temp = None
         file.close()
@@ -1913,7 +1912,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                     'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
-            p2 = remove_effects(p2, p1, eq1_list, type_=2)
+            p2 = remove_effects(p2, p1, eq1_list, z2=z2_obj)
             p1 = None
             p1_temp = None
         elif eliminate[0] == 2:
@@ -1923,7 +1922,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                     'ko_move': result['move1']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
-            p1 = remove_effects(p1, p2, eq2_list, type_=1)
+            p1 = remove_effects(p1, p2, eq2_list, z1=z1_obj)
             p2 = None
             p2_temp = None
         file.close()
@@ -2500,7 +2499,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                   for p in
                   z2['moves']]
         buffed_type2 = ['Omni']
-
+        z2['buff_eq'] = boss_info.get('buff_eq', None)
         main_embed, file, p1, p2, eq1_list, eq2_list, updated_blue_dict = get_zerp_battle_embed(interaction, z1, z2,
                                                                                                 z1_obj,
                                                                                                 z2, z1_type,
@@ -2508,7 +2507,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                                                                 [buffed_type1,
                                                                                                  buffed_type2],
                                                                                                 buffed_zerp,
-                                                                                                'Omni',
+                                                                                                '',
                                                                                                 _data1.get('bg',
                                                                                                            [None])[
                                                                                                     0],
@@ -2760,7 +2759,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                     'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move2']['type']], 'rounds': z1['rounds'].copy()})
             user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
-            p2 = remove_effects(p2, p1, eq1_list, type_=2)
+            p2 = remove_effects(p2, p1, eq1_list, z2=z2)
 
             p1 = None
             p1_temp = None
@@ -2771,7 +2770,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                     'ko_move': result['move1']['name'] + ' ' + config.TYPE_MAPPING[
                                                         result['move1']['type']], 'rounds': z2['rounds'].copy()})
             user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
-            p1 = remove_effects(p1, p2, eq2_list, type_=1)
+            p1 = remove_effects(p1, p2, eq2_list, z1=z1_obj)
             p2 = None
             p2_temp = None
         file.close()
@@ -2841,6 +2840,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             ephemeral=True)
         reward_dict = {}
         db_query.set_boss_hp(_data1['discord_id'], boss_hp, boss_hp)
+        total_dmg = boss_info['total_weekly_dmg'] + boss_hp
         winners = db_query.boss_reward_winners()
         for i in range(10):
             try:
@@ -2855,7 +2855,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 for player in winners:
                     p_dmg = player['boss_battle_stats']['weekly_dmg']
                     if p_dmg > 0:
-                        amt = round(p_dmg * t_reward / boss_info['start_hp'], 2)
+                        amt = round(p_dmg * t_reward / total_dmg, 2)
                         reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
                         description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`"
                 embed.description = description

@@ -5,20 +5,24 @@ import re
 import config
 
 
-def remove_effects(p, _p, eq_list, type_=1):
+def remove_effects(p, _p, eq_list, z1=None, z2=None):
+    z = z1 if z1 else z2
     for eq1_lower in eq_list:
         if 'opponent miss chance' in eq1_lower:
             b = eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')
             buffs = [[], []]
-            if type_ == 1:
+            if z2:
                 buffs[0].append(b)
             else:
                 buffs[1].append(b)
             p, _p, _, __ = apply_status_effects(p, _p, buffs)
-        elif 'opponent blue chance' in eq1_lower:
-            match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
-            percent_c = float(match.group()) if match is not None else 0
-            p[6] += percent_c
+        # elif 'opponent blue chance' in eq1_lower:
+        #     try:
+        #         match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
+        #         percent_c = float(match.group()) if match is not None else 0
+        #         z['moves'][6]['percent'] += percent_c
+        #     except:
+        #         print('remove_debuff failed')
     return p
 
 
@@ -159,9 +163,10 @@ def update_array(arr, index, value, own=False, is_boss=False, index2=None):
             buffer_miss += remaining_value - arr[index]
         remaining_value = arr[index]
     print(f'here: {remaining_value, value, buffer_miss, arr}')
-    if index == 7 and is_boss and remaining_value + arr[7] > 70:
-        remaining_value = 70 - arr[-1]
-    if value < 0 and arr[-1] is not None and not own:
+    if index == 7 and is_boss and value + arr[7] > 70:
+        value = 70 - arr[-1]
+        remaining_value = -value
+    elif value < 0 and arr[-1] is not None and not own:
         if is_boss and remaining_value + arr[-1] > 70:
             remaining_value = 70 - arr[-1]
         arr[index] -= remaining_value

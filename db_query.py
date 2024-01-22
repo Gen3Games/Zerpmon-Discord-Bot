@@ -831,10 +831,10 @@ def add_candy_slot(zerp_name):
     return res.acknowledged
 
 
-def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
+def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
     zerpmon_collection = db['MoveSets']
 
-    old = zerpmon_collection.find_one({'name': zerpmon_name})
+    old = zerpmon_collection.find_one({'name': zerpmon_name}) if zerp_obj is None else zerp_obj
     xp = old.get('xp')
     lvl_up, rewards = False, {}
     if old:
@@ -846,9 +846,10 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
             left_xp = (xp + xp_add) - next_lvl['xp_required']
             if (next_lvl['level'] == 30 and not ascended) or (next_lvl['level'] == 60 and ascended):
                 left_xp = 0
-            doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {
-                '$set': {'level': next_lvl['level'], 'xp': left_xp}},
-                                                         return_document=ReturnDocument.AFTER)
+            query = {'$set': {'level': next_lvl['level'], 'xp': left_xp}}
+            if zerp_obj:
+                query['$inc'] = {'licorice': 1}
+            doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, query, return_document=ReturnDocument.AFTER)
             xp = doc.get('xp')
             r_potion = next_lvl['revive_potion_reward']
             m_potion = next_lvl['mission_potion_reward']
@@ -867,7 +868,7 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
                     add_mission_potion(user_address, m_potion)
                     rewards['rp'] = r_potion
                     rewards['mp'] = m_potion
-                elif gym_r_potion:
+                if gym_r_potion:
                     add_gym_refill_potion(user_address, gym_r_potion)
                     globals().get(f'add_{candy_reward}')(user_address, candy_reward_cnt)
                     rewards['grp'] = gym_r_potion
@@ -884,7 +885,8 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False):
         else:
             maxed = old.get('maxed_out', 0)
             if level < 30 or (ascended and level < 60):
-                doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {'$inc': {'xp': xp_add}}, return_document=ReturnDocument.AFTER)
+                doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {'$inc': {'xp': xp_add}},
+                                                             return_document=ReturnDocument.AFTER)
                 xp = doc.get('xp')
             elif (level == 30 or level == 60) and maxed == 0:
                 zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'maxed_out': 1}})
@@ -1213,29 +1215,16 @@ def apply_lvl_candy(user_id, zerpmon_name):
     user = users_collection.find_one({'discord_id': str(user_id)})
 
     old = zerpmon_collection.find_one({'name': zerpmon_name})
+    level = old.get('level', 0)
+    ascended = old.get('ascended', False)
+
+    next_lvl = level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
     user_address = user['address']
-    if old:
-        level = old.get('level', 0)
-        xp = old.get('xp', 0)
-        next_lvl = level_collection.find_one({'level': level + 1}) if level < 30 else None
+    if next_lvl:
+        add_xp(zerpmon_name, user_address, next_lvl['xp_required'], ascended=ascended, zerp_obj=old)
 
-        if next_lvl:
-            new_doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name},
-                                                             {'$set': {'level': next_lvl['level'], 'xp': xp},
-                                                              '$inc': {'licorice': 1}},
-                                                             return_document=ReturnDocument.AFTER)
-            if next_lvl['level'] >= 10 and next_lvl['level'] % 10 == 0:
-                update_moves(new_doc)
-            r_potion = next_lvl['revive_potion_reward']
-            m_potion = next_lvl['mission_potion_reward']
-            if r_potion + m_potion == 0:
-                add_candy_fragment(user_address)
-            else:
-                add_revive_potion(user_address, r_potion)
-                add_mission_potion(user_address, m_potion)
-
-            add_lvl_candy(user_address, -1)
-            return True
+        add_lvl_candy(user_address, -1)
+        return True
     return False
 
 
@@ -1396,18 +1385,25 @@ def apply_gold_candy(user_id, zerp_name, amt=1):
 
 def update_moves(document, save_z=True):
     if 'level' in document and document['level'] / 10 >= 1:
-        miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
-        dec_percent = 3.34 if document['level'] >= 30 else 3.33
-        percent_change = dec_percent if dec_percent < miss_percent else miss_percent
-        count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
-        print(document)
-        for i, move in enumerate(document['moves']):
-            if move['color'] == 'miss':
-                move['percent'] = round(float(move['percent']) - percent_change, 2)
-                document['moves'][i] = move
-            elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
-                move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
-                document['moves'][i] = move
+        if document['level'] > 30:
+            if int(document.get('number', 0)) < 100000:
+                for i, move in enumerate(document['moves']):
+                    if move['color'] == 'blue':
+                        move['percent'] = move['percent'] + 6
+                        document['moves'][i] = move
+        else:
+            miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
+            dec_percent = 3.34 if document['level'] >= 30 else 3.33
+            percent_change = dec_percent if dec_percent < miss_percent else miss_percent
+            count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
+            print(document)
+            for i, move in enumerate(document['moves']):
+                if move['color'] == 'miss':
+                    move['percent'] = round(float(move['percent']) - percent_change, 2)
+                    document['moves'][i] = move
+                elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
+                    move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
+                    document['moves'][i] = move
         if save_z:
             del document['_id']
             save_new_zerpmon(document)
@@ -1863,7 +1859,7 @@ def get_boss_reset(hp) -> [bool, int, int, int, bool]:
             'name': 'world_boss'
         },
             {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp, 'boss_zerpmon': boss,
-                      'boss_trainer': trainer,
+                      'boss_trainer': trainer, 'boss_eq': random.choice(get_all_eqs()).get('name'),
                       "reward": 500 if not obj.get('boss_active', False) else 500 + obj['reward'] // 2,
                       'start_hp': hp, 'boss_msg_id': msg_id,
                       'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg']
@@ -2057,9 +2053,13 @@ def update_stats_candy(doc, candy_type):
 """ascend fn"""
 
 
-def ascend_zerpmon(zerp_name):
+def ascend_zerpmon(addr, zerp_name):
     zerpmon_collection = db['MoveSets']
+    users_collection = db['users']
     result = zerpmon_collection.update_one({"name": zerp_name}, {'$set': {'ascended': True}})
+
+    users_collection.update_one({'address': addr},
+                                {'$inc': {'revive_potion': 10, 'mission_potion': 10}})
 
     return result.acknowledged
 
