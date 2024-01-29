@@ -849,7 +849,8 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
             query = {'$set': {'level': next_lvl['level'], 'xp': left_xp}}
             if zerp_obj:
                 query['$inc'] = {'licorice': 1}
-            doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, query, return_document=ReturnDocument.AFTER)
+            doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, query,
+                                                         return_document=ReturnDocument.AFTER)
             xp = doc.get('xp')
             r_potion = next_lvl['revive_potion_reward']
             m_potion = next_lvl['mission_potion_reward']
@@ -874,7 +875,7 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
                     rewards['grp'] = gym_r_potion
                     rewards['extra_candy'] = candy_reward
                     rewards['extra_candy_cnt'] = candy_reward_cnt
-                else:
+                elif candy_slot > 0:
                     add_candy_fragment(user_address, candy_frags)
                     add_candy_slot(zerpmon_name)
                     rewards['cs'] = 1
@@ -1159,9 +1160,12 @@ def add_flair(user_id, flair_name, type_):
     if type_ < 0:
         users_collection = db['users']
         user_id = str(user_id)
+        user_obj = users_collection.find_one({'discord_id': user_id}, {'flair': 1})
+        user_obj['flair'].remove(flair_name)
+
         users_collection.update_one(
             {'discord_id': user_id},
-            {'$pull': {'flair': flair_name}}  # Remove the specific 'bg_value' from the 'bg' array
+            {'$set': {'flair': user_obj['flair']}}
         )
     else:
         update_user_flair(user_id, flair_name)
@@ -1880,7 +1884,7 @@ def get_boss_stats():
 def set_boss_battle_t(user_id, reset_next_t=False) -> None:
     users_col = db['users']
     users_col.update_one({'discord_id': str(user_id)},
-                         {'$set': {'boss_battle_stats.next_battle_t': get_next_ts() if not reset_next_t else 0}})
+                         {'$set': {'boss_battle_stats.next_battle_t': get_next_ts() + 60 if not reset_next_t else 0}})
 
 
 def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
@@ -1893,7 +1897,7 @@ def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
     new_hp = cur_hp - dmg_done
     if new_hp > 0:
         stats_col.update_one({'name': 'world_boss'},
-                             {'$set': {'boss_hp': new_hp}, '$inc': {'total_weekly_dmg': dmg_done}})
+                             {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}})
     else:
         stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
 
@@ -1937,25 +1941,25 @@ def get_boss_leaderboard():
 
 
 def verify_zerp_flairs():
-    stats_col = db['stats_log']
-    flair_doc = stats_col.find_one({'name': 'zerpmon_flairs'})
+    stats_col = db['store_items']
+    flair_doc = stats_col.find_one({'name': 'Zerpmon Flair'})
     if flair_doc is None:
-        stats_col.insert_one({'name': 'zerpmon_flairs', 'z_flairs': {i: None for i in config.ZERPMON_FLAIRS}})
+        stats_col.update_one({'name': 'Zerpmon Flair'}, {'variants': [i for i in config.ZERPMON_FLAIRS]}, upsert=True)
 
 
 def get_available_zerp_flairs(reverse=False):
-    stats_col = db['stats_log']
-    return {i: j for i, j in stats_col.find_one({'name': 'zerpmon_flairs'}).get('z_flairs', {}).items() if
+    stats_col = db['store_items']
+    return {i: j for i, j in stats_col.find_one({'name': 'Zerpmon Flair'}).get('variants', []).items() if
             (j is None and not reverse) or (j is not None and reverse)}
 
 
 def add_zerp_flair(user_id, flair_name):
     users_collection = db['users']
-    stats_col = db['stats_log']
+    stats_col = db['store_items']
     user_id = str(user_id)
     users_collection.update_one({'discord_id': user_id},
                                 {'$set': {f'z_flair.{flair_name}': None}})
-    r = stats_col.update_one({'name': 'zerpmon_flairs'}, {"$set": {f'z_flairs.{flair_name}': user_id, }})
+    r = stats_col.update_one({'name': 'Zerpmon Flair'}, {"$pull": {f'variants': flair_name, }})
     return r.acknowledged
 
 

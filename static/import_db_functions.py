@@ -315,7 +315,8 @@ def update_all_zerp_moves():
                         if move['color'] == 'blue':
                             move['percent'] = move['percent'] + percent_change
                             document['moves'][i] = move
-            else:
+            if document['level'] >= 10:
+                document['level'] = min(30, document['level'])
                 miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
                 percent_change = 3.33 * (document['level'] // 10)
                 if percent_change == 9.99:
@@ -330,28 +331,27 @@ def update_all_zerp_moves():
                     elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
                         move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
                         document['moves'][i] = move
-            save_new_zerpmon(document)
+            save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
         w_candy = document.get('white_candy', 0)
         g_candy = document.get('gold_candy', 0)
         if w_candy > 0:
 
             original_zerp = db['MoveSets2'].find_one({'name': document['name']})
-            for i in range(w_candy):
-                for i, move in enumerate(document['moves']):
-                    if move['color'].lower() == 'white':
-                        document['moves'][i]['dmg'] = round(
-                            document['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * 0.02),
-                            1)
-            save_new_zerpmon(document)
+
+            for i, move in enumerate(document['moves']):
+                if move['color'].lower() == 'white':
+                    document['moves'][i]['dmg'] = round(
+                        document['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * 0.02 * w_candy),
+                        1)
+            save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
         if g_candy > 0:
             original_zerp = db['MoveSets2'].find_one({'name': document['name']})
-            for i in range(g_candy):
-                for i, move in enumerate(document['moves']):
-                    if move['color'].lower() == 'gold':
-                        document['moves'][i]['dmg'] = round(
-                            document['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * 0.02,
-                            1)
-            save_new_zerpmon(document)
+            for i, move in enumerate(document['moves']):
+                if move['color'].lower() == 'gold':
+                    document['moves'][i]['dmg'] = round(
+                        document['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * 0.02 * g_candy,
+                        1)
+            save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
 
 
 def get_issuer_nfts_data(issuer):
@@ -486,18 +486,37 @@ def gift_ascension_reward():
                 users_c.update_one({'address': user['address']}, {'$inc': {'revive_potion': reward_c, 'mission_potion': reward_c}})
 
 
+def clear_slot_reward():
+    users_c = db['users']
+    collection = db['MoveSets']
+    for user in users_c.find():
+        candy_white, candy_gold = 0, 0
+        if len(user.get('zerpmons', [])) > 0:
+            for idx, zerp in user['zerpmons'].items():
+                zerp_obj = collection.find_one({'name': zerp['name']})
+                if zerp_obj.get('level', 0) < 36 and 'extra_candy_slot' in zerp_obj:
+                    candy_w = max(0, zerp_obj.get('white_candy', 0) - 5)
+                    candy_g = max(0, zerp_obj.get('gold_candy', 0) -5)
+                    candy_gold += candy_g
+                    candy_white += candy_w
+                    print(zerp['name'], zerp_obj['level'])
+                    collection.update_one({'name': zerp['name']}, {'$inc': {'white_candy': -candy_w, 'gold_candy': -candy_g}, '$unset': {'extra_candy_slot': ''}})
+            if candy_white + candy_gold > 0:
+                print(user['username'], 'white_candy:', candy_white, 'gold_candy:', candy_gold)
+                users_c.update_one({'address': user['address']}, {'$inc': {'white_candy': candy_white, 'gold_candy': candy_gold}})
+
 # gift_ascension_reward()
 # switch_cached()
 # import_boxes()
 
 # import_moves()
-# import_movesets()
+import_movesets()
 # import_level()
 # import_ascend_levels()
 # gift_ascension_reward()
-# import_attrs_img()
-# clean_attrs()
-# update_all_zerp_moves()
+import_attrs_img()
+clean_attrs()
+update_all_zerp_moves()
 # cache_data()
 # import_equipments()
 

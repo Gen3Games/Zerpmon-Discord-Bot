@@ -283,7 +283,7 @@ def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_type, buf
                 elif 'stars' in move:
                     move['stars'] = (len(move['stars']) + extra_star2)
         notes = f"{db_query.get_move(move['name'])['notes']}" if move['color'] == 'purple' else ''
-        _p = move['percent'] if move['color'] != 'blue' else blue_dict['new_b1']
+        _p = move['percent'] if move['color'] != 'blue' else blue_dict['new_b2']
         main_embed.add_field(
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
             value=f"> **{move['name']}** \n" + \
@@ -1611,7 +1611,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             if i in buffed_type2:
                 buffed_zerp2 = i
             elif tc2 and tc2.get('nft_id', '') in OMNI_TRAINERS:
-                buffed_zerp1 = i
+                buffed_zerp2 = i
                 break
         if 'buff_eq' in z2:
             eq2 = _data2['equipments'][z2['eq']]
@@ -2499,7 +2499,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                   for p in
                   z2['moves']]
         buffed_type2 = ['Omni']
-        z2['buff_eq'] = boss_info.get('buff_eq', None)
+        z2['buff_eq'] = boss_info.get('boss_eq', None)
         main_embed, file, p1, p2, eq1_list, eq2_list, updated_blue_dict = get_zerp_battle_embed(interaction, z1, z2,
                                                                                                 z1_obj,
                                                                                                 z2, z1_type,
@@ -2857,7 +2857,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                     if p_dmg > 0:
                         amt = round(p_dmg * t_reward / total_dmg, 2)
                         reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
-                        description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`"
+                        description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
                 embed.description = description
                 await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
                                           channel_id=config.BOSS_CHANNEL)
