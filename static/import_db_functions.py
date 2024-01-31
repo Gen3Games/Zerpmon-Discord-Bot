@@ -279,6 +279,10 @@ def clean_attrs():
         del doc['_id']
         if 'z_flair' in doc:
             del doc['z_flair']
+        if 'white_candy' in doc:
+            del doc['white_candy']
+        if 'gold_candy' in doc:
+            del doc['gold_candy']
 
         c2.insert_one(doc)
 
@@ -517,7 +521,7 @@ import_movesets()
 import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
-# cache_data()
+cache_data()
 # import_equipments()
 
 # reset_all_gyms()

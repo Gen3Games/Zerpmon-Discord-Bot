@@ -53,7 +53,8 @@ async def get_nft_metadata_safe(uri, token_id):
         url, name = await get_nft_data_wager(token_id)
         data = {
             'name': name,
-            'image': url
+            'image': url,
+            'token_id': token_id
         }
     return data
 
@@ -466,7 +467,7 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
     issuers = [issuer]
     if safari:
         issuers.append(config.ISSUER['TrainerV2'])
-    stored_zerpmons = [nft for nft in stored_nfts if nft["Issuer"] in issuers and nft['NFTokenID'] not in tokens_sent]
+    stored_zerpmons = [nft for nft in stored_nfts if nft.get("Issuer", nft['issuer']) in issuers and nft.get("Issuer", nft['issuer']) not in tokens_sent]
     logging.error(f'Found Zerpmons {issuer} {len(stored_zerpmons)}')
     if len(stored_zerpmons) == 0:
         return
@@ -476,22 +477,22 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
         new_token = True
         while new_token:
             random_zerpmon = random.choice(stored_zerpmons)
-            token_id = random_zerpmon['NFTokenID']
+            token_id = random_zerpmon.get('NFTokenID', random_zerpmon['nftokenID'])
             if token_id in tokens_sent:
                 return
             res = await send_nft('safari' if safari else ('gift' if gift_box else 'reward'), to_address, token_id)
             tokens_sent.append(token_id)
             db_query.save_token_sent(token_id, to_address)
             if issuer == config.ISSUER['Zerpmon']:
-                nft_data = await get_nft_metadata_safe(random_zerpmon['URI'], token_id)
+                nft_data = await get_nft_metadata_safe(random_zerpmon.get('URI', random_zerpmon['uri']), token_id)
 
             else:
-                nft_data = await get_nft_metadata_safe(random_zerpmon['URI'], token_id)
+                nft_data = await get_nft_metadata_safe(random_zerpmon.get('URI', random_zerpmon['uri']), token_id)
             img = nft_data['image']
             # if not gift_box:
             #     return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, ], wallet_empty
             # else:
-            return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id, random_zerpmon['Issuer']], wallet_empty
+            return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id, random_zerpmon.get("Issuer", random_zerpmon['issuer'])], wallet_empty
 
 
 async def send_nft(from_, to_address, token_id):
@@ -782,10 +783,9 @@ async def send_equipment(user_id, to_address, eq_name, safari=False, random_eq=F
         status, stored_nfts = await xrpl_functions.get_nfts(config.STORE_ADDR)
     else:
         status, stored_nfts = await xrpl_functions.get_nfts(config.SAFARI_ADDR)
+    valid_issuers = {config.ISSUER["Equipment"], config.ISSUER["Xblade"], config.ISSUER["Legend"]}
     stored_eqs = [nft for nft in stored_nfts if
-                  ((nft["Issuer"] == config.ISSUER["Equipment"] or nft["Issuer"] == config.ISSUER["Xblade"] or nft[
-                      "Issuer"] == config.ISSUER["Legend"]))
-                  and nft['NFTokenID'] not in tokens_sent]
+                  nft.get("Issuer", nft['issuer']) in valid_issuers and nft['NFTokenID'] not in tokens_sent]
     logging.error(f'Found {len(stored_eqs)}')
     wallet_empty = False
     if len(stored_eqs) <= 1:
@@ -794,16 +794,15 @@ async def send_equipment(user_id, to_address, eq_name, safari=False, random_eq=F
         token_id, nft_data = '', {}
         if random_eq:
             random_eq = random.choice(stored_eqs)
-            nft_data = await get_nft_metadata_safe(random_eq['URI'], random_eq['NFTokenID'])
-            token_id = random_eq['NFTokenID']
+            nft_data = await get_nft_metadata_safe(random_eq.get('URI', random_eq['uri']), random_eq.get('NFTokenID', random_eq['nftokenID']))
+            token_id = nft_data['token_id']
         else:
             for nft in stored_eqs:
-                nft_data = await get_nft_metadata_safe(nft['URI'], nft['NFTokenID'])
+                nft_data = await get_nft_metadata_safe(nft.get('URI', nft['uri']), nft.get('NFTokenID', nft['nftokenID']))
                 print(nft_data['name'], eq_name)
                 if nft_data['name'] == eq_name:
-                    if nft['NFTokenID'] not in tokens_sent:
-                        token_id = nft['NFTokenID']
-                        break
+                    token_id = nft_data['token_id']
+                    break
         if token_id == '' or nft_data == {}:
             return False, []
         if token_id in tokens_sent:
@@ -1016,7 +1015,7 @@ async def get_latest_nft_offers(address):
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
-# asyncio.run(send_zrp(config.ISSUER['ZRP'], 7300.9568, 'safari'))
+# asyncio.run(send_zrp('rLadbCqcKDZJCPCuQE3SUYnZpRc9LVPPTM', 1, 'loan'))
 # asyncio.run(send_txn('rLNNGQwberUSwBVT4AxxcHdo67SnccwhZc', 1, 'wager'))
 
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))

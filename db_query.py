@@ -250,6 +250,33 @@ def save_zerpmon_winrate(winner_name, loser_name):
     return True
 
 
+def temp_move_update(document):
+    if document['level'] > 30:
+        if int(document.get('number', 0)) < 100000:
+            lvl = document['level'] - 30
+            percent_change = 6 * (lvl // 10)
+            for i, move in enumerate(document['moves']):
+                if move['color'] == 'blue':
+                    move['percent'] = move['percent'] + percent_change
+                    document['moves'][i] = move
+    if document['level'] >= 10:
+        document['level'] = min(30, document['level'])
+        miss_percent = [i for i in document['moves'] if i['color'] == 'miss'][0]['percent']
+        percent_change = 3.33 * (document['level'] // 10)
+        if percent_change == 9.99:
+            percent_change = 10
+        percent_change = percent_change if percent_change < miss_percent else miss_percent
+        count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
+        print(document)
+        for i, move in enumerate(document['moves']):
+            if move['color'] == 'miss':
+                move['percent'] = round(move['percent'] - percent_change, 2)
+                document['moves'][i] = move
+            elif move['name'] != "" and move['percent'] > 0 and move['color'] != "blue":
+                move['percent'] = round(move['percent'] + (percent_change / count), 2)
+                document['moves'][i] = move
+
+
 def get_rand_zerpmon(level, lure_type=None):
     zerpmon_collection = db['MoveSets2']
     if lure_type:
@@ -263,8 +290,7 @@ def get_rand_zerpmon(level, lure_type=None):
     ]))
     zerp = random_doc[0]
     zerp['level'] = level
-    for i in range(level // 10):
-        zerp = update_moves(zerp, False)
+    temp_move_update(zerp)
     zerp['name2'] = zerp['name']
     # print(random_doc[0])
     return zerp
@@ -1510,6 +1536,15 @@ def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_
     )
 
 
+def set_burnt(burn_amount):
+    stats_col = db['stats_log']
+    stats_col.update_one({
+        'name': 'zrp_stats'
+    },
+        {'$set': {'burnt': burn_amount}}, upsert=True
+    )
+
+
 """BATTLE LOGS"""
 
 
@@ -2003,7 +2038,7 @@ def apply_candy_24(user_id, addr, zerp_name, candy_type):
         'type': candy_type
     }
     adder_fn = globals().get(f'add_{candy_type}')
-    query = {'$set': {f'active.{zerp_name}': {("type1" if candy_type == "overcharge_candy" else "type2"): zerp_value}}}
+    query = {'$set': {f'active.{zerp_name}.{"type1" if candy_type == "overcharge_candy" else "type2"}': zerp_value}}
     r = candy_collection.update_one({'discord_id': user_id},
                                     query, upsert=True)
     adder_fn(addr, -1)
@@ -2075,6 +2110,7 @@ def get_higher_lvls(lvl=1):
     res = level_collection.find({'level': {'$gt': lvl}})
     return [i for i in res]
 
+
 # c = db['users']
 # c.update_one({'address': 'rUpucKVa5Rvjmn8nL5aTKpEaBQUbXrZAcV'}, {'$set': {"gym": {
 #     "won": {
@@ -2129,3 +2165,13 @@ def get_higher_lvls(lvl=1):
 #         "lose_streak": 0
 #       }
 #     }, 'active_t': 0, 'gp': 0}}})
+
+
+def remove_nft_from_safari_stat(nft_id) -> None:
+    stats_col = db['stats_log']
+    stats_col.update_one({'name': 'safari-nfts-bithomp'}, {'$pull': {'nfts': {'nftokenID': nft_id}}})
+
+
+def get_safari_nfts():
+    stats_col = db['stats_log']
+    return stats_col.find_one({'name': 'safari-nfts-bithomp'}).get('nfts', [])

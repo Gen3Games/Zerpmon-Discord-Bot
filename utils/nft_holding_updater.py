@@ -151,4 +151,9 @@ async def update_nft_holdings(client: nextcord.Client):
                 logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
 
             await asyncio.sleep(2)
+        try:
+            burnt = 1589000 - (await xrpl_functions.get_zrp_balance(address=config.ISSUER['ZRP'], issuer=True))
+            db_query.set_burnt(burnt)
+        except:
+            pass
         await asyncio.sleep(3600)

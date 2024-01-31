@@ -230,7 +230,7 @@ async def on_ready():
     await setup_tasks()
     if len(config.loaners) == 0:
         db_query.set_loaners()
-    db_query.verify_zerp_flairs()
+    # db_query.verify_zerp_flairs()
 
 
 @client.event

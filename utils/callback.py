@@ -1144,6 +1144,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                 if success:
                                     rewards.append(f"Gained 1 Equipment({data[0]})!\nhttps://xrp.cafe/nft/{data[-1]}")
                                     description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{data[0]}**\n{data[1]} ! 🔥 🔥\n@everyone'
+                                    db_query.remove_nft_from_safari_stat(data[-1])
                                     await send_general_message(guild=interaction.guild, text=description,
                                                                image='')
                                 else:
@@ -1213,6 +1214,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                     msg = config.ZERP_MSG(token_id[0])
                                     description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just caught **{token_id[0]}** !! 🔥 🔥\n@everyone'
                                 rewards.append(f"Won {token_id[0]}!")
+                                db_query.remove_nft_from_safari_stat(token_id[2])
                                 await send_general_message(guild=interaction.guild, text=description,
                                                            image=token_id[1])
                             case _:
