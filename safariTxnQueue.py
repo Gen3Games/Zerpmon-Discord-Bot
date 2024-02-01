@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import traceback
 from xrpl.models.requests import AccountInfo, tx
 from xrpl.asyncio.transaction import safe_sign_and_submit_transaction
@@ -25,7 +26,7 @@ ws_client = AsyncJsonRpcClient(URL)
 
 def get_txn_log():
     txn_log_col = db['safari-txn-queue']
-    return txn_log_col.find({'status': 'pending'})
+    return [i for i in txn_log_col.find({'status': 'pending'})]
 
 
 def update_txn_log(_id, doc):
@@ -101,23 +102,26 @@ async def main():
     while True:
         try:
             queued_txns = get_txn_log()
-            for txn in queued_txns:
-                _id = txn['_id']
-                del txn['_id']
-                if txn['type'] == 'NFTokenCreateOffer':
-                    success, offerID = await send_nft(txn['from'], txn['destination'], txn['nftokenID'])
-                    if success:
-                        txn['status'] = 'fulfilled'
-                        txn['offerID'] = offerID
-                        update_txn_log(_id, txn)
-                elif txn['type'] == 'Payment':
-                    success = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
-                    if success:
-                        if txn['destination'] == config.JACKPOT_ADDR:
-                            del_txn_log(_id)
-                        else:
+            if len(queued_txns) == 0:
+                time.sleep(2)
+            else:
+                for txn in queued_txns:
+                    _id = txn['_id']
+                    del txn['_id']
+                    if txn['type'] == 'NFTokenCreateOffer':
+                        success, offerID = await send_nft(txn['from'], txn['destination'], txn['nftokenID'])
+                        if success:
                             txn['status'] = 'fulfilled'
+                            txn['offerID'] = offerID
                             update_txn_log(_id, txn)
+                    elif txn['type'] == 'Payment':
+                        success = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
+                        if success:
+                            if txn['destination'] == config.JACKPOT_ADDR:
+                                del_txn_log(_id)
+                            else:
+                                txn['status'] = 'fulfilled'
+                                update_txn_log(_id, txn)
         except Exception as e:
             logging.error(f'EXECPTION in WS: {traceback.format_exc()}')
 
