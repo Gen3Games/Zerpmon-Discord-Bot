@@ -104,14 +104,14 @@ async def main():
             for txn in queued_txns:
                 _id = txn['_id']
                 del txn['_id']
-                if txn['type'] == 'Payment':
-                    success, offerID = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
+                if txn['type'] == 'NFTokenCreateOffer':
+                    success, offerID = await send_nft(txn['from'], txn['destination'], txn['nftokenID'])
                     if success:
                         txn['status'] = 'fulfilled'
                         txn['offerID'] = offerID
                         update_txn_log(_id, txn)
-                elif txn['type'] == 'NFTokenCreateOffer':
-                    success = await send_nft(txn['from'], txn['destination'], txn['nftokenID'])
+                elif txn['type'] == 'Payment':
+                    success = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
                     if success:
                         if txn['destination'] == config.JACKPOT_ADDR:
                             del_txn_log(_id)
