@@ -253,12 +253,15 @@ def save_zerpmon_winrate(winner_name, loser_name):
 def temp_move_update(document):
     if document['level'] > 30:
         if int(document.get('number', 0)) < 100000:
-            lvl = document['level'] - 30
-            percent_change = 6 * (lvl // 10)
-            for i, move in enumerate(document['moves']):
-                if move['color'] == 'blue':
-                    move['percent'] = move['percent'] + percent_change
-                    document['moves'][i] = move
+            if 'Dragon' in [i['value'] for i in document['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']:
+                pass
+            else:
+                lvl = document['level'] - 30
+                percent_change = 6 * (lvl // 10)
+                for i, move in enumerate(document['moves']):
+                    if move['color'] == 'blue':
+                        move['percent'] = move['percent'] + percent_change
+                        document['moves'][i] = move
     if document['level'] >= 10:
         document['level'] = min(30, document['level'])
         miss_percent = [i for i in document['moves'] if i['color'] == 'miss'][0]['percent']
@@ -649,7 +652,7 @@ def update_mission_deck(new_deck, user_id):
 
 def clear_mission_deck(user_id):
     users_collection = db['users']
-    n_deck = {i: None for i in range(20)}
+    n_deck = {str(i): None for i in range(20)}
     r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': n_deck}})
 
     if r.acknowledged:
@@ -1417,10 +1420,14 @@ def update_moves(document, save_z=True):
     if 'level' in document and document['level'] / 10 >= 1:
         if document['level'] > 30:
             if int(document.get('number', 0)) < 100000:
-                for i, move in enumerate(document['moves']):
-                    if move['color'] == 'blue':
-                        move['percent'] = move['percent'] + 6
-                        document['moves'][i] = move
+                if 'Dragon' in [i['value'] for i in document['attributes'] if
+                                i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']:
+                    pass
+                else:
+                    for i, move in enumerate(document['moves']):
+                        if move['color'] == 'blue':
+                            move['percent'] = move['percent'] + 6
+                            document['moves'][i] = move
         else:
             miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
             dec_percent = 3.34 if document['level'] >= 30 else 3.33

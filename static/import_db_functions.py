@@ -313,12 +313,16 @@ def update_all_zerp_moves():
         if 'level' in document and document['level'] / 10 >= 1:
             if document['level'] > 30:
                 if int(document.get('number', 0)) < 100000:
-                    lvl = document['level'] - 30
-                    percent_change = 6 * (lvl // 10)
-                    for i, move in enumerate(document['moves']):
-                        if move['color'] == 'blue':
-                            move['percent'] = move['percent'] + percent_change
-                            document['moves'][i] = move
+                    if 'Dragon' in [i['value'] for i in document['attributes'] if
+                                    i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']:
+                        pass
+                    else:
+                        lvl = document['level'] - 30
+                        percent_change = 6 * (lvl // 10)
+                        for i, move in enumerate(document['moves']):
+                            if move['color'] == 'blue':
+                                move['percent'] = move['percent'] + percent_change
+                                document['moves'][i] = move
             if document['level'] >= 10:
                 document['level'] = min(30, document['level'])
                 miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
@@ -521,7 +525,7 @@ import_movesets()
 import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
-cache_data()
+# cache_data()
 # import_equipments()
 
 # reset_all_gyms()
