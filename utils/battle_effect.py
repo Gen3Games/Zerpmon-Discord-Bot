@@ -12,9 +12,9 @@ def remove_effects(p, _p, eq_list, z1=None, z2=None):
             b = eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')
             buffs = [[], []]
             if z2:
-                buffs[0].append(b)
-            else:
                 buffs[1].append(b)
+            else:
+                buffs[0].append(b)
             p, _p, _, __ = apply_status_effects(p, _p, buffs)
         # elif 'opponent blue chance' in eq1_lower:
         #     try:
