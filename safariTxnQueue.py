@@ -221,7 +221,7 @@ async def main():
                                 txn['offerID'] = offerID
                                 txn['hash'] = hash
                                 update_txn_log(_id, txn)
-                                sent.pop(_id)
+                                sent.pop()
                         elif txn['type'] == 'Payment':
                             success, hash = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
                             if success:
