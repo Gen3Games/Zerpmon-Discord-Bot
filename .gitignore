@@ -2,6 +2,7 @@
 __pycache__/
 
 logfile_wrapper.log
+safariTxnQueue.log
 config.py
 tests
 helpers
