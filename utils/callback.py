@@ -1113,7 +1113,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                                           safari=True)
             if purchased:
                 j_amount = round(amount * qty * 0.2, 2)
-                await send_zrp(config.JACKPOT_ADDR, j_amount, 'safari')
+                db_query.add_zrp_txn_log('safari', config.JACKPOT_ADDR, j_amount)
                 # Run 3 raffles
                 rewards = [
 
@@ -1130,9 +1130,9 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                             case "zrp":
                                 r_int = random.randint(10, 415) / 10
                                 s_amount = round(amount * r_int / 100, 2)
-                                status = await send_zrp(addr, s_amount, 'safari')
+                                status = db_query.add_zrp_txn_log('safari', addr, s_amount, )
                                 msg = random.choice(
-                                    config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction Successful`" if status else ""}!'
+                                    config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction added to Queue`" if status else ""}!'
                                 rewards.append(f"Gained {s_amount} $ZRP!")
                             case "equipment":
                                 db_query.add_equipment(addr, 1)

@@ -34,6 +34,12 @@ def is_monday():
     return current_time.weekday() == 0
 
 
+def update_address(new_addr, old_addr):
+    users_collection = db['users']
+    res = users_collection.update_one({'address': old_addr}, {'$set': {'address': new_addr}})
+    return res.acknowledged
+
+
 def save_user(user):
     users_collection = db['users']
     # Upsert user
@@ -253,7 +259,8 @@ def save_zerpmon_winrate(winner_name, loser_name):
 def temp_move_update(document):
     if document['level'] > 30:
         if int(document.get('number', 0)) < 100000:
-            if 'Dragon' in [i['value'] for i in document['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']:
+            if 'Dragon' in [i['value'] for i in document['attributes'] if
+                            i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']:
                 pass
             else:
                 lvl = document['level'] - 30
@@ -2182,3 +2189,33 @@ def remove_nft_from_safari_stat(nft_id) -> None:
 def get_safari_nfts():
     stats_col = db['stats_log']
     return stats_col.find_one({'name': 'safari-nfts-bithomp'}).get('nfts', [])
+
+
+def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
+    txn_log_col = db['safari-txn-queue']
+    res = txn_log_col.insert_one({
+        'type': 'Payment',
+        'from': from_addr,
+        'destination': to_addr,
+        'amount': amount,
+        'currency': 'ZRP',
+        'status': 'pending',
+    })
+    return res.acknowledged
+
+
+def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bool, issuer: str, uri: str, sr, ):
+    txn_log_col = db['safari-txn-queue']
+    res = txn_log_col.insert_one({
+            'type': 'NFTokenCreateOffer',
+            'destination': to_addr,
+            'from': from_addr,
+            'isEquipment': is_eq,
+            'nftokenID': nft_id,
+            'nftSerial': sr,
+            'issuer': issuer,
+            'uri': uri,
+            'status': 'pending',
+            'offerID': None,
+          })
+    return res.acknowledged

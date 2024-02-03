@@ -480,7 +480,10 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
             token_id = random_zerpmon.get('NFTokenID', random_zerpmon['nftokenID'])
             if token_id in tokens_sent:
                 return
-            res = await send_nft('safari' if safari else ('gift' if gift_box else 'reward'), to_address, token_id)
+            if safari:
+                res = db_query.add_nft_txn_log('safari', to_address, token_id, False, random_zerpmon['issuer'], random_zerpmon['uri'], random_zerpmon['nftSerial'])
+            else:
+                res = await send_nft('safari' if safari else ('gift' if gift_box else 'reward'), to_address, token_id)
             tokens_sent.append(token_id)
             db_query.save_token_sent(token_id, to_address)
             if issuer == config.ISSUER['Zerpmon']:
@@ -791,10 +794,10 @@ async def send_equipment(user_id, to_address, eq_name, safari=False, random_eq=F
     if len(stored_eqs) <= 1:
         wallet_empty = True
     if status:
-        token_id, nft_data = '', {}
+        token_id, nft_data, r_eq = '', {}, {}
         if random_eq:
-            random_eq = random.choice(stored_eqs)
-            nft_data = await get_nft_metadata_safe(random_eq.get('URI', random_eq['uri']), random_eq.get('NFTokenID', random_eq['nftokenID']))
+            r_eq = random.choice(stored_eqs)
+            nft_data = await get_nft_metadata_safe(r_eq.get('URI', r_eq['uri']), r_eq.get('NFTokenID', r_eq['nftokenID']))
             token_id = nft_data['token_id']
         else:
             for nft in stored_eqs:
@@ -813,7 +816,10 @@ async def send_equipment(user_id, to_address, eq_name, safari=False, random_eq=F
             db_query.save_token_sent(token_id, to_address)
             img = nft_data['image']
             if random_eq:
-                res = await send_nft('safari' if safari else 'store', to_address, token_id)
+                if safari:
+                    res = db_query.add_nft_txn_log('safari', to_address, token_id, True, r_eq['issuer'], r_eq['uri'], r_eq['nftSerial'])
+                else:
+                    res = await send_nft('safari' if safari else 'store', to_address, token_id)
                 return res, [(nft_data['name'] if 'name' in nft_data else token_id), img, token_id], wallet_empty
             else:
                 res, offer = await send_nft_with_amt('store', to_address, token_id, str(price))
@@ -1015,7 +1021,10 @@ async def get_latest_nft_offers(address):
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
-# asyncio.run(send_zrp('rLadbCqcKDZJCPCuQE3SUYnZpRc9LVPPTM', 1, 'loan'))
-# asyncio.run(send_txn('rLNNGQwberUSwBVT4AxxcHdo67SnccwhZc', 1, 'wager'))
+# asyncio.run(send_zrp('rGnBUCwMJSX57QDecdyT5drdG3gvsmVqxD', 2.5, 'loan'))
+# asyncio.run(send_zrp('raXcH79zhz6i6teeSeBto2a8vRWfTncjNj', 0.5, 'loan'))
+# asyncio.run(send_zrp('r4zLg6wZyXfn1hs92pYxiD4xWaPZADrgMr', 1.5, 'loan'))
+# asyncio.run(send_zrp('r3puC1kAXqo4kzeD53NZ1wPgNjAmyKan9o', 22.66, 'safari'))
+# asyncio.run(send_txn('rsTwpXdRU4JitSUkYcVhnmXsoG5PVjJvYz', 1, 'loan'))
 
 # asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))

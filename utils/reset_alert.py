@@ -79,8 +79,8 @@ async def send_reset_message(client: nextcord.Client):
         next_day_ts = get_next_ts()
         reset_time = next_day_ts - time.time()
         # print(reset_time)
-        if reset_time < 60:
-            await asyncio.sleep(60)
+        if reset_time < 300:
+            await asyncio.sleep(abs(reset_time))
             db_query.choose_gym_zerp()
             gym_str = '\nLost Gyms and Gym Zerpmon refreshed for each Leader!\n'
             if db_query.get_gym_reset() - time.time() < 60:

@@ -7,9 +7,11 @@ import db_query
 import xrpl_functions
 
 
-async def refresh_nfts(interaction: Interaction, user_doc):
+async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
     guild = interaction.guild
-
+    if old_address is not None:
+        if not db_query.update_address(user_doc['address'], old_address):
+            return False
     user_obj = user_doc
     try:
         if 'address' not in user_obj or len(user_obj['address']) < 5 or user_obj['address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':

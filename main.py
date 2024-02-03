@@ -4038,6 +4038,46 @@ async def refresh(interaction: nextcord.Interaction):
                 content=f"**Failed**, please try again after some time", )
 
 
+@client.slash_command(name="reverify",
+                      description="Reverify your Wallet")
+async def reverify(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    if not await verify_cooldown('refresh', interaction, 300):
+        return
+    user_doc = db_query.get_owned(interaction.user.id)
+    # Sanity checks
+    if user_doc is None:
+        await interaction.edit_original_message(
+            content=f"Sorry, you haven't verified your wallet yet, \n Please use `/wallet` to verify your wallet.", )
+        return
+    await interaction.edit_original_message(content=f"Generating a QR code")
+
+    uuid, url, href = await xumm_functions.gen_signIn_url()
+    embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this QR code or click here.",
+                        url=href)
+
+    embed.set_image(url=url)
+
+    msg = await interaction.edit_original_message(embed=embed )
+    for i in range(120):
+        logged_in, address = await xumm_functions.check_sign_in(uuid)
+
+        if logged_in:
+            # Proceed
+            await interaction.edit_original_message(content=f"**Signed in successfully!**")
+            old_addr = user_doc.get('address')
+            user_doc['address'] = address
+            success = await refresh_fn.refresh_nfts(interaction, user_doc, old_address=old_addr)
+            if success:
+                await interaction.edit_original_message(
+                    content=f"**Success**", embeds=[])
+            else:
+                await interaction.edit_original_message(
+                    content=f"**Failed**, please try again after some time", embeds=[])
+            return
+
+    await interaction.edit_original_message(content='', embed=CustomEmbed(title="QR code **expired** please generate a new one.", color=0x000))
 
 # Refresh CMD
 

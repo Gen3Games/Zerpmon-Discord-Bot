@@ -3,10 +3,12 @@ import logging
 import time
 import traceback
 from xrpl.models.requests import AccountInfo, tx
-from xrpl.asyncio.transaction import safe_sign_and_submit_transaction
+from xrpl.asyncio.transaction import safe_sign_and_submit_transaction, safe_sign_and_autofill_transaction, \
+    send_reliable_submission
+
 from xrpl.asyncio.clients import AsyncWebsocketClient
-from xrpl.asyncio.wallet.wallet_generation import Wallet
 from xrpl.models import Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag
+from xrpl.wallet import Wallet
 from pymongo import MongoClient
 import config
 
@@ -34,12 +36,20 @@ async def get_ws_client():
 
 def get_txn_log():
     txn_log_col = db['safari-txn-queue']
-    return [i for i in txn_log_col.find({'status': 'pending'})]
+    return [i for i in txn_log_col.find({'status': 'pending',
+                                         '$or': [{'retry_cnt': {'$lt': 5}}, {'retry_cnt': {'$exists': False}}]
+                                         })]
 
 
 def update_txn_log(_id, doc):
     txn_log_col = db['safari-txn-queue']
     res = txn_log_col.update_one({'_id': _id}, {'$set': doc})
+    return res.acknowledged
+
+
+def inc_retry_cnt(_id):
+    txn_log_col = db['safari-txn-queue']
+    res = txn_log_col.update_one({'_id': _id}, {'$inc': {'retry_cnt': 1}})
     return res.acknowledged
 
 
@@ -80,26 +90,29 @@ async def send_nft(from_, to_address, token_id):
                 destination=to_address,  # set to the address of the user you want to sell to
                 source_tag=13888813
             )
-
-            response = await safe_sign_and_submit_transaction(tx, sending_wallet, client)
+            signed = await safe_sign_and_autofill_transaction(tx, sending_wallet, client)
+            response = await send_reliable_submission(signed, client)
 
             # Print the response
             print(response.result)
+            meta = response.result['meta']
             try:
-                if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
+                if meta['TransactionResult'] in ["tesSUCCESS", "terQUEUED"]:
                     if from_ == 'safari':
-                        safari_seq = response.result['account_sequence_next']
-                    msg = await get_tx(client, response.result['tx_json']['hash'])
-                    nodes = msg['meta']['AffectedNodes']
-                    node = [i for i in nodes if
-                            'CreatedNode' in i and i['CreatedNode']['LedgerEntryType'] == 'NFTokenOffer']
-                    offer = node[0]['CreatedNode']['LedgerIndex']
+                        safari_seq = (await get_seq_num()) if safari_seq is None else safari_seq + 1
+                    # msg = await get_tx(client, response.result['tx_json']['hash'])
+                    # nodes = msg['meta']['AffectedNodes']
+                    # node = [i for i in nodes if
+                    #         'CreatedNode' in i and i['CreatedNode']['LedgerEntryType'] == 'NFTokenOffer']
+                    # offer = node[0]['CreatedNode']['LedgerIndex']
+                    logging.info(response.result)
+                    offer = meta['offer_id']
                     logging.info(f'Created NFT offer with offerID: {offer}')
-                    return True, offer, response.result['tx_json']['hash']
+                    return True, offer, response.result['hash']
 
-                elif response.result['engine_result'] in ["tefPAST_SEQ"]:
+                elif meta['TransactionResult'] in ["tefPAST_SEQ"]:
                     if from_ == 'safari':
-                        safari_seq = response.result['account_sequence_next']
+                        safari_seq = await get_seq_num()
                     await asyncio.sleep(1)
                 else:
                     await asyncio.sleep(1)
@@ -108,7 +121,7 @@ async def send_nft(from_, to_address, token_id):
                 break
     except Exception as e:
         logging.error(f"Something went wrong while sending NFT outside loop: {traceback.format_exc()}")
-    return False, None
+    return False, None, None
 
 
 async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
@@ -156,6 +169,16 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
             logging.error(f"ZRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(1)
     return False
+
+
+async def get_seq_num():
+    client = await get_ws_client()
+    acc_info = AccountInfo(
+        account=config.SAFARI_ADDR
+    )
+    account_info = await client.request(acc_info)
+    sequence = account_info.result["account_data"]["Sequence"]
+    return sequence
 
 
 async def get_seq(from_, amount=None):
@@ -214,25 +237,29 @@ async def main():
                     if _id not in sent:
                         del txn['_id']
                         if txn['type'] == 'NFTokenCreateOffer':
-                            success, offerID, hash = await send_nft(txn['from'], txn['destination'], txn['nftokenID'])
+                            success, offerID, hash_ = await send_nft(txn['from'], txn['destination'], txn['nftokenID'])
                             if success:
                                 sent.append(_id)
                                 txn['status'] = 'fulfilled'
                                 txn['offerID'] = offerID
-                                txn['hash'] = hash
+                                txn['hash'] = hash_
                                 update_txn_log(_id, txn)
                                 sent.pop()
+                            else:
+                                inc_retry_cnt(_id)
                         elif txn['type'] == 'Payment':
-                            success, hash = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
+                            success, hash_ = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
                             if success:
                                 sent.append(_id)
                                 if txn['destination'] == config.JACKPOT_ADDR:
                                     del_txn_log(_id)
                                 else:
                                     txn['status'] = 'fulfilled'
-                                    txn['hash'] = hash
+                                    txn['hash'] = hash_
                                     update_txn_log(_id, txn)
                                 sent.pop()
+                            else:
+                                inc_retry_cnt(_id)
         except Exception as e:
             logging.error(f'EXECPTION in WS: {traceback.format_exc()}')
 
