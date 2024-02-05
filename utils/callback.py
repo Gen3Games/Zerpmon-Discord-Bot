@@ -1132,7 +1132,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                 s_amount = round(amount * r_int / 100, 2)
                                 status = db_query.add_zrp_txn_log('safari', addr, s_amount, )
                                 msg = random.choice(
-                                    config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction added to Queue`" if status else ""}!'
+                                    config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction added to queue`" if status else ""}!'
                                 rewards.append(f"Gained {s_amount} $ZRP!")
                             case "equipment":
                                 db_query.add_equipment(addr, 1)
@@ -1184,9 +1184,9 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                             case "jackpot":
                                 bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
                                 amount_ = round(bal * 0.8, 2)
-                                status = await send_zrp(addr, amount_, 'jackpot')
+                                status = db_query.add_zrp_txn_log('jackpot', addr, amount_, )
                                 msg = config.JACKPOT_MSG(interaction.user.name,
-                                                         amount_) + f'\n{"Transaction Successful" if status else ""}!'
+                                                         amount_) + f'\n{"Transaction added to queue" if status else ""}!'
                                 rewards.append(f"Won Jackpot {amount_} $ZRP!")
                                 description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won the **Jackpot**(`{amount_} $ZRP`)! 🔥 🔥\n@everyone'
                                 await send_general_message(guild=interaction.guild, text=description,
@@ -1221,8 +1221,11 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                 msg = random.choice(config.NOTHING_MSG)
                                 rewards.append("Gained Nothing")
                         embed.description = msg
-                        await interaction.send(embed=embed, ephemeral=True)
-                        await asyncio.sleep(1)
+                        try:
+                            await interaction.send(embed=embed, ephemeral=True)
+                            await asyncio.sleep(1)
+                        except Exception as e:
+                            logging.error(f'Error when displaying a safari roll {e}')
                     embed = CustomEmbed(title="Summary", colour=0xff5722)
                     path = f'./static/safari/Success {random.randint(1, 14)}.png'
                     file = nextcord.File(path, filename="image.png")
@@ -1452,14 +1455,23 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
     embed = CustomEmbed(title=f"Would you like to proceed?",
                         color=0xff5252,
                         )
+
+    # print(idx, higher_lvls, '\n', lvl_up_list)
+    f_lvl = higher_lvls[idx - 1]['level'] if idx else zerp_doc.get('level')
+    if f_lvl == 60:
+        xp_gain -= (gain_left + zerp_doc['xp'])
+        cnt = int(xp_gain / (config.RECYCLE_XP[item] * (recycle_p / 100))) + 1
+        xrp_fee = 0.111508861 * xp_gain * 0.05
+        zrp_amt = round(xrp_fee / zrp_price, 2)
+        embed.add_field(name="Potion consumed: ",
+                        value=f"{cnt}",
+                        inline=False)
     embed.add_field(name="XP gain: ",
                     value=f"{xp_gain}",
                     inline=False)
     embed.add_field(name="Fee: ",
                     value=f"{zrp_amt} ZRP",
                     inline=False)
-    # print(idx, higher_lvls, '\n', lvl_up_list)
-    f_lvl = higher_lvls[idx - 1]['level'] if idx else zerp_doc.get('level')
     if f_lvl > 30 and not ascended:
         embed.add_field(name="Ascension Fee: ",
                         value=f"{asc_amt} XRP",
@@ -1519,9 +1531,10 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                 res, lvl_up, rewards, _ = db_query.add_xp(zerp_doc['name'], user_doc['address'], lvl['xp_required'],
                                                           ascended=ascended or ascend)
                 l_up |= lvl_up
+                print(rewards)
                 for key, val in rewards.items():
                     if type(val) is str:
-                        reward_list[val] += 1
+                        reward_list[val] += rewards['extra_candy_cnt']
                     else:
                         reward_list[key] += val
                 gain_left -= lvl['xp_required']
@@ -1530,7 +1543,10 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
             fn(user_doc['address'], -cnt)
             if dec_idx:
                 idx -= 1
-            if idx + 1 >= pending_lvls:
+            if idx == len(higher_lvls) - 1:
+                higher_lvls[idx]['level'] += 1
+                higher_lvls.append(higher_lvls[idx])
+            elif idx + 1 >= pending_lvls:
                 higher_lvls[idx + 1] = higher_lvls[idx]
             higher_lvls[idx + 1]['xp'] = xp_rn
             higher_lvls[idx + 1]['level'] -= 1
@@ -1814,10 +1830,10 @@ async def initiate_loan(interaction: nextcord.Interaction, listing):
                                                  'address': addr}, days, amount_total=amount - listing['per_day_cost'])
                 if loaned:
                     if listing['xrp']:
-                        await send_txn(loaner_obj['address'], amount / days, 'loan')
-                        await send_txn(loaner_obj['address'], amount / days, 'loan')
+                        await send_txn(loaner_obj['address'], amount / days, 'loan', memo=f'{listing["zerpmon_name"]} loan payment')
+                        # await send_zrp(loaner_obj['address'], amount / days, 'loan')
                     else:
-                        await send_zrp(loaner_obj['address'], round(amount / days, 2), 'loan')
+                        await send_zrp(loaner_obj['address'], round(amount / days, 2), 'loan', memo=f'{listing["zerpmon_name"]} loan payment')
                     await i.edit_original_message(content='', embeds=[CustomEmbed(title='Success',
                                                                                   description=f'**Loaned** {listing["zerpmon_name"]} for **{days}** Days!\nYou can now add it to your Deck')],
                                                   view=View())

@@ -337,11 +337,11 @@ def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=
         extra_img1 = Image.open(f"./static/images/_eq/{eq1}.png")
         extra_img1 = extra_img1.resize((400, 400))
         # Paste the extra images at the top right corner of img1 and img2
-        img1.paste(extra_img1, (1200 - 580, 150), mask=extra_img1)
+        img1.paste(extra_img1, (1200 - 580, 1250 - 580), mask=extra_img1)
     if eq2:
         extra_img2 = Image.open(f"./static/images/_eq/{eq2}.png")
         extra_img2 = extra_img2.resize((400, 400))
-        img3.paste(extra_img2, (1200 - 580, 150), mask=extra_img2)
+        img3.paste(extra_img2, (1200 - 580, 1250 - 580), mask=extra_img2)
     # Create new images with 1/10th of the original size
 
     # Create a new RGBA image with the size of the background image

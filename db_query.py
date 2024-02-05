@@ -871,7 +871,6 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
     zerpmon_collection = db['MoveSets']
 
     old = zerpmon_collection.find_one({'name': zerpmon_name}) if zerp_obj is None else zerp_obj
-    xp = old.get('xp')
     lvl_up, rewards = False, {}
     if old:
         level = old.get('level', 0)
@@ -1450,7 +1449,7 @@ def update_moves(document, save_z=True):
                     document['moves'][i] = move
         if save_z:
             del document['_id']
-            save_new_zerpmon(document)
+            save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
 
     return document
 

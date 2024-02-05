@@ -1067,7 +1067,6 @@ async def battle_deck(interaction: nextcord.Interaction,
             del deck_copy['trainer']
         except:
             pass
-            pass
         while len(user1_z) != len(deck_copy):
             try:
                 zerp = user_obj['zerpmons'][deck_copy[str(i)]]
@@ -4008,6 +4007,10 @@ async def recycle(interaction: nextcord.Interaction,
             return
         zerp_name = user_doc['zerpmons'][zerpmon_sr]['name']
         zerp_doc = db_query.get_zerpmon(zerp_name, )
+        if zerp_doc.get('level', 0) == 60:
+            await interaction.edit_original_message(
+                content=f"**Failed**, {zerp_name} is already maxed out", )
+            return
         await callback.recycle_callback(interaction, user_doc, zerp_doc, item, qty)
 
 

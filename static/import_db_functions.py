@@ -420,6 +420,8 @@ def cache_data():
                 }
         with open("./metadata.json", "w") as f:
             json.dump(tba, f)
+        db['nft-uri-cache'].drop()
+        db['nft-uri-cache'].insert_many([i for k, i in tba.items()])
 
     except Exception as e:
         print(str(e), ' error')
@@ -491,7 +493,8 @@ def gift_ascension_reward():
                     # print(zerp['name'], zerp_obj['level'])
             if reward_c > 0:
                 print(user['username'], 'revive_potion:', reward_c, 'mission_potion:', reward_c)
-                users_c.update_one({'address': user['address']}, {'$inc': {'revive_potion': reward_c, 'mission_potion': reward_c}})
+                users_c.update_one({'address': user['address']},
+                                   {'$inc': {'revive_potion': reward_c, 'mission_potion': reward_c}})
 
 
 def clear_slot_reward():
@@ -504,14 +507,18 @@ def clear_slot_reward():
                 zerp_obj = collection.find_one({'name': zerp['name']})
                 if zerp_obj.get('level', 0) < 36 and 'extra_candy_slot' in zerp_obj:
                     candy_w = max(0, zerp_obj.get('white_candy', 0) - 5)
-                    candy_g = max(0, zerp_obj.get('gold_candy', 0) -5)
+                    candy_g = max(0, zerp_obj.get('gold_candy', 0) - 5)
                     candy_gold += candy_g
                     candy_white += candy_w
                     print(zerp['name'], zerp_obj['level'])
-                    collection.update_one({'name': zerp['name']}, {'$inc': {'white_candy': -candy_w, 'gold_candy': -candy_g}, '$unset': {'extra_candy_slot': ''}})
+                    collection.update_one({'name': zerp['name']},
+                                          {'$inc': {'white_candy': -candy_w, 'gold_candy': -candy_g},
+                                           '$unset': {'extra_candy_slot': ''}})
             if candy_white + candy_gold > 0:
                 print(user['username'], 'white_candy:', candy_white, 'gold_candy:', candy_gold)
-                users_c.update_one({'address': user['address']}, {'$inc': {'white_candy': candy_white, 'gold_candy': candy_gold}})
+                users_c.update_one({'address': user['address']},
+                                   {'$inc': {'white_candy': candy_white, 'gold_candy': candy_gold}})
+
 
 # gift_ascension_reward()
 # switch_cached()
@@ -525,7 +532,7 @@ import_movesets()
 import_attrs_img()
 clean_attrs()
 update_all_zerp_moves()
-# cache_data()
+cache_data()
 # import_equipments()
 
 # reset_all_gyms()

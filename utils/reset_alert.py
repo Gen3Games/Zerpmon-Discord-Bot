@@ -141,9 +141,9 @@ async def send_reset_message(client: nextcord.Client):
                         db_query.remove_listed_loan(loan['zerpmon_name'], loan['listed_by']['id'])
                     else:
                         if loan['xrp']:
-                            await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan')
+                            await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
                         else:
-                            await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan')
+                            await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
                         db_query.decrease_loan_pending(loan['zerpmon_name'], loan['per_day_cost'])
                 if len(offer_expired) > 0:
                     expiry_msg = f'{", ".join(offer_expired)}Please use: `/loan relist` command to reactivate your Loan listing'
