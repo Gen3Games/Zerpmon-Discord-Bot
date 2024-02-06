@@ -128,7 +128,6 @@ def check_and_restart(task_handle: asyncio.Task, fn, arg):
         return task_handle
 
 
-
 async def setup_tasks():
     global task1, task2
     task1 = check_and_restart(task1, nft_holding_updater.update_nft_holdings, client)
@@ -220,7 +219,8 @@ async def on_ready():
         print(guild.name)
     config.gym_main_reset = db_query.get_gym_reset()
     config.zerpmon_holders = zerpmon_players
-    config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(zerpmon_players * config.BOSS_HP_PER_USER)
+    config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = db_query.get_boss_reset(
+        zerpmon_players * config.BOSS_HP_PER_USER)
     if new:
         await reset_alert.send_boss_update_msg(boss_channel, not new, )
     if not check_auction.is_running():
@@ -251,7 +251,7 @@ async def on_resumed():
                       description_localizations={'en-US': 'ping the bot', 'fr': 'fr_ping bot'})
 async def ping(interaction: nextcord.Interaction):
     lat = client.latency
-    await interaction.send(content=f'Pong! Latency: {lat*1000:.2f} ms', ephemeral=True)
+    await interaction.send(content=f'Pong! Latency: {lat * 1000:.2f} ms', ephemeral=True)
 
 
 # print(interaction.locale)
@@ -292,7 +292,7 @@ async def wallet(interaction: nextcord.Interaction):
             # Sanity check (Dual Discord Account with 1 Wallet)
             wallet_exist = db_query.check_wallet_exist(address)
             if wallet_exist:
-                await interaction.send(f"This wallet is already verified!")
+                await interaction.send(f"This wallet has already been verified!")
                 return
             # Proceed
             await interaction.send(f"**Signed in successfully!**", ephemeral=True)
@@ -970,7 +970,7 @@ async def battle_deck(interaction: nextcord.Interaction,
                       ),
                       deck_type: str = SlashOption(
                           name="deck_type",
-                          choices={"Gym": 'gym_deck', "Battle": 'battle_deck'},
+                          choices={"Gym": 'gym_deck', "Battle": 'battle_deck', "Tower Rush": 'gym_tower'},
                       ),
                       deck_number: str = SlashOption(
                           name="deck_number",
@@ -1003,12 +1003,13 @@ async def battle_deck(interaction: nextcord.Interaction,
     """
     execute_before_command(interaction)
     user = interaction.user
+    temp_mode = deck_type == 'gym_tower'
     await interaction.response.defer(ephemeral=True)
-    user_owned_nfts = {'data': db_query.get_owned(user.id), 'user': user.name}
+    user_owned_nfts = {'data': db_query.get_temp_user(str(user.id)) if temp_mode else db_query.get_owned(user.id), 'user': user.name}
 
     # Sanity checks
 
-    if user.id in [i['id'] for i in config.battle_royale_participants] and deck_type == 'battle_deck':
+    if deck_type == 'battle_deck' and user.id in [i['id'] for i in config.battle_royale_participants]:
         await interaction.edit_original_message(
             content="Sorry you can't change your deck while in the middle of a Battle Royale")
         return
@@ -1018,27 +1019,34 @@ async def battle_deck(interaction: nextcord.Interaction,
             await interaction.edit_original_message(
                 content=f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", )
             return
-
+        if temp_mode:
+            if not owned_nfts['data']['fee_paid']:
+                await interaction.edit_original_message(
+                    content=f"Sorry, it looks like your Gym tower rush ticket has expired\nPlease use `gym_tower battle`", )
+                return
+            zerp_name_list = [str(idx) for idx in range(10)]
+            trainer_list = zerp_name_list
+        else:
+            zerp_name_list = [i for i in list(owned_nfts['data']['zerpmons'].keys())]
+            trainer_list = [i for i in list(owned_nfts['data']['trainer_cards'].keys())]
         if len(owned_nfts['data']['zerpmons']) == 0:
             await interaction.edit_original_message(
                 content=f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to set inside the deck", )
             return
         for zerpmon_name in [zerpmon_name1, zerpmon_name2, zerpmon_name3, zerpmon_name4, zerpmon_name5]:
-            if zerpmon_name != '' and zerpmon_name not in [i for i in
-                                                           list(owned_nfts['data']['zerpmons'].keys())]:
+            if zerpmon_name != '' and zerpmon_name not in zerp_name_list:
                 await interaction.edit_original_message(
                     content=f"**Failed**, please recheck the ID/Name or make sure you hold these Zerpmon", )
                 return
-        if trainer_name != '' and trainer_name not in [i for i in
-                                                       list(owned_nfts['data']['trainer_cards'].keys())]:
+        if trainer_name != '' and trainer_name not in trainer_list:
             await interaction.edit_original_message(
                 content=f"**Failed**, please recheck the ID/Name or make sure you hold this Trainer Card", )
             return False
     user_obj = user_owned_nfts['data']
     eqs = [eq1, eq2, eq3, eq4, eq5]
     new_deck = {}
-    old_deck = user_obj[deck_type][deck_number]
-    old_eq_deck = user_obj['equipment_decks'][deck_type][deck_number]
+    old_deck = user_obj['battle_deck'][deck_number] if temp_mode else user_obj[deck_type][deck_number]
+    old_eq_deck = user_obj['equipment_decks'][deck_number] if temp_mode else user_obj['equipment_decks'][deck_type][deck_number]
     for i, zerpmon_name in enumerate([zerpmon_name1, zerpmon_name2, zerpmon_name3, zerpmon_name4, zerpmon_name5]):
         if zerpmon_name != '' and zerpmon_name is not None and zerpmon_name not in list(new_deck.values()):
             new_deck[str(i)] = zerpmon_name
@@ -1054,9 +1062,9 @@ async def battle_deck(interaction: nextcord.Interaction,
         for k, v in new_deck.items():
             old_deck[k] = v
         new_deck = old_deck
-    if deck_type not in user_obj or (
+    if (deck_type not in user_obj and not temp_mode) or (
             len(new_deck) == 0):
-        await interaction.edit_original_message(content=f"Sorry, your can't add **Equipment** to an empty deck.")
+        await interaction.edit_original_message(content=f"Sorry, you can't add **Equipment** to an empty deck.")
         return
     else:
         fail_msg = ''
@@ -1069,8 +1077,8 @@ async def battle_deck(interaction: nextcord.Interaction,
             pass
         while len(user1_z) != len(deck_copy):
             try:
-                zerp = user_obj['zerpmons'][deck_copy[str(i)]]
-                zerp_obj = db_query.get_zerpmon(zerp['name'])
+                zerp = user_obj['zerpmons'][deck_copy[str(i)]] if not temp_mode else user_obj['zerpmons'][int(deck_copy[str(i)])]
+                zerp_obj = db_query.get_zerpmon(zerp['name']) if not temp_mode else zerp
                 user1_z.append(zerp_obj)
             except:
                 user1_z.append(None)
@@ -1089,7 +1097,8 @@ async def battle_deck(interaction: nextcord.Interaction,
             if equipment == '' or equipment is None:
                 eqs[eq_i] = None if is_new == 'New' else equipment
                 continue
-            if user_obj is None or len(user_obj['equipments'].get(equipment, {})) == 0:
+            eq_not_owned = (int(equipment) >= 10) if temp_mode else (user_obj['equipments'].get(equipment) is None)
+            if user_obj is None or eq_not_owned:
                 await interaction.edit_original_message(content=f"Sorry, you don't own **{equipment}  Equipment**")
                 return
             if len(all_types) < eq_i + 1 or all_types[eq_i] is None:
@@ -1098,11 +1107,17 @@ async def battle_deck(interaction: nextcord.Interaction,
                 eqs[eq_i] = None
                 continue
             zerp_types = all_types[eq_i]
-            for item in user_obj['equipments'][equipment]['attributes']:
-                if item['trait_type'] == 'Type':
-                    if item['value'] not in zerp_types and item['value'] != 'Omni':
-                        fail_msg += f"Sorry, **{user_obj['equipments'][equipment]['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
-                        eqs[eq_i] = None
+            eq = user_obj['equipments'][int(equipment)]
+            if temp_mode:
+                if eq['type'] not in zerp_types and eq['type'] != 'Omni':
+                    fail_msg += f"Sorry, **{eq['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
+                    eqs[eq_i] = None
+            else:
+                for item in user_obj['equipments'][equipment]['attributes']:
+                    if item['trait_type'] == 'Type':
+                        if item['value'] not in zerp_types and item['value'] != 'Omni':
+                            fail_msg += f"Sorry, **{user_obj['equipments'][equipment]['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
+                            eqs[eq_i] = None
     # print(new_deck)
     # await interaction.send(
     #     f"**Adding to deck...**",
@@ -1121,8 +1136,10 @@ async def battle_deck(interaction: nextcord.Interaction,
         eqs = {str(i): eq for i, eq in enumerate(eqs)}
     if deck_type == 'gym_deck':
         saved = db_query.update_gym_deck(str(deck_number), new_deck, eqs, user.id)
-    else:
+    elif deck_type == 'battle_deck':
         saved = db_query.update_battle_deck(str(deck_number), new_deck, eqs, user.id)
+    else:
+        saved = db_query.update_gym_tower_deck(str(deck_number), new_deck, eqs, user.id)
 
     if fail_msg != '':
         await interaction.edit_original_message(content=fail_msg)
@@ -4062,7 +4079,7 @@ async def reverify(interaction: nextcord.Interaction):
 
     embed.set_image(url=url)
 
-    msg = await interaction.edit_original_message(embed=embed )
+    msg = await interaction.edit_original_message(embed=embed)
     for i in range(120):
         logged_in, address = await xumm_functions.check_sign_in(uuid)
 
@@ -4080,9 +4097,41 @@ async def reverify(interaction: nextcord.Interaction):
                     content=f"**Failed**, please try again after some time", embeds=[])
             return
 
-    await interaction.edit_original_message(content='', embed=CustomEmbed(title="QR code **expired** please generate a new one.", color=0x000))
+    await interaction.edit_original_message(content='',
+                                            embed=CustomEmbed(title="QR code **expired** please generate a new one.",
+                                                              color=0x000))
+
 
 # Refresh CMD
+
+# Gym Tower CMD
+
+@client.slash_command(name="gym_tower",
+                      description="Gym Tower Rush",
+                      )
+async def gym_tower(interaction: nextcord.Interaction):
+    # ...
+    pass
+
+
+@gym_tower.subcommand(name='battle', description="Start battle against Gym Tower leaders.")
+async def gym_tower_battle(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    user = interaction.user
+    await interaction.response.defer(ephemeral=True)
+
+    user_doc = db_query.get_owned(user.id)
+    user_temp_d = db_query.get_temp_user(str(user.id))
+    if user_doc is None:
+        await interaction.send('Wallet not verified yet, starting verification...', ephemeral=True)
+        await wallet(interaction)
+    elif user_temp_d is None or not user_temp_d.get('fee_paid', False):
+        await callback.setup_gym_tower(interaction, user_doc)
+    else:
+        if await checks.verify_gym_tower(interaction, user_temp_d):
+            pass
+
+# Gym Tower CMD
 
 # Reaction Tracker
 
@@ -4286,8 +4335,17 @@ async def gym_autocomplete(interaction: nextcord.Interaction, item: str):
 @battle_deck.on_autocomplete("trainer_name")
 async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
     # Determine the choices for the trainer_name option based on a condition
-    user_owned = db_query.get_owned(interaction.user.id)
-    cards = {k: v for k, v in user_owned['trainer_cards'].items() if item.lower() in v['name'].lower()}
+    temp_mode = False
+    try:
+        temp_mode = [i for i in interaction.data['options'][0]['options'] if i['name'] == 'deck_type'][0]['value'] == 'gym_tower'
+    except:
+        pass
+    if temp_mode:
+        user_owned = db_query.get_temp_user(str(interaction.user.id))
+        cards = {str(k): v for k, v in enumerate(user_owned['trainers']) if item.lower() in v['name'].lower()}
+    else:
+        user_owned = db_query.get_owned(interaction.user.id)
+        cards = {k: v for k, v in user_owned['trainer_cards'].items() if item.lower() in v['name'].lower()}
     choices = {}
     if (len(cards)) == 0:
         pass
@@ -4295,7 +4353,11 @@ async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
         for k, v in cards.items():
             if len(choices) == 25:
                 break
-            choices[f'{v["name"]} ({checks.get_type_emoji(v["attributes"], emoji=False)})'] = k
+            if temp_mode:
+                emj = v['type'] if 'type' in v else v['affinity']
+            else:
+                emj = checks.get_type_emoji(v["attributes"], emoji=False)
+            choices[f'{v["name"]} ({emj})'] = k
     await interaction.response.send_autocomplete(choices)
 
 

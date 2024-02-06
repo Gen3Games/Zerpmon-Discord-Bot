@@ -513,3 +513,16 @@ def populate_lvl_up_embed(zerp_doc, lvl_obj, is_lvl_up, reward_list):
         url=zerp_doc['image'] if "https:/" in zerp_doc['image'] else 'https://cloudflare-ipfs.com/ipfs/' + zerp_doc[
             'image'].replace("ipfs://", ""))
     return embed
+
+
+async def verify_gym_tower(i: nextcord.Interaction, temp_user_d):
+    battle_d = temp_user_d['battle_deck']['0']
+    equipment_d = temp_user_d['equipment_decks']['0']
+    if len(battle_d) < 6:
+        has_trainer = battle_d.get('trainer') is not None
+        z = len(battle_d) - 1 if has_trainer else len(battle_d)
+        await i.edit_original_message(
+            content=f"Please create a compatible **deck** (Your current Gym Tower deck has **{z}** Zerpmon and **{1 if has_trainer else 0}** Trainer)\n"
+                    f"`/add gym_tower_deck`")
+        return False
+    return True

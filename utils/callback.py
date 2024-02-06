@@ -756,7 +756,7 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
     # Sanity checks
     if _i.user.id in config.ADMINS:
         return user_owned_nfts['address'], True
-        amount = round(amount/100, 2)
+        amount = round(amount / 100, 2)
     if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
@@ -1421,6 +1421,7 @@ async def lure_callback(interaction: nextcord.Interaction, user_doc):
         db_query.add_zerp_lure(user_d['address'], -1)
         db_query.update_user_zerp_lure(user_d['discord_id'], selected_option)
         await interaction.edit_original_message(content="**Success**", embeds=[], view=view)
+
     # Register the event handler for the select menu
     select_menu.callback = lambda i: handle_select_menu(i, user_doc)
 
@@ -1510,7 +1511,9 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
             return
         amt = round(zrp_amt + (asc_amt if ascend else 0), 2)
         addr, purchased = await zrp_purchase_callback(user_doc, _i, amt,
-                                                      'Recycle fee ' + ('Ascend ' if ascend else '') + 'Transaction **confirmed**', recycle_fee=True)
+                                                      'Recycle fee ' + (
+                                                          'Ascend ' if ascend else '') + 'Transaction **confirmed**',
+                                                      recycle_fee=True)
         if purchased:
             if ascend:
                 await ascend_callback(interaction, user_doc, zerp_doc, payment_done=True)
@@ -1538,7 +1541,8 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                     else:
                         reward_list[key] += val
                 gain_left -= lvl['xp_required']
-            _, _, _, xp_rn = db_query.add_xp(zerp_doc['name'], user_doc['address'], gain_left, ascended=ascended or ascend)
+            _, _, _, xp_rn = db_query.add_xp(zerp_doc['name'], user_doc['address'], gain_left,
+                                             ascended=ascended or ascend)
             fn = getattr(db_query, f"add_{item}") if item != 'lure_cnt' else db_query.add_zerp_lure
             fn(user_doc['address'], -cnt)
             if dec_idx:
@@ -1830,10 +1834,12 @@ async def initiate_loan(interaction: nextcord.Interaction, listing):
                                                  'address': addr}, days, amount_total=amount - listing['per_day_cost'])
                 if loaned:
                     if listing['xrp']:
-                        await send_txn(loaner_obj['address'], amount / days, 'loan', memo=f'{listing["zerpmon_name"]} loan payment')
+                        await send_txn(loaner_obj['address'], amount / days, 'loan',
+                                       memo=f'{listing["zerpmon_name"]} loan payment')
                         # await send_zrp(loaner_obj['address'], amount / days, 'loan')
                     else:
-                        await send_zrp(loaner_obj['address'], round(amount / days, 2), 'loan', memo=f'{listing["zerpmon_name"]} loan payment')
+                        await send_zrp(loaner_obj['address'], round(amount / days, 2), 'loan',
+                                       memo=f'{listing["zerpmon_name"]} loan payment')
                     await i.edit_original_message(content='', embeds=[CustomEmbed(title='Success',
                                                                                   description=f'**Loaned** {listing["zerpmon_name"]} for **{days}** Days!\nYou can now add it to your Deck')],
                                                   view=View())
@@ -2004,4 +2010,45 @@ async def ascend_callback(interaction: nextcord.Interaction, user_d, zerp_d, pay
     else:
         await interaction.edit_original_message(
             content="Failed, please make sure to sign the **TXN** within a few minutes", embeds=[],
+            view=View())
+
+
+"""Gym tower rush"""
+
+
+async def setup_gym_tower(interaction: nextcord.Interaction, user_d):
+    zrp_price = await xrpl_functions.get_zrp_price_api()
+    zrp_amt = round(5 / zrp_price, 2)
+    await interaction.edit_original_message(
+        content=f"**Note**, You'll need to pay an entry ticket fee of `{zrp_amt} ZRP` to play and earn rewards!", embeds=[],
+        view=View())
+    await asyncio.sleep(5)
+    addr, success = await zrp_purchase_callback(user_d, interaction, amount=zrp_amt, item='Gym Tower Rush ticket fee', fee=True)
+
+    if success:
+        user_obj = db_query.add_temp_user(user_d['discord_id'], user_d['address'])
+        embed2 = CustomEmbed(
+            title=f"**ZERPMON**:\n",
+            color=0xff5252,
+        )
+        for idx, nft in enumerate(user_obj.get('zerpmons')):
+            my_button = f"https://xrp.cafe/nft/{nft['nft_id']}"
+            nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] in ['Type', 'Affinity']])
+            embed2.add_field(
+                name=f"#{idx+1}  **{nft['name']}** ({nft_type})",
+                value=f'> Level: **{nft.get("level", 0)}**\n'
+                      f'> [view]({my_button})', inline=False)
+        embed2.add_field(
+            name=f"**EQUIPMENTS**",
+            value=f'\u200B', inline=False)
+
+        for idx, nft in enumerate(user_obj.get('equipments')):
+            nft_type = nft['type']
+            embed2.add_field(
+                name=f"#{idx+1}  **{nft['name']}** ({nft_type})",
+                value=f'> {config.TYPE_MAPPING[nft_type]}\n', inline=False)
+        await interaction.edit_original_message(
+            content=f"**Allotted these Zerpmon and Equipment**\n"
+                    f"Note: Please create a **deck of your own choosing** to be able to battle against Gym Tower leaders using"
+                    f"`/add battle_deck deck_type: Tower Rush`", embeds=[embed2],
             view=View())

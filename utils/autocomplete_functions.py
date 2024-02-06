@@ -10,7 +10,7 @@ from utils.checks import get_type_emoji
 
 
 async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
-    user_owned = get_owned(interaction.user.id)
+    temp_mode = False
     params = []
     try:
         params = interaction.data['options'][0]['options']
@@ -21,7 +21,17 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
     #     main_type = user_owned['equipments'][params[0]['value']]['attributes'][-1]['value']
     remove_items = [i['value'] for i in params if i['name'][0].isdigit()]
     # print(interaction.data)
-    cards = {k: v for k, v in user_owned['zerpmons'].items() if
+    try:
+        temp_mode = [i for i in interaction.data['options'][0]['options'] if i['name'] == 'deck_type'][0]['value'] == 'gym_tower'
+    except:
+        pass
+    if temp_mode:
+        user_owned = db_query.get_temp_user(str(interaction.user.id))
+        zerps = [(str(k), v) for k, v in enumerate(user_owned['zerpmons'])]
+    else:
+        user_owned = get_owned(interaction.user.id)
+        zerps = user_owned['zerpmons'].items()
+    cards = {k: v for k, v in zerps if
              item.lower() in v['name'].lower() and k not in remove_items and
              (main_type == '' or main_type in [i['value'] for i in v['attributes'] if i['trait_type'] == 'Type'])}
     choices = {}
@@ -37,9 +47,18 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
 
 
 async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
-    user_owned = get_owned(interaction.user.id)
-    mission_zerps = user_owned['mission_deck']
     params = interaction.data['options'][0]['options']
+    temp_mode = False
+    try:
+        temp_mode = [i for i in params if i['name'] == 'deck_type'][0]['value'] == 'gym_tower'
+    except:
+        pass
+    if temp_mode:
+        user_owned = db_query.get_temp_user(str(interaction.user.id))
+        zerps = [(str(k), v) for k, v in enumerate(user_owned['zerpmons'])]
+    else:
+        user_owned = get_owned(interaction.user.id)
+        mission_zerps = user_owned['mission_deck']
     # print(params)
     focused = [i['name'] for i in params if i.get('focused', False)][0].split('_')[-1]
     print(focused)
@@ -52,12 +71,16 @@ async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
     else:
         slot_zerpmon = [i['value'] for i in params if i['name'] == focused]
     slot_zerpmon = slot_zerpmon[0] if len(slot_zerpmon) > 0 else False
-    z_moves = [] if not slot_zerpmon else db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name'])['moves']
+    z_moves = [] if not slot_zerpmon else (user_owned['zerpmons'][int(slot_zerpmon)] if temp_mode else db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name']))['moves']
     types = config.TYPE_MAPPING if not slot_zerpmon else [i['type'] for idx, i in enumerate(z_moves) if idx < 4]
     # print(slot_zerpmon, types)
     remove_items = [i['value'] for i in params if 'equipment' in i['name']]
     if user_owned is not None and 'equipments' in user_owned:
-        choices = {f'{i["name"]} ({get_type_emoji(i["attributes"], emoji=False)})': k for k, i in user_owned['equipments'].items() if item in i['name'] and k not in remove_items and
+        if temp_mode:
+            choices = {f'{i["name"]} ({i["type"]})': str(k) for k, i in
+                       enumerate(user_owned['equipments']) if item in i['name'] and str(k) not in remove_items and (i["type"] == 'Omni' or i["type"] in types)}
+        else:
+            choices = {f'{i["name"]} ({get_type_emoji(i["attributes"], emoji=False)})': k for k, i in user_owned['equipments'].items() if item in i['name'] and k not in remove_items and
                    any((_i['value'] == 'Omni' or _i['value'] in types) for _i in i['attributes'] if _i['trait_type'] == 'Type')}
     else:
         choices = {}

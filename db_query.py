@@ -180,10 +180,10 @@ def check_wallet_exist(address):
 
     user_id = str(address)
     result = users_collection.find_one({"address": user_id})
-
+    discord_user_exist = result is not None and result.get('discord_id') is not None
     # print(f"Found user {result}")
 
-    return result is not None
+    return discord_user_exist
 
 
 def get_user(address):
@@ -1007,14 +1007,27 @@ def update_rank(user_id, win, decay=False, field='rank'):
     # print(r)
 
 
-def get_random_doc_with_type(type_value):
+def get_random_doc_with_type(type_value=None, limit=5, level=None):
     collection = db['MoveSets2']
-    query = {'attributes': {'$elemMatch': {'trait_type': 'Type', 'value': type_value}}}
-    documents = list(collection.find(query))
-    if documents:
-        random_documents = random.sample(documents, 5)
+    if type_value is None:
+        query = {}
+    else:
+        query = {'attributes': {'$elemMatch': {'trait_type': 'Type', 'value': type_value}}}
+
+    random_documents = collection.aggregate([
+        {'$match': query},
+        {'$sample': {'size': limit}}
+    ])
+
+    if random_documents:
+        random_documents = list(random_documents)
         for doc in random_documents:
+            del doc['_id']
+            if level is not None and level >= 10:
+                doc['level'] = level
+                update_moves(doc, False)
             doc['name2'] = doc['name']
+
         return random_documents
     else:
         return None
@@ -1643,8 +1656,8 @@ def get_eq_by_name(name, gym=False):
         return equipment_col.find_one({'name': name}, )
 
 
-def get_all_eqs():
-    return [i for i in equipment_col.find({})]
+def get_all_eqs(limit=None):
+    return list(equipment_col.find({}, {'_id': 0}))
 
 
 """LOAN"""
@@ -2206,15 +2219,81 @@ def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
 def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bool, issuer: str, uri: str, sr, ):
     txn_log_col = db['safari-txn-queue']
     res = txn_log_col.insert_one({
-            'type': 'NFTokenCreateOffer',
-            'destination': to_addr,
-            'from': from_addr,
-            'isEquipment': is_eq,
-            'nftokenID': nft_id,
-            'nftSerial': sr,
-            'issuer': issuer,
-            'uri': uri,
-            'status': 'pending',
-            'offerID': None,
-          })
+        'type': 'NFTokenCreateOffer',
+        'destination': to_addr,
+        'from': from_addr,
+        'isEquipment': is_eq,
+        'nftokenID': nft_id,
+        'nftSerial': sr,
+        'issuer': issuer,
+        'uri': uri,
+        'status': 'pending',
+        'offerID': None,
+    })
     return res.acknowledged
+
+
+"""Gym tower"""
+
+
+def get_random_trainers(limit=5):
+    collection = db['trainers']
+
+    random_documents = collection.aggregate([
+        {'$match': {}},
+        {'$sample': {'size': limit}},
+        {'$project': {'_id': 0, 'image': 1, 'name': 1, 'type': 1, 'nft_id': 1, 'trainer number': 1, 'affinity': 1}}
+    ])
+
+    if random_documents:
+        return list(random_documents)
+    else:
+        return None
+
+
+def get_temp_user(user_id: str):
+    temp_users_col = db['temp_user_data']
+    return temp_users_col.find_one({'discord_id': user_id})
+
+
+def add_temp_user(user_id: str, user_addr: str, fee_paid=True):
+    temp_users_col = db['temp_user_data']
+
+    eq_deck = {}
+    for i in range(5):
+        eq_deck[str(i)] = {str(i): None for i in range(5)}
+    user_doc = {'address': user_addr,
+                'fee_paid': fee_paid,
+                'zerpmons': get_random_doc_with_type(limit=10, level=30),
+                'equipments': random.sample(get_all_eqs(), 10),
+                'trainers': get_random_trainers(10),
+                "battle_deck": {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}},
+                "equipment_decks": eq_deck,
+                'tower_level': 1,
+                }
+    temp_users_col.update_one({'discord_id': user_id},
+                              {'$set': user_doc, }, upsert=True
+                              )
+    return user_doc
+
+
+def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
+    users_collection = db['temp_user_data']
+
+    doc = users_collection.find_one({'discord_id': str(user_id)})
+
+    # add the element to the array
+    arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
+        doc["battle_deck"]
+    if deck_no not in arr:
+        arr[deck_no] = {}
+
+    arr[deck_no] = new_deck
+    r = users_collection.update_one({'discord_id': str(user_id)},
+                                    {"$set": {f'equipment_decks.{deck_no}': eqs,
+                                              'battle_deck': arr}})
+
+    if r.acknowledged:
+        return True
+    else:
+        return False
