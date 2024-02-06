@@ -721,7 +721,7 @@ def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, buff_eq
                     m1 = db_query.get_move(move1['name'])
                     note = m1['notes'].lower()
 
-                    pn1, pn2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                    pn1, pn2, _m1, _m2 = apply_status_effects(percentages1.copy(), percentages2.copy(),
                                                               [[note], []], is_boss=is_boss)
                     if not rage or 'oppo' not in note:
                         percentages1, percentages2 = pn1, pn2
@@ -787,7 +787,7 @@ def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, buff_eq
                 else:
                     if winner['move2']['dmg'] == 0:
                         if winner['move1']['stars'] > 0:
-                            pn1, pn2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                            pn1, pn2, _m1, _m2 = apply_status_effects(percentages1.copy(), percentages2.copy(),
                                                                       [[note], []], is_boss=is_boss)
                             if not rage or 'oppo' not in note:
                                 percentages1, percentages2 = pn1, pn2
@@ -806,7 +806,7 @@ def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, buff_eq
                 if s1 > s2:
                     m1 = db_query.get_move(move1['name'])
 
-                    pn1, pn2, _m1, _m2 = apply_status_effects(percentages1, percentages2,
+                    pn1, pn2, _m1, _m2 = apply_status_effects(percentages1.copy(), percentages2.copy(),
                                                               [[m1['notes']], []],
                                                               is_boss=is_boss)
                     if not rage or 'oppo' not in m1['notes']:
