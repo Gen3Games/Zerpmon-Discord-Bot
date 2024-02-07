@@ -14,6 +14,8 @@ import requests
 from xrpl.utils import drops_to_xrp
 from db_query import get_safari_nfts
 
+last_checked_price = 0
+
 
 async def get_nfts(address):
     try:
@@ -89,7 +91,10 @@ async def get_offers(address):
 
 
 async def get_zrp_price_api(total_tokens=50):
+    global last_checked_price
     try:
+        if time.time() - last_checked_price < 10 and config.zrp_price and config.zrp_price > 0.1:
+            return config.zrp_price
         async with AsyncWebsocketClient(config.NODE_URL) as client:
             marker = True
             markerVal = None
@@ -134,6 +139,7 @@ async def get_zrp_price_api(total_tokens=50):
                         drops += ratio * get
                         total_tokens = 0
             config.zrp_price = round(drops / 10 ** 6, 2)/50
+            last_checked_price = time.time()
             return config.zrp_price
     except Exception as e:
         print(traceback.format_exc())

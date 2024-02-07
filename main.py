@@ -970,7 +970,7 @@ async def battle_deck(interaction: nextcord.Interaction,
                       ),
                       deck_type: str = SlashOption(
                           name="deck_type",
-                          choices={"Gym": 'gym_deck', "Battle": 'battle_deck', "Tower Rush": 'gym_tower'},
+                          choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK, "Tower rush": config.TOWER_DECK},
                       ),
                       deck_number: str = SlashOption(
                           name="deck_number",
@@ -1155,7 +1155,7 @@ async def battle_deck(interaction: nextcord.Interaction,
 async def default_deck(interaction: nextcord.Interaction,
                        deck_type: str = SlashOption(
                            name="deck_type",
-                           choices={"Gym": 'True', "Battle": 'False'},
+                           choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK, "Tower rush": config.TOWER_DECK},
                        ),
                        deck_number: str = SlashOption(
                            name="deck_number",
@@ -1167,11 +1167,12 @@ async def default_deck(interaction: nextcord.Interaction,
     Deal with default Zerpmon Deck
     """
     user = interaction.user
+    temp_mode = deck_type == 'gym_tower'
 
-    user_owned_nfts = {'data': db_query.get_owned(user.id), 'user': user.name}
+    user_owned_nfts = {'data':  db_query.get_temp_user(str(user.id)) if temp_mode else db_query.get_owned(user.id), 'user': user.name}
 
     # Sanity checks
-    if user.id in [i['id'] for i in config.battle_royale_participants] and deck_type == 'False':
+    if deck_type == 'battle_deck' and user.id in [i['id'] for i in config.battle_royale_participants]:
         await interaction.send(
             f"Sorry you can't change your deck while in the middle of a Battle Royale", ephemeral=True)
         return
@@ -1185,7 +1186,7 @@ async def default_deck(interaction: nextcord.Interaction,
     # await interaction.send(
     #     f"**Setting deck...**",
     #     ephemeral=True)
-    saved = db_query.set_default_deck(str(deck_number), user.id, gym=True if deck_type == 'True' else False)
+    saved = db_query.set_default_deck(str(deck_number), user_owned_nfts['data'], user.id, type_=deck_type)
     if saved:
         await interaction.send(
             f"**Success**",
@@ -4129,7 +4130,9 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
         await callback.setup_gym_tower(interaction, user_doc)
     else:
         if await checks.verify_gym_tower(interaction, user_temp_d):
-            pass
+            await interaction.edit_original_message(content='**Battle beginning**...')
+            await battle_function.proceed_gym_tower_battle(interaction, user_temp_d)
+
 
 # Gym Tower CMD
 

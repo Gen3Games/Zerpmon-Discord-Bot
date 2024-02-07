@@ -744,11 +744,10 @@ def clear_gym_deck(deck_no, user_id):
         return False
 
 
-def set_default_deck(deck_no, user_id, gym=False):
+def set_default_deck(deck_no, doc, user_id, type_: str):
     users_collection = db['users']
 
-    doc = users_collection.find_one({'discord_id': str(user_id)})
-    if gym:
+    if type_ == config.GYM_DECK:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "gym_deck" not in doc or doc["gym_deck"] == {} else doc[
             "gym_deck"]
         arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
@@ -758,7 +757,7 @@ def set_default_deck(deck_no, user_id, gym=False):
         # save the updated document
         r = users_collection.update_one({'discord_id': str(user_id)},
                                         {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck}})
-    else:
+    elif type_ == config.BATTLE_DECK:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
             doc["battle_deck"]
         arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
@@ -767,6 +766,15 @@ def set_default_deck(deck_no, user_id, gym=False):
         # save the updated document
         r = users_collection.update_one({'discord_id': str(user_id)},
                                         {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck}})
+    else:
+        users_collection = db['temp_user_data']
+        arr = doc["battle_deck"]
+        arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
+        eq_deck = doc['equipment_decks']
+        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
+        # save the updated document
+        r = users_collection.update_one({'discord_id': str(user_id)},
+                                        {"$set": {'battle_deck': arr, 'equipment_decks': eq_deck}})
 
     if r.acknowledged:
         return True
@@ -2297,3 +2305,19 @@ def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
         return True
     else:
         return False
+
+
+def reset_gym_tower(user_id):
+    users_collection = db['temp_user_data']
+    res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': {'fee_paid': False}})
+    return res.acknowledged
+
+
+def update_gym_tower(user_id, new_level):
+    users_collection = db['temp_user_data']
+    if new_level > 20:
+        q = {'tower_level': 1, 'fee_paid': False}
+    else:
+        q = {'tower_level': new_level}
+    res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
+    return res.acknowledged

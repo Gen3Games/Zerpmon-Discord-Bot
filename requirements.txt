@@ -6,3 +6,1067 @@ Pillow==10.2.0
 pymongo==4.3.3
 pytz==2022.1
 requests==2.31.0
+{
+  "_id": {
+    "$oid": "65c27cc1720469459fc484ea"
+  },
+  "discord_id": "1017889758313197658",
+  "address": "x",
+  "battle_deck": {
+    "0": {
+      "0": "0",
+      "1": "5",
+      "2": "6",
+      "3": "8",
+      "4": "9",
+      "trainer": "2"
+    },
+    "1": {},
+    "2": {},
+    "3": {},
+    "4": {}
+  },
+  "equipment_decks": {
+    "0": {
+      "0": "4",
+      "1": null,
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "1": {
+      "0": null,
+      "1": null,
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "2": {
+      "0": null,
+      "1": null,
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "3": {
+      "0": null,
+      "1": null,
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "4": {
+      "0": null,
+      "1": null,
+      "2": null,
+      "3": null,
+      "4": null
+    }
+  },
+  "equipments": [
+    {
+      "type": "Ice",
+      "name": "Tundra Ice",
+      "notes": [
+        "Increase opponent miss chance by 12.5%"
+      ]
+    },
+    {
+      "type": "Omni",
+      "name": "Longbow",
+      "notes": [
+        "Increases own crit chance by 15%",
+        "Decrease own miss chance by 12.5%"
+      ]
+    },
+    {
+      "type": "Fairy",
+      "name": "Fairy Dust",
+      "notes": [
+        "50% chance to pierce opponent's defenses white vs purple or white/gold vs blue"
+      ]
+    },
+    {
+      "type": "Omni",
+      "name": "Magic Blindfold",
+      "notes": [
+        "Upon missing - 70% chance to roll again"
+      ]
+    },
+    {
+      "type": "Ghost",
+      "name": "Old Key",
+      "notes": [
+        "Increase own purple moves by 2 stars"
+      ]
+    },
+    {
+      "type": "Electric",
+      "name": "Lightning Ring",
+      "notes": [
+        "35% chance for enemy Gold Attack to do 0 damage"
+      ]
+    },
+    {
+      "type": "Omni",
+      "name": "Power Glove",
+      "notes": [
+        "Increase own miss chance by 12.5%",
+        "Increase own damage by 70%"
+      ]
+    },
+    {
+      "type": "Omni",
+      "name": "Iron Shield",
+      "notes": [
+        "Reduce opponent damage by 17.5%",
+        "Increase own purple moves by 1 star"
+      ]
+    },
+    {
+      "type": "Dragon",
+      "name": "Dragon Amulet",
+      "notes": [
+        "Decrease own miss chance by 25%"
+      ]
+    },
+    {
+      "type": "Poison",
+      "name": "Toxic Vile",
+      "notes": [
+        "Reduce opponent damage by 35%"
+      ]
+    }
+  ],
+  "fee_paid": true,
+  "tower_level": 1,
+  "trainers": [
+    {
+      "nft_id": "00081388F3D76A09647C813D0363E6F820BB7C797D2EB7043C83A08D000004F2",
+      "image": "https://theshillverse.com/nft/img/punk/1225.png",
+      "name": "Shill Punk #1225",
+      "type": "Water"
+    },
+    {
+      "nft_id": "00081388F3D76A09647C813D0363E6F820BB7C797D2EB7044B2967A400000509",
+      "image": "https://theshillverse.com/nft/img/punk/1248.png",
+      "name": "Shill Punk #1248",
+      "type": "Undead"
+    },
+    {
+      "nft_id": "00081388F3D76A09647C813D0363E6F820BB7C797D2EB70440A3A582000004E7",
+      "image": "https://theshillverse.com/nft/img/punk/1214.png",
+      "name": "Shill Punk #1214",
+      "type": "Dragon"
+    },
+    {
+      "nft_id": "00081388F3D76A09647C813D0363E6F820BB7C797D2EB704344396A300000508",
+      "image": "https://theshillverse.com/nft/img/punk/1247.png",
+      "name": "Shill Punk #1247",
+      "type": "Fighting"
+    },
+    {
+      "nft_id": "00081388F3D76A09647C813D0363E6F820BB7C797D2EB704151DBBB80000051D",
+      "image": "https://theshillverse.com/nft/img/punk/1268.png",
+      "name": "Shill Punk #1268",
+      "type": "Dark"
+    },
+    {
+      "nft_id": "0008138805D83B701191193A067C4011056D3DEE2B298C559E6E73E50000004A",
+      "image": "ipfs://QmbpkmZEdRAUn8NTSd46RqMGuS6PnPa4jStgTMCUJyQvE5/46.png",
+      "name": "Butler Kevin",
+      "type": "Ghost"
+    },
+    {
+      "nft_id": "0008138805D83B701191193A067C4011056D3DEE2B298C552BF15EE000000045",
+      "image": "ipfs://QmbpkmZEdRAUn8NTSd46RqMGuS6PnPa4jStgTMCUJyQvE5/41.png",
+      "name": "Bird Watcher Nicole",
+      "type": "Flying"
+    },
+    {
+      "nft_id": "0008138805D83B701191193A067C4011056D3DEE2B298C559808B6B80000001D",
+      "image": "ipfs://QmbpkmZEdRAUn8NTSd46RqMGuS6PnPa4jStgTMCUJyQvE5/1.png",
+      "name": "Bug Collector Bea",
+      "type": "Bug"
+    },
+    {
+      "nft_id": "00081388F3D76A09647C813D0363E6F820BB7C797D2EB704922092DF00000544",
+      "image": "https://theshillverse.com/nft/img/punk/1307.png",
+      "name": "Shill Punk #1307",
+      "type": "Bug"
+    },
+    {
+      "nft_id": "0008138805D83B701191193A067C4011056D3DEE2B298C5529ABA6A80000000D",
+      "affinity": "Dark",
+      "image": "ipfs://QmULGrhj9SywbS8h7R4Lb1gf4oRsome8fw8J5MYqB18tRS/14.png",
+      "name": "Nariana",
+      "trainer number": "Trainer #14"
+    }
+  ],
+  "zerpmons": [
+    {
+      "number": "135",
+      "name": "Tidetail",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E1FFCBB7C000000E1",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #135"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Ghost"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Water"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Evo 2"
+        }
+      ],
+      "image": "ipfs://QmUfXXSPcJ7czC8vdF5QC6ZpuiLLgiemVLVU9V46dbgnXG/135.png",
+      "collection": "Canon",
+      "moves": [
+        {
+          "name": "Banshee Blast",
+          "dmg": 120,
+          "type": "Ghost",
+          "id": "#257",
+          "percent": 23.56,
+          "color": "white"
+        },
+        {
+          "name": "Tidal Wave",
+          "dmg": 80,
+          "type": "Water",
+          "id": "#55",
+          "percent": 19.56,
+          "color": "white"
+        },
+        {
+          "name": "Night Terror",
+          "dmg": 70,
+          "type": "Ghost",
+          "id": "#261",
+          "percent": 8.56,
+          "color": "gold"
+        },
+        {
+          "name": "Drenching Downpour",
+          "dmg": 85,
+          "type": "Water",
+          "id": "#64",
+          "percent": 7.56,
+          "color": "gold"
+        },
+        {
+          "name": "Phantom Scream",
+          "stars": "*",
+          "id": "#263",
+          "percent": 10.56,
+          "color": "purple"
+        },
+        {
+          "name": "Ghostly Possession",
+          "stars": "****",
+          "id": "#266",
+          "percent": 11.56,
+          "color": "purple"
+        },
+        {
+          "name": "Protect",
+          "id": "#377",
+          "percent": 12,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 18.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Tidetail"
+    },
+    {
+      "name": "Necrogon",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E549B96DA048F1E3F",
+      "number": "890",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #890"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Dragon"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Undead"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Legendary"
+        }
+      ],
+      "image": "ipfs://QmSTLWe2yW3a3DjxDzLuRuG7eui3YgDCSkLc5ECK2zXjmm/890.png",
+      "moves": [
+        {
+          "name": "Undead Apocalypse",
+          "dmg": 120,
+          "type": "Undead",
+          "id": "#366",
+          "percent": 20.56,
+          "color": "white"
+        },
+        {
+          "name": "Obliterating Breath",
+          "dmg": 120,
+          "type": "Dragon",
+          "id": "#275",
+          "percent": 17.56,
+          "color": "white"
+        },
+        {
+          "name": "Dimensional Shredder",
+          "dmg": 85,
+          "type": "Dragon",
+          "id": "#280",
+          "percent": 10.56,
+          "color": "gold"
+        },
+        {
+          "name": "Deathly Dismemberment",
+          "dmg": 85,
+          "type": "Undead",
+          "id": "#370",
+          "percent": 12.56,
+          "color": "gold"
+        },
+        {
+          "name": "Eternal Graveyard",
+          "stars": "*****",
+          "id": "#472",
+          "percent": 10.56,
+          "color": "purple"
+        },
+        {
+          "name": "Counter Attack",
+          "stars": "***",
+          "id": "#449",
+          "percent": 10.56,
+          "color": "purple"
+        },
+        {
+          "name": "Block",
+          "id": "#394",
+          "percent": 15,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 17.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Necrogon"
+    },
+    {
+      "name": "Geoday",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E164DD050000001B5",
+      "number": "362",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #362"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Rock"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Steel"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Evo 1"
+        }
+      ],
+      "image": "ipfs://QmWKCwSxmhNSEgMFGeRCmkrUVSRvwuCiPsCgcgtWzQCBya/362.png",
+      "moves": [
+        {
+          "name": "Zen Headbutt",
+          "dmg": 80,
+          "type": "Psychic",
+          "id": "#200",
+          "percent": 14.56,
+          "color": "white"
+        },
+        {
+          "name": "Meteor Rush",
+          "dmg": 120,
+          "type": "Rock",
+          "id": "#239",
+          "percent": 13.56,
+          "color": "white"
+        },
+        {
+          "name": "Geode Grenade",
+          "dmg": 85,
+          "type": "Rock",
+          "id": "#244",
+          "percent": 13.56,
+          "color": "gold"
+        },
+        {
+          "name": "Steel Swipe",
+          "dmg": 55,
+          "type": "Steel",
+          "id": "#314",
+          "percent": 6.56,
+          "color": "gold"
+        },
+        {
+          "name": "Metallic Harden",
+          "stars": "***",
+          "id": "#319",
+          "percent": 13.56,
+          "color": "purple"
+        },
+        {
+          "name": "Awaken",
+          "stars": "****",
+          "id": "#447",
+          "percent": 9.56,
+          "color": "purple"
+        },
+        {
+          "name": "Protect",
+          "id": "#377",
+          "percent": 11,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 28.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Geoday"
+    },
+    {
+      "name": "Dredge",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E14DEEF0E00000273",
+      "number": "482",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #482"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Bug"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Fire"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Base"
+        }
+      ],
+      "image": "ipfs://QmZqtCrfy37LWMb6wBNcXZeBPcAAT4bZiKhcw1kp2TqLzo/482.png",
+      "total": 2,
+      "winrate": 0,
+      "moves": [
+        {
+          "name": "Power Dig",
+          "dmg": 50,
+          "type": "Ground",
+          "id": "#161",
+          "percent": 11.56,
+          "color": "white"
+        },
+        {
+          "name": "Spine Strike",
+          "dmg": 50,
+          "type": "Bug",
+          "id": "#215",
+          "percent": 10.56,
+          "color": "white"
+        },
+        {
+          "name": "Chrysalid Charge",
+          "dmg": 70,
+          "type": "Bug",
+          "id": "#225",
+          "percent": 20.56,
+          "color": "gold"
+        },
+        {
+          "name": "Searing Strike",
+          "dmg": 55,
+          "type": "Fire",
+          "id": "#44",
+          "percent": 9.56,
+          "color": "gold"
+        },
+        {
+          "name": "Rapid Evolution",
+          "stars": "****",
+          "id": "#464",
+          "percent": 24.56,
+          "color": "purple"
+        },
+        {
+          "name": "Metamorphosis Madness",
+          "stars": "***",
+          "id": "#229",
+          "percent": 15.56,
+          "color": "purple"
+        },
+        {
+          "name": "Protect",
+          "id": "#377",
+          "percent": 11,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 7.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Dredge"
+    },
+    {
+      "number": "122",
+      "name": "Aype",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E1DB70344000000A9",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #122"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Dark"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Fighting"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Base"
+        }
+      ],
+      "image": "ipfs://QmeMkuupq86qXbQFzfcmnrCXs4NM797cHVK7GL8YvTjVE9/122.png",
+      "collection": "Canon",
+      "total": 6,
+      "winrate": 16.666666666666668,
+      "moves": [
+        {
+          "name": "Submission Slam",
+          "dmg": 120,
+          "type": "Fighting",
+          "id": "#132",
+          "percent": 21.56,
+          "color": "white"
+        },
+        {
+          "name": "Fatal Sneak Attack",
+          "dmg": 125,
+          "type": "Fighting",
+          "id": "#395",
+          "percent": 20.56,
+          "color": "white"
+        },
+        {
+          "name": "Umbral Uppercut",
+          "dmg": 40,
+          "type": "Dark",
+          "id": "#295",
+          "percent": 9.56,
+          "color": "gold"
+        },
+        {
+          "name": "Face Punch",
+          "dmg": 75,
+          "type": "Normal",
+          "id": "#488",
+          "percent": 12.56,
+          "color": "gold"
+        },
+        {
+          "name": "Spirit Boost",
+          "stars": "*",
+          "id": "#137",
+          "percent": 14.56,
+          "color": "purple"
+        },
+        {
+          "name": "Frighten",
+          "stars": "*",
+          "id": "#299",
+          "percent": 13.56,
+          "color": "purple"
+        },
+        {
+          "name": "Protect",
+          "id": "#377",
+          "percent": 21,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 7.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Aype"
+    },
+    {
+      "name": "Rock Titan",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E1195C10F00000374",
+      "number": "200053",
+      "attributes": [
+        {
+          "trait_type": "Type",
+          "value": "Rock"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Titan"
+        }
+      ],
+      "image": "ipfs://QmcxpECCofNDimXEAVzRLumHd2YbzuGwu8RVJGLHN5qE5U/200053.png",
+      "moves": [
+        {
+          "name": "Marble Minigun",
+          "dmg": 200,
+          "type": "Rock",
+          "id": "#535",
+          "percent": 27.56,
+          "color": "white"
+        },
+        {
+          "name": "Obsidian Obliteration",
+          "dmg": 120,
+          "type": "Rock",
+          "id": "#240",
+          "percent": 11.56,
+          "color": "white"
+        },
+        {
+          "name": "Geode Grenade",
+          "dmg": 85,
+          "type": "Rock",
+          "id": "#244",
+          "percent": 8.56,
+          "color": "gold"
+        },
+        {
+          "name": "Bedrock Blast",
+          "dmg": 70,
+          "type": "Rock",
+          "id": "#243",
+          "percent": 7.56,
+          "color": "gold"
+        },
+        {
+          "name": "Rock Shield",
+          "stars": "**",
+          "id": "#246",
+          "percent": 3.56,
+          "color": "purple"
+        },
+        {
+          "name": "Gravel Grind",
+          "stars": "*",
+          "id": "#245",
+          "percent": 4.56,
+          "color": "purple"
+        },
+        {
+          "name": "Block",
+          "id": "#394",
+          "percent": 24,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 36.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Rock Titan"
+    },
+    {
+      "number": "77",
+      "name": "Glorby",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E1F91500100000066",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #77"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Psychic"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Water"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Evo 1"
+        }
+      ],
+      "image": "ipfs://QmfQszke2ZDPngphoMR4E587KBwzTUUtprGtUStUjuU989/77.png",
+      "collection": "Canon",
+      "total": 1,
+      "winrate": 0,
+      "moves": [
+        {
+          "name": "Zen Headbutt",
+          "dmg": 80,
+          "type": "Psychic",
+          "id": "#200",
+          "percent": 15.56,
+          "color": "white"
+        },
+        {
+          "name": "Hydro Cannon",
+          "dmg": 80,
+          "type": "Water",
+          "id": "#56",
+          "percent": 13.56,
+          "color": "white"
+        },
+        {
+          "name": "Drenching Downpour",
+          "dmg": 85,
+          "type": "Water",
+          "id": "#64",
+          "percent": 12.56,
+          "color": "gold"
+        },
+        {
+          "name": "Bedrock Blast",
+          "dmg": 70,
+          "type": "Rock",
+          "id": "#243",
+          "percent": 9.56,
+          "color": "gold"
+        },
+        {
+          "name": "Mind Control",
+          "stars": "***",
+          "id": "#211",
+          "percent": 12.56,
+          "color": "purple"
+        },
+        {
+          "name": "Oceanic Domain",
+          "stars": "*****",
+          "id": "#455",
+          "percent": 12.56,
+          "color": "purple"
+        },
+        {
+          "name": "Protect",
+          "id": "#377",
+          "percent": 11,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 23.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Glorby"
+    },
+    {
+      "number": "24",
+      "name": "Burnjaw",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E61FD0ACC00000031",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #24"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Fire"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Poison"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Evo 1"
+        }
+      ],
+      "image": "ipfs://QmVaxPZuJpk5xvmgN6A3xYZVUzVFmC23sTank1JM7qdCYW/24.png",
+      "collection": "Canon",
+      "total": 1,
+      "winrate": 100,
+      "moves": [
+        {
+          "name": "Magma Blast",
+          "dmg": 80,
+          "type": "Fire",
+          "id": "#38",
+          "percent": 13.56,
+          "color": "white"
+        },
+        {
+          "name": "Tremor Shake",
+          "dmg": 70,
+          "type": "Ground",
+          "id": "#171",
+          "percent": 14.56,
+          "color": "white"
+        },
+        {
+          "name": "Noxious Eruption",
+          "dmg": 85,
+          "type": "Poison",
+          "id": "#154",
+          "percent": 23.56,
+          "color": "gold"
+        },
+        {
+          "name": "Flame Whirlwind",
+          "dmg": 70,
+          "type": "Fire",
+          "id": "#45",
+          "percent": 15.56,
+          "color": "gold"
+        },
+        {
+          "name": "Molten Maelstrom",
+          "stars": "***",
+          "id": "#49",
+          "percent": 8.56,
+          "color": "purple"
+        },
+        {
+          "name": "Burn Up",
+          "stars": "**",
+          "id": "#48",
+          "percent": 6.56,
+          "color": "purple"
+        },
+        {
+          "name": "Detect",
+          "id": "#390",
+          "percent": 21,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 17.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Burnjaw"
+    },
+    {
+      "name": "Botosaur",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E90DE506E000003D3",
+      "number": "725",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #725"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Steel"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Undead"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Base"
+        }
+      ],
+      "image": "ipfs://QmWbwcVnbHx5w8oQWcLsig9WrrGdKQtRhxKePpxumZhxq8/725.png",
+      "moves": [
+        {
+          "name": "Undead Wail",
+          "dmg": 50,
+          "type": "Undead",
+          "id": "#359",
+          "percent": 13.56,
+          "color": "white"
+        },
+        {
+          "name": "Metal Crush",
+          "dmg": 50,
+          "type": "Steel",
+          "id": "#305",
+          "percent": 12.56,
+          "color": "white"
+        },
+        {
+          "name": "Steel Swipe",
+          "dmg": 55,
+          "type": "Steel",
+          "id": "#314",
+          "percent": 14.56,
+          "color": "gold"
+        },
+        {
+          "name": "Alloy Attack",
+          "dmg": 40,
+          "type": "Steel",
+          "id": "#313",
+          "percent": 13.56,
+          "color": "gold"
+        },
+        {
+          "name": "Metallic Harden",
+          "stars": "***",
+          "id": "#319",
+          "percent": 13.56,
+          "color": "purple"
+        },
+        {
+          "name": "Eternal Graveyard",
+          "stars": "*****",
+          "id": "#472",
+          "percent": 14.56,
+          "color": "purple"
+        },
+        {
+          "name": "Withdraw",
+          "id": "#379",
+          "percent": 15,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 17.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Botosaur"
+    },
+    {
+      "name": "Psydoll",
+      "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7EDB1EA9A80000030D",
+      "number": "623",
+      "attributes": [
+        {
+          "trait_type": "Zerpdex Number",
+          "value": "Zerpmon #623"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Poison"
+        },
+        {
+          "trait_type": "Type",
+          "value": "Psychic"
+        },
+        {
+          "trait_type": "Evolution Stage",
+          "value": "Base"
+        }
+      ],
+      "image": "ipfs://QmTNEeLAyKfD5WjoLGMTwS3D1ZuudkHL47BZK8WegqCE4v/623.png",
+      "moves": [
+        {
+          "name": "Venom Nova",
+          "dmg": 125,
+          "type": "Poison",
+          "id": "#403",
+          "percent": 12.56,
+          "color": "white"
+        },
+        {
+          "name": "Brain Torment",
+          "dmg": 80,
+          "type": "Psychic",
+          "id": "#427",
+          "percent": 11.56,
+          "color": "white"
+        },
+        {
+          "name": "Aura Sphere Blast",
+          "dmg": 70,
+          "type": "Psychic",
+          "id": "#207",
+          "percent": 18.56,
+          "color": "gold"
+        },
+        {
+          "name": "Solar Storm",
+          "dmg": 70,
+          "type": "Cosmic",
+          "id": "#351",
+          "percent": 16.56,
+          "color": "gold"
+        },
+        {
+          "name": "Disarm",
+          "stars": "*****",
+          "id": "#441",
+          "percent": 10.56,
+          "color": "purple"
+        },
+        {
+          "name": "Blinding Light",
+          "stars": "**",
+          "id": "#451",
+          "percent": 11.56,
+          "color": "purple"
+        },
+        {
+          "name": "Protect",
+          "id": "#377",
+          "percent": 10,
+          "color": "blue"
+        },
+        {
+          "name": "Miss",
+          "id": "#1",
+          "percent": 18.66,
+          "color": "miss"
+        }
+      ],
+      "level": 30,
+      "name2": "Psydoll"
+    }
+  ]
+}

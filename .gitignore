@@ -13,3 +13,4 @@ static/safari
 static/rank_images
 .idea
 test.json
+config_extra.py

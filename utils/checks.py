@@ -523,6 +523,6 @@ async def verify_gym_tower(i: nextcord.Interaction, temp_user_d):
         z = len(battle_d) - 1 if has_trainer else len(battle_d)
         await i.edit_original_message(
             content=f"Please create a compatible **deck** (Your current Gym Tower deck has **{z}** Zerpmon and **{1 if has_trainer else 0}** Trainer)\n"
-                    f"`/add gym_tower_deck`")
+                    f"`/add battle_deck deck_type: Tower rush`")
         return False
     return True

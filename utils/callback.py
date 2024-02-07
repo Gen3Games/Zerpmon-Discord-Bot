@@ -2050,5 +2050,5 @@ async def setup_gym_tower(interaction: nextcord.Interaction, user_d):
         await interaction.edit_original_message(
             content=f"**Allotted these Zerpmon and Equipment**\n"
                     f"Note: Please create a **deck of your own choosing** to be able to battle against Gym Tower leaders using"
-                    f"`/add battle_deck deck_type: Tower Rush`", embeds=[embed2],
+                    f"\n`/add battle_deck deck_type: Tower Rush`", embeds=[embed2],
             view=View())
