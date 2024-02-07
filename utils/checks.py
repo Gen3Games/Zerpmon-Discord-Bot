@@ -116,12 +116,15 @@ async def check_wager_entry(interaction: nextcord.Interaction, users):
 
 
 def get_deck_embed(deck_type, owned_nfts):
-    embed2 = CustomEmbed(title=f"**{deck_type.upper()}** Decks",
+    title = deck_type.replace('_', ' ').title()
+    embed2 = CustomEmbed(title=f"**{title}** Decks",
                          color=0xff5252,
                          )
+    temp_mode = deck_type == config.TOWER_DECK
     embed2.add_field(name='\u200b', value='\u200B', inline=False)
-    eqs = owned_nfts['equipment_decks'][f'{deck_type}_deck']
-    for k, v in owned_nfts[f'{deck_type}_deck'].items():
+    eqs = owned_nfts['equipment_decks'][f'{deck_type}_deck'] if not temp_mode else owned_nfts['equipment_decks']
+    deck_key = f'{deck_type}_deck' if not temp_mode else 'battle_deck'
+    for k, v in owned_nfts[deck_key].items():
         print(v)
         found = True
         nfts = {}
@@ -130,16 +133,16 @@ def get_deck_embed(deck_type, owned_nfts):
                          inline=False)
         # embed2.add_field(name='\u200b', value='\u200B', inline=False)
         new_v = v
-        if 'trainer' in v and v['trainer'] != "" and v['trainer']:
-            nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']]
+        if 'trainer' in v and v['trainer']:
+            nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']] if not temp_mode else owned_nfts['trainers'][int(v['trainer'])]
             del new_v['trainer']
         for pos, sr in new_v.items():
             if sr:
-                nfts[str(pos)] = owned_nfts['zerpmons'][sr]
+                nfts[str(pos)] = owned_nfts['zerpmons'][sr if not temp_mode else int(sr)]
 
         if len(nfts) == 0:
             embed2.add_field(
-                name=f"Sorry looks like you haven't selected any Zerpmon for {deck_type.title()} deck #{int(k) + 1}",
+                name=f"Sorry looks like you haven't selected any Zerpmon for {title} deck #{int(k) + 1}",
                 value='\u200B',
                 inline=False)
 
@@ -155,21 +158,23 @@ def get_deck_embed(deck_type, owned_nfts):
                 print(serial)
                 if serial == 'trainer':
                     trainer = nft
-                    my_button = f"https://xrp.cafe/nft/{trainer['token_id']}"
+                    my_button = f"https://xrp.cafe/nft/{trainer['token_id' if not temp_mode else 'nft_id']}"
                     emj = '🧙'
-                    for attr in trainer['attributes']:
-                        if 'Trainer Number' in attr['trait_type']:
-                            emj = '⭐'
-                            break
-                        if attr['value'] == 'Legendary':
-                            emj = '🌟'
-                            break
+                    if temp_mode:
+                        emj = ''
+                    else:
+                        for attr in trainer['attributes']:
+                            if 'Trainer Number' in attr['trait_type']:
+                                emj = '⭐'
+                                break
+                            if attr['value'] == 'Legendary':
+                                emj = '🌟'
+                                break
                     msg_str = f"> **Main Trainer**:\n" \
                               f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
                               f"> \n" + msg_str
                 else:
-                    eq_name = owned_nfts['equipments'][eqs[k][serial]]['name'] if eqs[k][serial] in owned_nfts[
-                        'equipments'] else None
+                    eq_name = owned_nfts['equipments'][int(eqs[k][serial])]['name'] if (eqs[k][serial] and int(eqs[k][serial]) < 10) else None
                     msg_str += f'> #{int(serial) + 1} ⭐ {nft["name"]} ⭐ {" - " + eq_name if eq_name is not None else ""}\n'
             embed2.add_field(name='\u200B', value=msg_str, inline=False)
             embed2.add_field(name='\u200b', value='\u200B', inline=False)

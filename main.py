@@ -4134,6 +4134,22 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
             await battle_function.proceed_gym_tower_battle(interaction, user_temp_d)
 
 
+@gym_tower.subcommand(name='deck', description="Show Gym tower specific decks.")
+async def gym_tower_battle(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    owned_nfts = db_query.get_temp_user(str(interaction.user.id))
+    # print([(k, v) for k, v in owned_nfts['zerpmons'].items()])
+    if owned_nfts is None:
+        await interaction.edit_original_message(content=f"Sorry no decks found")
+        return
+    found = False if len(owned_nfts['battle_deck']['0']) == 0 else True
+    embed = checks.get_deck_embed(config.TOWER_DECK, owned_nfts)
+
+    await interaction.edit_original_message(
+        content="FOUND" if found else "No deck found try to use `/add battle_deck deck_type: Tower rush`"
+        , embed=embed, )
+
 # Gym Tower CMD
 
 # Reaction Tracker
