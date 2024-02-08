@@ -13,6 +13,7 @@ from nextcord import ButtonStyle
 from nextcord.ui import Button, View
 
 import config
+import config_extra
 import db_query
 import xrpl_functions
 import xumm_functions
@@ -754,9 +755,9 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
                                 offerId='',
                                 token_id='', fee=False, loan=False, ascend=False, recycle_fee=False):
     # Sanity checks
-    if _i.user.id in config.ADMINS:
-        return user_owned_nfts['address'], True
-        amount = round(amount / 100, 2)
+    # if _i.user.id in config.ADMINS:
+    #     return user_owned_nfts['address'], True
+    #     amount = round(amount / 100, 2)
     if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
@@ -2016,39 +2017,58 @@ async def ascend_callback(interaction: nextcord.Interaction, user_d, zerp_d, pay
 """Gym tower rush"""
 
 
-async def setup_gym_tower(interaction: nextcord.Interaction, user_d):
-    zrp_price = await xrpl_functions.get_zrp_price_api()
-    zrp_amt = round(5 / zrp_price, 2)
-    await interaction.edit_original_message(
-        content=f"**Note**, You'll need to pay an entry ticket fee of `{zrp_amt} ZRP` to play and earn rewards!", embeds=[],
-        view=View())
-    await asyncio.sleep(5)
-    addr, success = await zrp_purchase_callback(user_d, interaction, amount=zrp_amt, item='Gym Tower Rush ticket fee', fee=True)
-
+async def setup_gym_tower(interaction: nextcord.Interaction, user_d, reset=False):
+    if not reset:
+        zrp_price = await xrpl_functions.get_zrp_price_api()
+        zrp_amt = round(5 / zrp_price, 2)
+        await interaction.edit_original_message(
+            content=f"**Note**, You'll need to pay an entry ticket fee of `{zrp_amt} ZRP` to play and earn rewards!", embeds=[],
+            view=View())
+        await asyncio.sleep(5)
+        addr, success = await zrp_purchase_callback(user_d, interaction, amount=zrp_amt, item='Gym Tower Rush ticket fee', fee=True)
+    else:
+        success = True
     if success:
-        user_obj = db_query.add_temp_user(user_d['discord_id'], user_d['address'])
+        user_obj = db_query.add_temp_user(user_d['discord_id'], user_d['address'], is_reset=reset)
+        type_map = config.TYPE_MAPPING if interaction.guild.id != config.MAIN_GUILD[0] else config_extra.O_TYPE_MAPPING
+        embed = CustomEmbed(
+            title=f"**TRAINERS**:\n",
+            color=0xff5200,
+        )
+        for idx, nft in enumerate(user_obj.get('trainers')):
+            my_button = f"https://xrp.cafe/nft/{nft['nft_id']}"
+            nft_type = nft['type'] if 'type' in nft else nft['affinity']
+            embed.add_field(
+                name=f"#{idx+1}  **{nft['name']}** ({nft_type})",
+                value=f'> {type_map[nft_type]}\n'
+                      f'> [view]({my_button})', inline=False)
         embed2 = CustomEmbed(
             title=f"**ZERPMON**:\n",
             color=0xff5252,
         )
         for idx, nft in enumerate(user_obj.get('zerpmons')):
             my_button = f"https://xrp.cafe/nft/{nft['nft_id']}"
-            nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] in ['Type', 'Affinity']])
+            types = [i['value'] for i in nft['attributes'] if i['trait_type'] in ['Type', 'Affinity']]
+            nft_type = ', '.join(types)
             embed2.add_field(
                 name=f"#{idx+1}  **{nft['name']}** ({nft_type})",
-                value=f'> Level: **{nft.get("level", 0)}**\n'
+                value=f"> {', '.join([type_map[i] for i in types])}\n"
+                      f'> Level: **{nft.get("level", 0)}**\n'
                       f'> [view]({my_button})', inline=False)
         embed2.add_field(
-            name=f"**EQUIPMENTS**",
+            name=f"\u200B",
+            value=f'\u200B', inline=False)
+        embed2.add_field(
+            name=f"**EQUIPMENT**:",
             value=f'\u200B', inline=False)
 
         for idx, nft in enumerate(user_obj.get('equipments')):
             nft_type = nft['type']
             embed2.add_field(
                 name=f"#{idx+1}  **{nft['name']}** ({nft_type})",
-                value=f'> {config.TYPE_MAPPING[nft_type]}\n', inline=False)
+                value=f'> {type_map[nft_type]}\n', inline=False)
         await interaction.edit_original_message(
             content=f"**Allotted these Zerpmon and Equipment**\n"
                     f"Note: Please create a **deck of your own choosing** to be able to battle against Gym Tower leaders using"
-                    f"\n`/add battle_deck deck_type: Tower Rush`", embeds=[embed2],
+                    f"\n`/add battle_deck deck_type: Tower Rush`", embeds=[embed, embed2],
             view=View())

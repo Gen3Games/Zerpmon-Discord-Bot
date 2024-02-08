@@ -8,6 +8,7 @@ import pymongo
 import pytz
 from pymongo import MongoClient, ReturnDocument, DESCENDING, UpdateOne
 import config
+import config_extra
 
 client = MongoClient(config.MONGO_URL)
 db = client['Zerpmon']
@@ -65,7 +66,7 @@ def update_user_decks(address, discord_id, serials, t_serial):
 
     mission_trainer = user_obj["mission_trainer"] if 'mission_trainer' in user_obj else ""
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
-    battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {}
+    battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}}
     gym_deck = user_obj["gym_deck"] if 'gym_deck' in user_obj else {}
 
     new_mission_deck = {i: None for i in range(20)}
@@ -74,7 +75,8 @@ def update_user_decks(address, discord_id, serials, t_serial):
             new_mission_deck[k] = v
     if mission_trainer not in t_serial:
         mission_trainer = ""
-    new_battle_deck = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}}
+    new_battle_deck = {k: {} for k, v in battle_deck.items()}
+
     for k, v in battle_deck.items():
         for serial in v:
             if serial == "trainer":
@@ -2264,7 +2266,7 @@ def get_temp_user(user_id: str):
     return temp_users_col.find_one({'discord_id': user_id})
 
 
-def add_temp_user(user_id: str, user_addr: str, fee_paid=True):
+def add_temp_user(user_id: str, user_addr: str, fee_paid=True, is_reset=False):
     temp_users_col = db['temp_user_data']
 
     eq_deck = {}
@@ -2275,10 +2277,13 @@ def add_temp_user(user_id: str, user_addr: str, fee_paid=True):
                 'zerpmons': get_random_doc_with_type(limit=10, level=30),
                 'equipments': random.sample(get_all_eqs(), 10),
                 'trainers': get_random_trainers(10),
-                "battle_deck": {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}},
+                "battle_deck": {'0': {}},
                 "equipment_decks": eq_deck,
                 'tower_level': 1,
+                'reset': False,
                 }
+    if is_reset:
+        del user_doc['tower_level']
     temp_users_col.update_one({'discord_id': user_id},
                               {'$set': user_doc, }, upsert=True
                               )
@@ -2291,14 +2296,12 @@ def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
     doc = users_collection.find_one({'discord_id': str(user_id)})
 
     # add the element to the array
-    arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
+    arr = {'0': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
         doc["battle_deck"]
-    if deck_no not in arr:
-        arr[deck_no] = {}
 
-    arr[deck_no] = new_deck
+    arr['0'] = new_deck
     r = users_collection.update_one({'discord_id': str(user_id)},
-                                    {"$set": {f'equipment_decks.{deck_no}': eqs,
+                                    {"$set": {f'equipment_decks.0': eqs,
                                               'battle_deck': arr}})
 
     if r.acknowledged:
@@ -2307,9 +2310,9 @@ def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
         return False
 
 
-def reset_gym_tower(user_id):
+def reset_gym_tower(user_id, zrp_earned=0):
     users_collection = db['temp_user_data']
-    res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': {'fee_paid': False}})
+    res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': {'fee_paid': False}, '$inc': {'total_zrp_earned': zrp_earned}})
     return res.acknowledged
 
 
@@ -2318,6 +2321,6 @@ def update_gym_tower(user_id, new_level):
     if new_level > 20:
         q = {'tower_level': 1, 'fee_paid': False}
     else:
-        q = {'tower_level': new_level}
+        q = {'tower_level': new_level, 'reset': True}
     res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
     return res.acknowledged

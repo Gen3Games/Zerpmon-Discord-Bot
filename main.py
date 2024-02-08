@@ -15,6 +15,8 @@ from nextcord import SlashOption, ButtonStyle
 from nextcord.ui import Button, View
 import config
 from nextcord.ext import commands, tasks
+
+import config_extra
 import xumm_functions
 import xrpl_functions
 import db_query
@@ -185,6 +187,15 @@ async def on_ready():
     boss_channel = None
     for guild in client.guilds:
         if guild.id == config.MAIN_GUILD[0]:
+            print(guild.emojis)
+            for emoji in guild.emojis:
+                try:
+                    name = emoji.name[1:].title()
+                    config_extra.O_TYPE_MAPPING[name] = f'<:{emoji.name}:{emoji.id}>'
+                except:
+                    pass
+            config_extra.O_TYPE_MAPPING['Dragonling'] = config_extra.O_TYPE_MAPPING['Dragon']
+            print(config_extra.O_TYPE_MAPPING)
             for i in range(3):
                 try:
                     if zerpmon_players == 0:
@@ -1070,12 +1081,11 @@ async def battle_deck(interaction: nextcord.Interaction,
         fail_msg = ''
         deck_copy = new_deck.copy()
         user1_z = []
-        i = 0
         try:
             del deck_copy['trainer']
         except:
             pass
-        while len(user1_z) != len(deck_copy):
+        for i in range(5):
             try:
                 zerp = user_obj['zerpmons'][deck_copy[str(i)]] if not temp_mode else user_obj['zerpmons'][int(deck_copy[str(i)])]
                 zerp_obj = db_query.get_zerpmon(zerp['name']) if not temp_mode else zerp
@@ -1155,7 +1165,7 @@ async def battle_deck(interaction: nextcord.Interaction,
 async def default_deck(interaction: nextcord.Interaction,
                        deck_type: str = SlashOption(
                            name="deck_type",
-                           choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK, "Tower rush": config.TOWER_DECK},
+                           choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK},
                        ),
                        deck_number: str = SlashOption(
                            name="deck_number",
@@ -4103,6 +4113,50 @@ async def reverify(interaction: nextcord.Interaction):
                                                               color=0x000))
 
 
+@client.slash_command(name="reverify",
+                      description="Reverify your Wallet")
+async def reverify(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    if not await verify_cooldown('refresh', interaction, 300):
+        return
+    user_doc = db_query.get_owned(interaction.user.id)
+    # Sanity checks
+    if user_doc is None:
+        await interaction.edit_original_message(
+            content=f"Sorry, you haven't verified your wallet yet, \n Please use `/wallet` to verify your wallet.", )
+        return
+    await interaction.edit_original_message(content=f"Generating a QR code")
+
+    uuid, url, href = await xumm_functions.gen_signIn_url()
+    embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this QR code or click here.",
+                        url=href)
+
+    embed.set_image(url=url)
+
+    msg = await interaction.edit_original_message(embed=embed)
+    for i in range(120):
+        logged_in, address = await xumm_functions.check_sign_in(uuid)
+
+        if logged_in:
+            # Proceed
+            await interaction.edit_original_message(content=f"**Signed in successfully!**")
+            old_addr = user_doc.get('address')
+            user_doc['address'] = address
+            success = await refresh_fn.refresh_nfts(interaction, user_doc, old_address=old_addr)
+            if success:
+                await interaction.edit_original_message(
+                    content=f"**Success**", embeds=[])
+            else:
+                await interaction.edit_original_message(
+                    content=f"**Failed**, please try again after some time", embeds=[])
+            return
+
+    await interaction.edit_original_message(content='',
+                                            embed=CustomEmbed(title="QR code **expired** please generate a new one.",
+                                                              color=0x000))
+
+
 # Refresh CMD
 
 # Gym Tower CMD
@@ -4126,8 +4180,8 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
     if user_doc is None:
         await interaction.send('Wallet not verified yet, starting verification...', ephemeral=True)
         await wallet(interaction)
-    elif user_temp_d is None or not user_temp_d.get('fee_paid', False):
-        await callback.setup_gym_tower(interaction, user_doc)
+    elif user_temp_d is None or user_temp_d.get('reset', False) or not user_temp_d.get('fee_paid', False):
+        await callback.setup_gym_tower(interaction, user_doc, reset=False if not user_temp_d else user_temp_d.get('reset', False))
     else:
         if await checks.verify_gym_tower(interaction, user_temp_d):
             await interaction.edit_original_message(content='**Battle beginning**...')
@@ -4149,6 +4203,36 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
     await interaction.edit_original_message(
         content="FOUND" if found else "No deck found try to use `/add battle_deck deck_type: Tower rush`"
         , embed=embed, )
+
+
+@gym_tower.subcommand(name='dashboard', description="Show Gym tower dashboard.")
+async def gym_tower_battle(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    owned_nfts = db_query.get_temp_user(str(interaction.user.id))
+    # print([(k, v) for k, v in owned_nfts['zerpmons'].items()])
+    if owned_nfts is None:
+        await interaction.edit_original_message(content=f"Sorry you haven't played Gym tower rush yet")
+        return
+    if not owned_nfts['fee_paid']:
+        await interaction.edit_original_message(content=f"Sorry you don't seem to be participating in Gym tower rush")
+        return
+    embed = CustomEmbed(
+            title=f"**Gym tower rush** dashboard:\n",
+            color=0xa2a8d3,
+        )
+    lvl = owned_nfts['tower_level']
+    embed.add_field(
+        name=f"**Level**",
+        value=f"{owned_nfts['tower_level']}", inline=False)
+    embed.add_field(
+        name=f"**Next Level Reward**",
+        value=f"`{config_extra.tower_reward[lvl + 1]}` ZRP", inline=False)
+
+    embed.add_field(
+        name=f"**Total ZRP earned**",
+        value=f"`{owned_nfts.get('total_zrp_earned', 0)}` ZRP", inline=False)
+    await interaction.edit_original_message(embed=embed, )
 
 # Gym Tower CMD
 

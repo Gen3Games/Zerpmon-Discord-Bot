@@ -117,10 +117,10 @@ async def check_wager_entry(interaction: nextcord.Interaction, users):
 
 def get_deck_embed(deck_type, owned_nfts):
     title = deck_type.replace('_', ' ').title()
-    embed2 = CustomEmbed(title=f"**{title}** Decks",
+    temp_mode = deck_type == config.TOWER_DECK
+    embed2 = CustomEmbed(title=f"**{title}** {'Deck' if temp_mode else 'Decks'}",
                          color=0xff5252,
                          )
-    temp_mode = deck_type == config.TOWER_DECK
     embed2.add_field(name='\u200b', value='\u200B', inline=False)
     eqs = owned_nfts['equipment_decks'][f'{deck_type}_deck'] if not temp_mode else owned_nfts['equipment_decks']
     deck_key = f'{deck_type}_deck' if not temp_mode else 'battle_deck'
@@ -136,9 +136,10 @@ def get_deck_embed(deck_type, owned_nfts):
         if 'trainer' in v and v['trainer']:
             nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']] if not temp_mode else owned_nfts['trainers'][int(v['trainer'])]
             del new_v['trainer']
-        for pos, sr in new_v.items():
+        for i in range(5):
+            sr = new_v[str(i)]
             if sr:
-                nfts[str(pos)] = owned_nfts['zerpmons'][sr if not temp_mode else int(sr)]
+                nfts[str(i)] = owned_nfts['zerpmons'][sr if not temp_mode else int(sr)]
 
         if len(nfts) == 0:
             embed2.add_field(
@@ -528,6 +529,6 @@ async def verify_gym_tower(i: nextcord.Interaction, temp_user_d):
         z = len(battle_d) - 1 if has_trainer else len(battle_d)
         await i.edit_original_message(
             content=f"Please create a compatible **deck** (Your current Gym Tower deck has **{z}** Zerpmon and **{1 if has_trainer else 0}** Trainer)\n"
-                    f"`/add battle_deck deck_type: Tower rush`")
+                    f"/add battle_deck change_type: `New` deck_type: `Tower rush` deck_number: `1st`")
         return False
     return True

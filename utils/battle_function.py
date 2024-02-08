@@ -977,8 +977,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         user1_zerpmons = list(user1_zerpmons.values())[:low_z if len(user1_zerpmons) > low_z else len(user1_zerpmons)]
     else:
         user1_z = []
-        i = 0
-        for _ in range(5):
+        for i in range(5):
             try:
                 temp_zerp = user1_zerpmons[_data1['gym_deck']['0'][str(i)]]
                 eq = _data1['equipment_decks']['gym_deck']['0'][str(i)]
@@ -988,7 +987,6 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                 user1_z.append(temp_zerp)
             except:
                 pass
-            i += 1
         user1_z.reverse()
         user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[-low_z:]
 
@@ -1512,8 +1510,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                              :low_z if len(user1_zerpmons) > low_z else len(user1_zerpmons)]
         else:
             user1_z = []
-            i = 0
-            for _ in range(5):
+            for i in range(5):
                 try:
                     temp_zerp = user1_zerpmons[_data1['battle_deck']['0'][str(i)]]
                     eq = _data1['equipment_decks']['battle_deck']['0'][str(i)]
@@ -1524,7 +1521,6 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                 except:
                     # print(f'{traceback.format_exc()}')
                     pass
-                i += 1
             user1_z.reverse()
             user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[-low_z:]
         if 'battle_deck' not in _data2 or (
@@ -1534,8 +1530,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                              :low_z if len(user2_zerpmons) > low_z else len(user2_zerpmons)]
         else:
             user2_z = []
-            i = 0
-            for _ in range(5):
+            for i in range(5):
                 try:
                     temp_zerp2 = user2_zerpmons[_data2['battle_deck']['0'][str(i)]]
                     eq = _data2['equipment_decks']['battle_deck']['0'][str(i)]
@@ -1546,7 +1541,6 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                 except:
                     # print(f'{traceback.format_exc()}')
                     pass
-                i += 1
             user2_z.reverse()
             user2_zerpmons = user2_z if len(user2_z) <= low_z else user2_z[-low_z:]
         battle_log = {'teamA': {'trainer': tc1, 'zerpmons': []},
@@ -2442,8 +2436,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
         user1_zerpmons = list(user1_zerpmons.values())[:low_z if len(user1_zerpmons) > low_z else len(user1_zerpmons)]
     else:
         user1_z = []
-        i = 0
-        for _ in range(5):
+        for i in range(5):
             try:
                 temp_zerp = user1_zerpmons[_data1['battle_deck']['0'][str(i)]]
                 eq = _data1['equipment_decks']['battle_deck']['0'][str(i)]
@@ -2453,7 +2446,6 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 user1_z.append(temp_zerp)
             except:
                 pass
-            i += 1
         user1_z.reverse()
         user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[-low_z:]
 
@@ -2912,7 +2904,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
 
     tc1 = _data1['trainers'][battle_deck['trainer']]
     tc1i = tc1['image']
-    buffed_type1 = tc1['type'] if 'type' in tc1 else tc1['affinity']
+    buffed_type1 = [tc1['type'] if 'type' in tc1 else tc1['affinity']]
 
     user2_zerpmons = leader['zerpmons']
     random.shuffle(user2_zerpmons)
@@ -3328,15 +3320,26 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
             print(f"Delete failed retrying {e}")
 
     if len(user1_zerpmons) == 0:
+
+        embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
+                            description=f"{user_mention} vs {leader_name} {config.TYPE_MAPPING[gym_type]}")
+
+        embed.add_field(name='\u200B', value='\u200B')
+
+        embed.add_field(
+            name=f"Reached Gym tower",
+            value=f"{stage}",
+            inline=False)
+        zrp_price = await xrpl_functions.get_zrp_price_api()
+        amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
+        db_query.reset_gym_tower(_data1['discord_id'], amt)
+        embed.add_field(name=f"ZRP won", value=amt, inline=True)
+        response = None
+        if amt > 0:
+            response = await xrpl_ws.send_zrp(_data1['address'], amt, 'tower', )
         await interaction.send(
-            f"Sorry you **LOST** 💀 \nYou can try competing in **Gym Tower Rush** again by purchasing another ticket",
-            ephemeral=True)
-        # battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'rounds': z2['rounds']})
-        # db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name, battle_log['teamA'],
-        #                            battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
-        # Save user's match
-        db_query.reset_gym_tower(_data1['discord_id'])
-        await asyncio.sleep(1)
+            f"Sorry you **LOST** 💀 \nYou can try competing in **Gym Tower Rush** again by purchasing another ticket" + (f"**Failed**, something went wrong." if response == False else (f"**Successfully** sent `{amt}` ZRP" if response else "")),
+            ephemeral=True, embed=embed)
         return 2
     elif len(user2_zerpmons) == 0:
         # battle_log['teamA']['zerpmons'].append(
@@ -3353,23 +3356,19 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                         inline=False)
         embed.add_field(
             name=f"Gym tower level Up",
-            value=f"{stage + 1}  ⬆",
+            value=f"{(stage + 1)%21}  ⬆",
             inline=False)
-        zrp_price = await xrpl_functions.get_zrp_price_api()
-        amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
-        embed.add_field(name=f"ZRP won", value=amt, inline=True)
-        if amt > 0:
-            response = await xrpl_ws.send_zrp(_data1['address'], amt, 'tower', )
+        embed.add_field(name='\u200B', value='\u200B')
+        embed.add_field(name='\u200B', value='> Please use `/gym_tower battle` again to get another batch of random Zerpmon')
         db_query.update_gym_tower(_data1['discord_id'], new_level=stage + 1)
+        if stage + 1 > 20:
+            zrp_price = await xrpl_functions.get_zrp_price_api()
+            amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
+            embed.add_field(name=f"ZRP won", value=amt, inline=False)
+            embed.add_field(name=f"**Congratulations** {user_mention} on clearing **Gym tower rush**!", value=amt, inline=False)
+            response = None
+            if amt > 0:
+                response = await xrpl_ws.send_zrp(_data1['address'], amt, 'tower', )
         await msg_hook.send(f"**WINNER**   👑**{user_mention}**👑", embed=embed, ephemeral=True)
-        await asyncio.sleep(1)
-        if amt > 0:
-            if not response:
-                await interaction.send(
-                    f"**Failed**, something went wrong.",
-                    ephemeral=True)
-            else:
-                await interaction.send(
-                    f"**Successfully** sent `{amt}` ZRP",
-                    ephemeral=True)
+
         return 1
