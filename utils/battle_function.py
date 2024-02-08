@@ -2031,8 +2031,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                                                                                             z2_type,
                                                                                             [buffed_type1, []],
                                                                                             buffed_zerp, '',
-                                                                                            _data1.get('bg', [None])[
-                                                                                                0],
+                                                                                            _data1['bg'][0] if _data1.get('bg') else None,
                                                                                             None, None, )
 
     await asyncio.sleep(1)
