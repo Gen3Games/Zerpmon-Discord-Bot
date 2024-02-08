@@ -66,7 +66,8 @@ def update_user_decks(address, discord_id, serials, t_serial):
 
     mission_trainer = user_obj["mission_trainer"] if 'mission_trainer' in user_obj else ""
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
-    battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}}
+    battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {},
+                                                                             '4': {}}
     gym_deck = user_obj["gym_deck"] if 'gym_deck' in user_obj else {}
 
     new_mission_deck = {i: None for i in range(20)}
@@ -2279,11 +2280,11 @@ def add_temp_user(user_id: str, user_addr: str, fee_paid=True, is_reset=False):
                 'trainers': get_random_trainers(10),
                 "battle_deck": {'0': {}},
                 "equipment_decks": eq_deck,
-                'tower_level': 1,
                 'reset': False,
                 }
-    if is_reset:
-        del user_doc['tower_level']
+    if not is_reset:
+        user_doc['tower_level'] = 1
+        user_doc['gym_order'] = random.sample(config_extra.TOWER_SEQ[:-1], 19).append('Dragon')
     temp_users_col.update_one({'discord_id': user_id},
                               {'$set': user_doc, }, upsert=True
                               )
@@ -2312,7 +2313,8 @@ def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
 
 def reset_gym_tower(user_id, zrp_earned=0):
     users_collection = db['temp_user_data']
-    res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': {'fee_paid': False}, '$inc': {'total_zrp_earned': zrp_earned}})
+    res = users_collection.update_one({'discord_id': str(user_id)},
+                                      {'$set': {'fee_paid': False}, '$inc': {'total_zrp_earned': zrp_earned}})
     return res.acknowledged
 
 
@@ -2323,4 +2325,29 @@ def update_gym_tower(user_id, new_level):
     else:
         q = {'tower_level': new_level, 'reset': True}
     res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
+    return res.acknowledged
+
+
+# Crossmark fn
+
+def save_sign_up_req(user_id: str, uuid: str) -> bool:
+    req_collection = db['signin_requests']
+    res = req_collection.update_one({'discord_id': user_id},
+                                    {'$set': {'uuid': uuid, 'status': 'pending', 'address': ''}}, upsert=True)
+    return res.acknowledged
+
+
+async def get_req_status(uuid: str) -> (bool, str):
+    req_collection = db['signin_requests']
+    res = req_collection.find_one({'uuid': uuid})
+    success = res['status'] == 'fulfilled'
+    if success:
+        req_collection.delete_one({'uuid': uuid})
+    addr = res['address']
+    return success, addr
+
+
+def del_sign_up_req(uuid: str) -> bool:
+    req_collection = db['signin_requests']
+    res = req_collection.delete_one({'uuid': uuid})
     return res.acknowledged

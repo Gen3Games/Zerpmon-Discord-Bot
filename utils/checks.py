@@ -8,13 +8,7 @@ import config
 import db_query
 from db_query import get_owned
 from utils import battle_function
-
-
-class CustomEmbed(nextcord.Embed):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.set_footer(text='Zerpmon',
-                        icon_url=config.ICON_URL)
+from globals import CustomEmbed
 
 
 def convert_timestamp_to_hours_minutes(timestamp):

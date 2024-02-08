@@ -2890,7 +2890,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
     user_mention = interaction.user.mention
     stage = user_doc.get('tower_level')
 
-    gym_type = config_extra.TOWER_SEQ[stage - 1]
+    gym_type = user_doc['gym-order'][stage - 1]
     leader = db_query.get_gym_leader(gym_type)
 
     leader_name = config.LEADER_NAMES[gym_type]

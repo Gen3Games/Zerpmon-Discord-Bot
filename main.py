@@ -15,7 +15,7 @@ from nextcord import SlashOption, ButtonStyle
 from nextcord.ui import Button, View
 import config
 from nextcord.ext import commands, tasks
-
+import uuid
 import config_extra
 import xumm_functions
 import xrpl_functions
@@ -279,103 +279,7 @@ async def on_guild_join(guild):
 async def wallet(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     # Sanity check
-    roles = interaction.guild.roles
-    z_role = nextcord.utils.get(roles, name="Zerpmon Holder")
-    t_role = nextcord.utils.get(roles, name="Trainer")
-    if z_role in interaction.user.roles or t_role in interaction.user.roles:
-        await interaction.send(f"You are already verified!")
-        return
-
-    # Proceed
-    await interaction.send(f"Generating a QR code", ephemeral=True)
-
-    uuid, url, href = await xumm_functions.gen_signIn_url()
-    embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this QR code or click here.",
-                        url=href)
-
-    embed.set_image(url=url)
-
-    msg = await interaction.send(embed=embed, ephemeral=True, )
-    for i in range(120):
-        logged_in, address = await xumm_functions.check_sign_in(uuid)
-
-        if logged_in:
-            # Sanity check (Dual Discord Account with 1 Wallet)
-            wallet_exist = db_query.check_wallet_exist(address)
-            if wallet_exist:
-                await interaction.send(f"This wallet has already been verified!")
-                return
-            # Proceed
-            await interaction.send(f"**Signed in successfully!**", ephemeral=True)
-
-            good_status, nfts = await xrpl_functions.get_nfts(address)
-
-            user_obj = {
-                "username": interaction.user.name + "#" + interaction.user.discriminator,
-                "discord_id": str(interaction.user.id),
-                "guild_id": interaction.guild_id,
-                "zerpmons": {},
-                "trainer_cards": {},
-                "equipments": {},
-                "battle_deck": {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}},
-                "gym_deck": {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}},
-            }
-
-            if not good_status:
-                # In case the account isn't active or XRP server is down
-                await interaction.send(f"**Sorry, encountered an Error!**", ephemeral=True)
-                return
-
-            for nft in nfts:
-
-                if nft["Issuer"] == config.ISSUER["Trainer"]:
-
-                    metadata = xrpl_functions.get_nft_metadata(nft['URI'])
-                    serial = nft["nft_serial"]
-                    if metadata and "Zerpmon Trainers" in metadata['description']:
-                        # Add to MongoDB here
-                        user_obj["trainer_cards"][serial] = {"name": metadata['name'],
-                                                             "image": metadata['image'],
-                                                             "attributes": metadata['attributes'],
-                                                             "token_id": nft["NFTokenID"],
-                                                             }
-
-                if nft["Issuer"] == config.ISSUER["Zerpmon"]:
-                    metadata = xrpl_functions.get_nft_metadata(nft['URI'])
-                    serial = nft["nft_serial"]
-                    if metadata and "Zerpmon " in metadata['description']:
-                        # Add to MongoDB here
-                        user_obj["zerpmons"][serial] = {"name": metadata['name'],
-                                                        "image": metadata['image'],
-                                                        "attributes": metadata['attributes'],
-                                                        "token_id": nft["NFTokenID"],
-                                                        }
-                if nft["Issuer"] == config.ISSUER["Equipment"]:
-                    metadata = xrpl_functions.get_nft_metadata(nft['URI'])
-                    serial = nft["nft_serial"]
-                    if metadata and "Zerpmon Equipment" in metadata['description']:
-                        # Add to MongoDB here
-                        user_obj["equipments"][serial] = {"name": metadata['name'],
-                                                          "image": metadata['image'],
-                                                          "attributes": metadata['attributes'],
-                                                          "token_id": nft["NFTokenID"],
-                                                          }
-            if len(user_obj['zerpmons']) > 0:
-                await interaction.user.add_roles(z_role)
-            if len(user_obj['trainer_cards']) > 0:
-                await interaction.user.add_roles(t_role)
-            # Save the address to stop dual accounts
-            user_obj['address'] = address
-            db_query.save_user(user_obj)
-            for k in ['gym_deck', 'battle_deck', 'mission_deck']:
-                if k != 'mission_deck':
-                    for i in range(5):
-                        db_query.set_equipment_on(user_obj['discord_id'], [None, None, None, None, None], k, str(i))
-                else:
-                    db_query.set_equipment_on(user_obj['discord_id'], [None, None, None, None, None] * 4, k, None)
-            return
-        await asyncio.sleep(1)
-    await msg.edit(embed=CustomEmbed(title="QR code **expired** please generate a new one.", color=0x000))
+    await refresh_fn.verify_wallet(interaction)
 
 
 @client.slash_command(name="show", description="Show owned Zerpmon or Trainer cards")
@@ -4070,29 +3974,44 @@ async def refresh(interaction: nextcord.Interaction):
 
 
 @client.slash_command(name="reverify",
-                      description="Reverify your Wallet")
-async def reverify(interaction: nextcord.Interaction):
+                      description="Reverify your Wallet",)
+async def reverify(interaction: nextcord.Interaction,
+                   is_crossm: str = SlashOption(
+                       name="wallet_type",
+                       choices=['Xumm', 'Crossmark'], )
+                   ):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
+    is_crossm = is_crossm == 'Crossmark'
     if not await verify_cooldown('refresh', interaction, 300):
         return
-    user_doc = db_query.get_owned(interaction.user.id)
+    user_id = interaction.user.id
+    user_doc = db_query.get_owned(user_id)
     # Sanity checks
     if user_doc is None:
         await interaction.edit_original_message(
             content=f"Sorry, you haven't verified your wallet yet, \n Please use `/wallet` to verify your wallet.", )
         return
-    await interaction.edit_original_message(content=f"Generating a QR code")
+    if is_crossm:
+        unique_id = str(uuid.uuid4())
+        req_url = f"https://app.zerpmon.world/link-discord-crossmark/{unique_id}"
+        await interaction.edit_original_message(
+            content=f"Generating **verification** link...", )
+        embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this link.", url=req_url)
+        await interaction.edit_original_message(embed=embed)
+        v_fn = db_query.get_req_status
+    else:
+        await interaction.edit_original_message(content=f"Generating a QR code")
+        unique_id, url, href = await xumm_functions.gen_signIn_url()
+        embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this QR code or click here.",
+                            url=href)
 
-    uuid, url, href = await xumm_functions.gen_signIn_url()
-    embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this QR code or click here.",
-                        url=href)
-
-    embed.set_image(url=url)
+        embed.set_image(url=url)
+        v_fn = xumm_functions.check_sign_in
 
     msg = await interaction.edit_original_message(embed=embed)
-    for i in range(120):
-        logged_in, address = await xumm_functions.check_sign_in(uuid)
+    for i in range(18):
+        logged_in, address = await v_fn(unique_id)
 
         if logged_in:
             # Proceed
@@ -4107,54 +4026,52 @@ async def reverify(interaction: nextcord.Interaction):
                 await interaction.edit_original_message(
                     content=f"**Failed**, please try again after some time", embeds=[])
             return
+        await asyncio.sleep(10)
 
     await interaction.edit_original_message(content='',
                                             embed=CustomEmbed(title="QR code **expired** please generate a new one.",
                                                               color=0x000))
 
 
-@client.slash_command(name="reverify",
-                      description="Reverify your Wallet")
-async def reverify(interaction: nextcord.Interaction):
+@client.slash_command(name="verify_crossmark",
+                      description="Verify your Cossmark wallet")
+async def verify_crossmark(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
-    if not await verify_cooldown('refresh', interaction, 300):
-        return
-    user_doc = db_query.get_owned(interaction.user.id)
+    user_id = interaction.user.id
+    user_doc = db_query.get_owned(user_id)
     # Sanity checks
-    if user_doc is None:
+    if user_doc is not None:
         await interaction.edit_original_message(
-            content=f"Sorry, you haven't verified your wallet yet, \n Please use `/wallet` to verify your wallet.", )
+            content=f"You have already verified your wallet.\nFor switching to a different wallet use `/reverify` command", )
         return
-    await interaction.edit_original_message(content=f"Generating a QR code")
+    unique_id = str(uuid.uuid4())
+    req_url = f"https://app.zerpmon.world/link-discord-crossmark/{unique_id}"
+    await interaction.edit_original_message(
+        content=f"Generating **verification** link...", )
+    if db_query.save_sign_up_req(str(user_id), unique_id):
+        embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this link.", url=req_url)
+        await interaction.edit_original_message(embed=embed)
+        for i in range(18):
+            logged_in, address = db_query.get_req_status(unique_id)
+            if logged_in:
+                # Proceed
+                await interaction.edit_original_message(content=f"**Signed in successfully!**", embeds=[])
+                success = await refresh_fn.post_signin_callback(interaction, address)
+                if success:
+                    await interaction.edit_original_message(
+                        content=f"**Success**", embeds=[])
+                else:
+                    await interaction.edit_original_message(
+                        content=f"**Failed**, please try again after some time", embeds=[])
+                return
+            await asyncio.sleep(10)
 
-    uuid, url, href = await xumm_functions.gen_signIn_url()
-    embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this QR code or click here.",
-                        url=href)
+        await interaction.edit_original_message(content='',
+                                                embed=CustomEmbed(title="Link **expired** please generate a new one.",
+                                                                  color=0x000))
+        db_query.del_sign_up_req(unique_id)
 
-    embed.set_image(url=url)
-
-    msg = await interaction.edit_original_message(embed=embed)
-    for i in range(120):
-        logged_in, address = await xumm_functions.check_sign_in(uuid)
-
-        if logged_in:
-            # Proceed
-            await interaction.edit_original_message(content=f"**Signed in successfully!**")
-            old_addr = user_doc.get('address')
-            user_doc['address'] = address
-            success = await refresh_fn.refresh_nfts(interaction, user_doc, old_address=old_addr)
-            if success:
-                await interaction.edit_original_message(
-                    content=f"**Success**", embeds=[])
-            else:
-                await interaction.edit_original_message(
-                    content=f"**Failed**, please try again after some time", embeds=[])
-            return
-
-    await interaction.edit_original_message(content='',
-                                            embed=CustomEmbed(title="QR code **expired** please generate a new one.",
-                                                              color=0x000))
 
 
 # Refresh CMD
@@ -4206,7 +4123,7 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
 
 
 @gym_tower.subcommand(name='dashboard', description="Show Gym tower dashboard.")
-async def gym_tower_battle(interaction: nextcord.Interaction):
+async def gym_tower_dashboard(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
     owned_nfts = db_query.get_temp_user(str(interaction.user.id))
@@ -4222,16 +4139,21 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
             color=0xa2a8d3,
         )
     lvl = owned_nfts['tower_level']
+    gym_t = owned_nfts['gym_order'][lvl - 1]
     embed.add_field(
         name=f"**Level**",
-        value=f"{owned_nfts['tower_level']}", inline=False)
+        value=f"{lvl}", inline=False)
     embed.add_field(
         name=f"**Next Level Reward**",
         value=f"`{config_extra.tower_reward[lvl + 1]}` ZRP", inline=False)
+    embed.add_field(
+        name=f"**Next battle against**",
+        value=f"{gym_t} Gym (**{config.LEADER_NAMES[gym_t]}**)", inline=False)
 
     embed.add_field(
         name=f"**Total ZRP earned**",
         value=f"`{owned_nfts.get('total_zrp_earned', 0)}` ZRP", inline=False)
+
     await interaction.edit_original_message(embed=embed, )
 
 # Gym Tower CMD
