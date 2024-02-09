@@ -168,7 +168,7 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
         except Exception as e:
             logging.error(f"ZRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(1)
-    return False
+    return False, ''
 
 
 async def get_seq_num():
