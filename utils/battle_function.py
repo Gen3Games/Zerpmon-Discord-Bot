@@ -2889,7 +2889,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
     user_mention = interaction.user.mention
     stage = user_doc.get('tower_level')
 
-    gym_type = user_doc['gym-order'][stage - 1]
+    gym_type = user_doc['gym_order'][stage - 1]
     leader = db_query.get_gym_leader(gym_type)
 
     leader_name = config.LEADER_NAMES[gym_type]
@@ -3326,12 +3326,12 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
         embed.add_field(name='\u200B', value='\u200B')
 
         embed.add_field(
-            name=f"Reached Gym tower",
+            name=f"Reached Tower Level",
             value=f"{stage}",
             inline=False)
         zrp_price = await xrpl_functions.get_zrp_price_api()
         amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
-        db_query.reset_gym_tower(_data1['discord_id'], amt)
+        db_query.reset_gym_tower(_data1['discord_id'], amt, stage)
         embed.add_field(name=f"ZRP won", value=amt, inline=True)
         response = None
         if amt > 0:
@@ -3358,7 +3358,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
             value=f"{(stage + 1)%21}  ⬆",
             inline=False)
         embed.add_field(name='\u200B', value='\u200B')
-        embed.add_field(name='\u200B', value='> Please use `/gym_tower battle` again to get another batch of random Zerpmon')
+        embed.add_field(name='\u200B', value='> Please use `/tower_rush battle` again to get another batch of random Zerpmon')
         db_query.update_gym_tower(_data1['discord_id'], new_level=stage + 1)
         if stage + 1 > 20:
             zrp_price = await xrpl_functions.get_zrp_price_api()

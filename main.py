@@ -26,7 +26,7 @@ from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, che
 from xrpl.utils import xrp_to_drops
 from utils.trade import trade_item
 from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete, \
-    loan_autocomplete, zerp_flair_autocomplete
+    loan_autocomplete, zerp_flair_autocomplete, deck_num_autocomplete
 from utils.callback import wager_battle_r_callback
 
 intents = nextcord.Intents.all()
@@ -885,11 +885,11 @@ async def battle_deck(interaction: nextcord.Interaction,
                       ),
                       deck_type: str = SlashOption(
                           name="deck_type",
-                          choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK, "Tower rush": config.TOWER_DECK},
+                          choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK, "Tower Rush": config.TOWER_DECK},
                       ),
                       deck_number: str = SlashOption(
                           name="deck_number",
-                          choices={"1st": '0', "2nd": '1', "3rd": '2', "4th": '3', "5th": '4'},
+                          autocomplete_callback=deck_num_autocomplete,
                       ),
                       trainer_name: str = SlashOption("trainer_name", required=False, default=''),
                       zerpmon_name1: str = SlashOption("1st", autocomplete_callback=zerpmon_autocomplete,
@@ -921,7 +921,8 @@ async def battle_deck(interaction: nextcord.Interaction,
     temp_mode = deck_type == 'gym_tower'
     await interaction.response.defer(ephemeral=True)
     user_owned_nfts = {'data': db_query.get_temp_user(str(user.id)) if temp_mode else db_query.get_owned(user.id), 'user': user.name}
-
+    if temp_mode:
+        deck_number = '0'
     # Sanity checks
 
     if deck_type == 'battle_deck' and user.id in [i['id'] for i in config.battle_royale_participants]:
@@ -1245,9 +1246,16 @@ async def show_deck(interaction: nextcord.Interaction):
     else:
         embed3 = checks.get_deck_embed('gym', owned_nfts)
         embeds.append(embed3)
+    view = View()
+    b1 = Button(label='Show more (battle deck)', style=ButtonStyle.green)
+    view.add_item(b1)
+    b1.callback = lambda _i: checks.show_deck_range(_i, 'battle', owned_nfts, sIdx=5, eIdx=10)
+    b2 = Button(label='Show more (gym deck)', style=ButtonStyle.blurple)
+    view.add_item(b2)
+    b2.callback = lambda _i: checks.show_deck_range(_i, 'gym', owned_nfts, sIdx=5, eIdx=10)
     await msg.edit(
         content="FOUND" if found else "No deck found try to use `/add battle` or `/add mission` to create now"
-        , embeds=embeds, )
+        , embeds=embeds, view=view)
 
 
 @client.slash_command(name="use",
@@ -4078,7 +4086,7 @@ async def verify_crossmark(interaction: nextcord.Interaction):
 
 # Gym Tower CMD
 
-@client.slash_command(name="gym_tower",
+@client.slash_command(name="tower_rush",
                       description="Gym Tower Rush",
                       )
 async def gym_tower(interaction: nextcord.Interaction):
@@ -4086,7 +4094,7 @@ async def gym_tower(interaction: nextcord.Interaction):
     pass
 
 
-@gym_tower.subcommand(name='battle', description="Start battle against Gym Tower leaders.")
+@gym_tower.subcommand(name='battle', description="Start battle against Tower Rush leaders.")
 async def gym_tower_battle(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     user = interaction.user
@@ -4105,7 +4113,7 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
             await battle_function.proceed_gym_tower_battle(interaction, user_temp_d)
 
 
-@gym_tower.subcommand(name='deck', description="Show Gym tower specific decks.")
+@gym_tower.subcommand(name='deck', description="Show Tower rush specific decks.")
 async def gym_tower_battle(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
@@ -4122,39 +4130,63 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
         , embed=embed, )
 
 
-@gym_tower.subcommand(name='dashboard', description="Show Gym tower dashboard.")
+@gym_tower.subcommand(name='dashboard', description="Show Tower rush dashboard.")
 async def gym_tower_dashboard(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
     owned_nfts = db_query.get_temp_user(str(interaction.user.id))
     # print([(k, v) for k, v in owned_nfts['zerpmons'].items()])
     if owned_nfts is None:
-        await interaction.edit_original_message(content=f"Sorry you haven't played Gym tower rush yet")
+        await interaction.edit_original_message(content=f"Sorry you haven't played Tower rush yet")
         return
     if not owned_nfts['fee_paid']:
-        await interaction.edit_original_message(content=f"Sorry you don't seem to be participating in Gym tower rush")
+        await interaction.edit_original_message(content=f"Sorry you don't seem to be participating in Tower rush")
         return
     embed = CustomEmbed(
-            title=f"**Gym tower rush** dashboard:\n",
+            title=f"**Tower rush** dashboard:\n",
             color=0xa2a8d3,
         )
     lvl = owned_nfts['tower_level']
     gym_t = owned_nfts['gym_order'][lvl - 1]
+    zrp_price = await xrpl_functions.get_zrp_price_api()
     embed.add_field(
         name=f"**Level**",
         value=f"{lvl}", inline=False)
     embed.add_field(
-        name=f"**Next Level Reward**",
-        value=f"`{config_extra.tower_reward[lvl + 1]}` ZRP", inline=False)
+        name=f"**Current Level Payout**",
+        value=f"`{round(config_extra.tower_reward[lvl] / zrp_price, 2)}` ZRP", inline=False)
+    embed.add_field(
+        name=f"**Next Level Payout**",
+        value=f"`{round(config_extra.tower_reward[lvl + 1] / zrp_price, 2)}` ZRP", inline=False)
     embed.add_field(
         name=f"**Next battle against**",
         value=f"{gym_t} Gym (**{config.LEADER_NAMES[gym_t]}**)", inline=False)
 
     embed.add_field(
+        name=f"**Tower Rush Points**",
+        value=f"`{owned_nfts.get('tp', 0)}`", inline=False)
+    embed.add_field(
         name=f"**Total ZRP earned**",
         value=f"`{owned_nfts.get('total_zrp_earned', 0)}` ZRP", inline=False)
 
     await interaction.edit_original_message(embed=embed, )
+
+
+@gym_tower.subcommand(name='leaderboard', description="Show Tower rush leaderboard")
+async def gym_ld(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    users = db_query.get_tower_rush_leaderboard(str(interaction.user.id))
+    embed = CustomEmbed(color=0xa56cc1,
+                        title=f"TOWER RUSH LEADERBOARD")
+
+    for i, user in users:
+        msg = '#{0:<4} {1:<25} TRP : {3:>2}      ZRP earned: {2:<20}'.format(i, user['username'],
+                                                                 user.get('total_zrp_earned', 0),
+                                                                 user['tp'])
+        embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
+
+    await interaction.edit_original_message(embed=embed)
 
 # Gym Tower CMD
 

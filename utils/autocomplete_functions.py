@@ -144,3 +144,17 @@ async def zerp_flair_autocomplete(interaction: nextcord.Interaction, item: str):
         choices = {}
     choices = dict(sorted(choices.items()))
     await interaction.response.send_autocomplete(choices)
+
+
+async def deck_num_autocomplete(interaction: nextcord.Interaction, item: str):
+    params = interaction.data['options'][0]['options']
+    temp_mode = False
+    try:
+        temp_mode = [i for i in params if i['name'] == 'deck_type'][0]['value'] == 'gym_tower'
+    except:
+        pass
+    if not temp_mode:
+        choices = {"1st": '0', "2nd": '1', "3rd": '2', "4th": '3', "5th": '4'}
+    else:
+        choices = {"1st": '0'}
+    await interaction.response.send_autocomplete(choices)

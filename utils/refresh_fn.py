@@ -19,7 +19,7 @@ async def post_signin_callback(interaction: nextcord.Interaction, address: str, 
     # Sanity check (Dual Discord Account with 1 Wallet)
     wallet_exist = db_query.check_wallet_exist(address)
     if wallet_exist:
-        await interaction.send(f"This wallet has already been verified!")
+        await interaction.send(f"This wallet address has already been verified!")
         return False
     # Proceed
 

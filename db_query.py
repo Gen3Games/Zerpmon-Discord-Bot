@@ -1936,7 +1936,7 @@ def get_boss_reset(hp) -> [bool, int, int, int, bool]:
         },
             {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp, 'boss_zerpmon': boss,
                       'boss_trainer': trainer, 'boss_eq': random.choice(get_all_eqs()).get('name'),
-                      "reward": 500 if not obj.get('boss_active', False) else 500 + obj['reward'] // 2,
+                      "reward": 500 if not obj.get('boss_active', False) else obj['reward'] + 300,
                       'start_hp': hp, 'boss_msg_id': msg_id,
                       'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg']
                       }
@@ -2267,13 +2267,15 @@ def get_temp_user(user_id: str):
     return temp_users_col.find_one({'discord_id': user_id})
 
 
-def add_temp_user(user_id: str, user_addr: str, fee_paid=True, is_reset=False):
+def add_temp_user(user_d, fee_paid=True, is_reset=False):
     temp_users_col = db['temp_user_data']
+    user_id, username, user_addr = user_d['discord_id'], user_d['username'], user_d['address']
 
     eq_deck = {}
     for i in range(5):
         eq_deck[str(i)] = {str(i): None for i in range(5)}
-    user_doc = {'address': user_addr,
+    user_doc = {'username': username,
+                'address': user_addr,
                 'fee_paid': fee_paid,
                 'zerpmons': get_random_doc_with_type(limit=10, level=30),
                 'equipments': random.sample(get_all_eqs(), 10),
@@ -2283,8 +2285,15 @@ def add_temp_user(user_id: str, user_addr: str, fee_paid=True, is_reset=False):
                 'reset': False,
                 }
     if not is_reset:
+        if 'flair' in user_d:
+            user_doc['flair'] = user_d['flair']
+        if 'profile_photo_url' in user_d:
+            user_doc['profile_photo_url'] = user_d['profile_photo_url']
+        if 'display_name' in user_d:
+            user_doc['display_name'] = user_d['display_name']
         user_doc['tower_level'] = 1
-        user_doc['gym_order'] = random.sample(config_extra.TOWER_SEQ[:-1], 19).append('Dragon')
+        user_doc['gym_order'] = random.sample(config_extra.TOWER_SEQ[:-1], 19)
+        user_doc['gym_order'].append('Dragon')
     temp_users_col.update_one({'discord_id': user_id},
                               {'$set': user_doc, }, upsert=True
                               )
@@ -2311,10 +2320,11 @@ def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
         return False
 
 
-def reset_gym_tower(user_id, zrp_earned=0):
+def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
     users_collection = db['temp_user_data']
     res = users_collection.update_one({'discord_id': str(user_id)},
-                                      {'$set': {'fee_paid': False}, '$inc': {'total_zrp_earned': zrp_earned}})
+                                      {'$set': {'fee_paid': False},
+                                       '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1}})
     return res.acknowledged
 
 
@@ -2326,6 +2336,24 @@ def update_gym_tower(user_id, new_level):
         q = {'tower_level': new_level, 'reset': True}
     res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
     return res.acknowledged
+
+
+def get_tower_rush_leaderboard(discord_id):
+    users_collection = db['temp_user_data']
+    filter_ = {'tp': {'$exists': True}}
+    projection = {"tp": 1, "address": 1, "discord_id": 1, "username": 1, "total_zrp_earned": 1, '_id': 0}
+
+    top_users = list(enumerate(users_collection.find(filter_, projection).sort('tp', DESCENDING), start=1))
+
+    # Find the user's rank and return the top 10 users or less
+    user_rank = next((rank for rank, user in top_users if user['discord_id'] == discord_id), None)
+    top_10 = top_users[:10]
+
+    # Append the user's rank to the result
+    if user_rank and user_rank > top_10[-1][0]:
+        top_10.append((user_rank, users_collection.find_one({'discord_id': discord_id}, projection)))
+
+    return top_10
 
 
 # Crossmark fn

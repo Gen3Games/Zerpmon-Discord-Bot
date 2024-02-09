@@ -3,12 +3,13 @@ import csv
 import nextcord
 import datetime
 import pytz
-from nextcord.ui import View
 import config
 import db_query
 from db_query import get_owned
-from utils import battle_function
+from utils import battle_function, callback
 from globals import CustomEmbed
+from nextcord import ButtonStyle
+from nextcord.ui import Button, View
 
 
 def convert_timestamp_to_hours_minutes(timestamp):
@@ -109,7 +110,7 @@ async def check_wager_entry(interaction: nextcord.Interaction, users):
     return True
 
 
-def get_deck_embed(deck_type, owned_nfts):
+def get_deck_embed(deck_type, owned_nfts, sIdx=0, eIdx=5):
     title = deck_type.replace('_', ' ').title()
     temp_mode = deck_type == config.TOWER_DECK
     embed2 = CustomEmbed(title=f"**{title}** {'Deck' if temp_mode else 'Decks'}",
@@ -118,63 +119,81 @@ def get_deck_embed(deck_type, owned_nfts):
     embed2.add_field(name='\u200b', value='\u200B', inline=False)
     eqs = owned_nfts['equipment_decks'][f'{deck_type}_deck'] if not temp_mode else owned_nfts['equipment_decks']
     deck_key = f'{deck_type}_deck' if not temp_mode else 'battle_deck'
-    for k, v in owned_nfts[deck_key].items():
-        print(v)
-        found = True
-        nfts = {}
-        embed2.add_field(name=f"__{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}__:\n",
-                         value='\u200B',
-                         inline=False)
-        # embed2.add_field(name='\u200b', value='\u200B', inline=False)
-        new_v = v
-        if 'trainer' in v and v['trainer']:
-            nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']] if not temp_mode else owned_nfts['trainers'][int(v['trainer'])]
-            del new_v['trainer']
-        for i in range(5):
-            sr = new_v[str(i)]
-            if sr:
-                nfts[str(i)] = owned_nfts['zerpmons'][sr if not temp_mode else int(sr)]
+    for k in range(sIdx, eIdx):
+        k = str(k)
+        if k in owned_nfts[deck_key]:
+            v = owned_nfts[deck_key][k]
+            print(v)
+            found = True
+            nfts = {}
+            embed2.add_field(name=f"__{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}__:\n",
+                             value='\u200B',
+                             inline=False)
+            # embed2.add_field(name='\u200b', value='\u200B', inline=False)
+            new_v = v
+            if 'trainer' in v and v['trainer']:
+                nfts['trainer'] = owned_nfts['trainer_cards'][v['trainer']] if not temp_mode else owned_nfts['trainers'][int(v['trainer'])]
+                del new_v['trainer']
+            for i in range(5):
+                try:
+                    sr = new_v[str(i)]
+                    if sr:
+                        nfts[str(i)] = owned_nfts['zerpmons'][sr if not temp_mode else int(sr)]
+                except:
+                    pass
+            if len(nfts) == 0:
+                embed2.add_field(
+                    name=f"Sorry looks like you haven't selected any Zerpmon for {title} deck #{int(k) + 1}",
+                    value='\u200B',
+                    inline=False)
 
-        if len(nfts) == 0:
-            embed2.add_field(
-                name=f"Sorry looks like you haven't selected any Zerpmon for {title} deck #{int(k) + 1}",
-                value='\u200B',
-                inline=False)
-
-        else:
-            msg_str = '> __**Battle Zerpmon**__:\n' \
-                      f'> \n'
-            sorted_keys = sorted(nfts.keys(),
-                                 key=lambda _k: (_k != "trainer", int(_k) if _k.isdigit() else float('inf')))
-            print(sorted_keys)
-            sorted_data = {_k: nfts[_k] for _k in sorted_keys}
-            print(sorted_data)
-            for serial, nft in sorted_data.items():
-                print(serial)
-                if serial == 'trainer':
-                    trainer = nft
-                    my_button = f"https://xrp.cafe/nft/{trainer['token_id' if not temp_mode else 'nft_id']}"
-                    emj = '🧙'
-                    if temp_mode:
-                        emj = ''
+            else:
+                msg_str = '> __**Battle Zerpmon**__:\n' \
+                          f'> \n'
+                sorted_keys = sorted(nfts.keys(),
+                                     key=lambda _k: (_k != "trainer", int(_k) if _k.isdigit() else float('inf')))
+                print(sorted_keys)
+                sorted_data = {_k: nfts[_k] for _k in sorted_keys}
+                print(sorted_data)
+                for serial, nft in sorted_data.items():
+                    print(serial)
+                    if serial == 'trainer':
+                        trainer = nft
+                        my_button = f"https://xrp.cafe/nft/{trainer['token_id' if not temp_mode else 'nft_id']}"
+                        emj = '🧙'
+                        if temp_mode:
+                            emj = ''
+                        else:
+                            for attr in trainer['attributes']:
+                                if 'Trainer Number' in attr['trait_type']:
+                                    emj = '⭐'
+                                    break
+                                if attr['value'] == 'Legendary':
+                                    emj = '🌟'
+                                    break
+                        msg_str = f"> **Main Trainer**:\n" \
+                                  f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
+                                  f"> \n" + msg_str
                     else:
-                        for attr in trainer['attributes']:
-                            if 'Trainer Number' in attr['trait_type']:
-                                emj = '⭐'
-                                break
-                            if attr['value'] == 'Legendary':
-                                emj = '🌟'
-                                break
-                    msg_str = f"> **Main Trainer**:\n" \
-                              f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
-                              f"> \n" + msg_str
-                else:
-                    eq_name = owned_nfts['equipments'][int(eqs[k][serial])]['name'] if (eqs[k][serial] and int(eqs[k][serial]) < 10) else None
-                    msg_str += f'> #{int(serial) + 1} ⭐ {nft["name"]} ⭐ {" - " + eq_name if eq_name is not None else ""}\n'
-            embed2.add_field(name='\u200B', value=msg_str, inline=False)
-            embed2.add_field(name='\u200b', value='\u200B', inline=False)
-    print(embed2.fields)
+                        eq_name = owned_nfts['equipments'][int(eqs[k][serial])]['name'] if (eqs[k][serial] and int(eqs[k][serial]) < 10) else None
+                        msg_str += f'> #{int(serial) + 1} ⭐ {nft["name"]} ⭐ {" - " + eq_name if eq_name is not None else ""}\n'
+                embed2.add_field(name='\u200B', value=msg_str, inline=False)
+                embed2.add_field(name='\u200b', value='\u200B', inline=False)
     return embed2
+
+
+async def show_deck_range(interaction: nextcord.Interaction, deck_type, data, sIdx=0, eIdx=5):
+    await interaction.response.defer(ephemeral=True)
+    view = View()
+    if eIdx < 20:
+        b1 = Button(label='Show more', style=ButtonStyle.green)
+        view.add_item(b1)
+        b1.callback = lambda _i: show_deck_range(_i, deck_type, data, sIdx=eIdx, eIdx=eIdx+5)
+
+    embed = get_deck_embed(deck_type, data, sIdx, eIdx)
+
+    await interaction.edit_original_message(
+        content='', embed=embed, view=view)
 
 
 async def check_trainer_cards(interaction, user, trainer_name):
@@ -521,8 +540,9 @@ async def verify_gym_tower(i: nextcord.Interaction, temp_user_d):
     if len(battle_d) < 6:
         has_trainer = battle_d.get('trainer') is not None
         z = len(battle_d) - 1 if has_trainer else len(battle_d)
+        embed, embed2 = callback.get_alloc_embeds(i, temp_user_d)
         await i.edit_original_message(
             content=f"Please create a compatible **deck** (Your current Gym Tower deck has **{z}** Zerpmon and **{1 if has_trainer else 0}** Trainer)\n"
-                    f"/add battle_deck change_type: `New` deck_type: `Tower rush` deck_number: `1st`")
+                    f"/add battle_deck change_type: `New` deck_type: `Tower rush` deck_number: `1st`", embeds=[embed, embed2],)
         return False
     return True
