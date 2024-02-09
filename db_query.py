@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import random
+import sys
 import time
 from utils import battle_effect
 import pymongo
@@ -163,18 +164,61 @@ def get_all_users():
     return [i for i in result if i.get('discord_id', None)]
 
 
-def get_owned(user_id):
+def get_owned(user_id, autoc=False):
     users_collection = db['users']
-    # Upsert user
-    # print(user_id)
-
     user_id = str(user_id)
-    result = users_collection.find_one({"discord_id": user_id})
+    if not autoc:
+        result = users_collection.find_one({"discord_id": user_id})
+    else:
+        pipeline = [{'$match': {'discord_id': user_id}},
+                    {
+                        '$project': {
+                            '_id': 0,
+                            'zerpmons': {
+                                '$map': {
+                                    'input': {'$objectToArray': '$zerpmons'},
+                                    'as': 'zerpmon',
+                                    'in': {
+                                        'name': '$$zerpmon.v.name',
+                                        'attributes': '$$zerpmon.v.attributes'
+                                    }
+                                }
+                            },
+                            'trainer_cards': {
+                                '$map': {
+                                    'input': {'$objectToArray': '$trainer_cards'},
+                                    'as': 'trainer',
+                                    'in': {
+                                        'name': '$$trainer.v.name',
+                                        'attributes': '$$trainer.v.attributes'
+                                    }
+                                }
+                            },
+                            'equipments': {
+                                '$map': {
+                                    'input': {'$objectToArray': '$equipments'},
+                                    'as': 'equipment',
+                                    'in': {
+                                        'name': '$$equipment.v.name',
+                                        'attributes': '$$equipment.v.attributes'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ]
+        res = list(users_collection.aggregate(pipeline))[0]
+        print(res['trainer_cards'])
+        for key in ['zerpmons', 'trainer_cards', 'equipments']:
+            for idx in range(len(res[key])):
+                i = res[key][idx]
+                res[key][idx] = {'name': i['name'],
+                                        'type': [_i['value'] for _i in i['attributes'] if _i['trait_type'] == 'Type']}
 
-    # print(f"Found user {result}")
+        return res
 
     return result
-
+# print(get_owned('1017889758313197658', True))
 
 def check_wallet_exist(address):
     users_collection = db['users']
@@ -2262,10 +2306,58 @@ def get_random_trainers(limit=5):
         return None
 
 
-def get_temp_user(user_id: str):
+def get_temp_user(user_id: str, autoc=False):
     temp_users_col = db['temp_user_data']
-    return temp_users_col.find_one({'discord_id': user_id})
+    if not autoc:
+        return temp_users_col.find_one({'discord_id': user_id})
+    else:
+        pipeline = [{'$match': {'discord_id': user_id}},
+                    {
+                        '$project': {
+                            '_id': 0,
+                            'zerpmons': {
+                                '$map': {
+                                    'input': '$zerpmons',
+                                    'as': 'zerpmon',
+                                    'in': {
+                                        'name': '$$zerpmon.name',
+                                        'attributes': '$$zerpmon.attributes'
+                                    }
+                                }
+                            },
+                            'trainers': {
+                                '$map': {
+                                    'input': '$trainers',
+                                    'as': 'trainer',
+                                    'in': {
+                                        'name': '$$trainer.name',
+                                        'type': '$$trainer.type',
+                                        'affinity': '$$trainer.affinity'
+                                    }
+                                }
+                            },
+                            'equipments': {
+                                '$map': {
+                                    'input': '$equipments',
+                                    'as': 'equipment',
+                                    'in': {
+                                        'name': '$$equipment.name',
+                                        'type': '$$equipment.type',
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ]
+        res = list(temp_users_col.aggregate(pipeline))[0]
+        for idx in range(len(res['zerpmons'])):
+            i = res['zerpmons'][idx]
+            res['zerpmons'][idx] = {'name': i['name'],
+                                    'type': [_i['value'] for _i in i['attributes'] if _i['trait_type'] == 'Type']}
+        return res
 
+
+# print(get_temp_user('1017889758313197658', autoc=True))
 
 def add_temp_user(user_d, fee_paid=True, is_reset=False):
     temp_users_col = db['temp_user_data']
@@ -2294,10 +2386,10 @@ def add_temp_user(user_d, fee_paid=True, is_reset=False):
         user_doc['tower_level'] = 1
         user_doc['gym_order'] = random.sample(config_extra.TOWER_SEQ[:-1], 19)
         user_doc['gym_order'].append('Dragon')
-    temp_users_col.update_one({'discord_id': user_id},
-                              {'$set': user_doc, }, upsert=True
-                              )
-    return user_doc
+    obj = temp_users_col.find_one_and_update({'discord_id': user_id},
+                                             {'$set': user_doc, }, upsert=True,
+                                             return_document=ReturnDocument.AFTER)
+    return obj
 
 
 def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):

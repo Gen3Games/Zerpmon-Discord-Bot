@@ -149,6 +149,15 @@ async def get_seq(from_, amount=None):
         sending_wallet = Wallet(seed=config.GIFT_SEED, sequence=sequence)
         sending_address = config.GIFT_ADDR
         return sequence, sending_address, sending_wallet
+    elif from_ == 'tower':
+        acc_info = AccountInfo(
+            account=config.TOWER_ADDR
+        )
+        account_info = await client.request(acc_info)
+        sequence = account_info.result["account_data"]["Sequence"]
+        sending_wallet = Wallet(seed=config.TOWER_SEED, sequence=sequence)
+        sending_address = config.TOWER_ADDR
+        return sequence, sending_address, sending_wallet
     else:
         return None, None, None
 

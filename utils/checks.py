@@ -541,8 +541,11 @@ async def verify_gym_tower(i: nextcord.Interaction, temp_user_d):
         has_trainer = battle_d.get('trainer') is not None
         z = len(battle_d) - 1 if has_trainer else len(battle_d)
         embed, embed2 = callback.get_alloc_embeds(i, temp_user_d)
+        lvl = temp_user_d['tower_level']
+        gym_t = temp_user_d['gym_order'][lvl - 1]
         await i.edit_original_message(
             content=f"Please create a compatible **deck** (Your current Gym Tower deck has **{z}** Zerpmon and **{1 if has_trainer else 0}** Trainer)\n"
-                    f"/add battle_deck change_type: `New` deck_type: `Tower rush` deck_number: `1st`", embeds=[embed, embed2],)
+                    f"/add battle_deck change_type: `New` deck_type: `Tower rush` deck_number: `1st`\n\n"
+                    f" ❗ **Upcoming Battle** ❗ {gym_t} Leader **{config.LEADER_NAMES[gym_t]}**", embeds=[embed, embed2],)
         return False
     return True

@@ -587,13 +587,14 @@ def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, buff_eq
                             'stars'] > 0) else z1['moves'][6]['name']
                         if trigger:
                             decided = True
+                            winner['eq2_msg'] = f"✨**{buff_eqs[1]}**✨ ({z2['name2']})\n"
                             if random.randint(1, 2) == 1:
                                 winner[
-                                    'eq2_msg'] = f"{z2['name2']}'s **{move2['name']}** has miraculously pierced through {z1['name2']}'s {m_name}!"
+                                    'eq2_msg'] += f"{z2['name2']}'s **{move2['name']}** has miraculously pierced through {z1['name2']}'s {m_name}!"
                                 winner['winner'] = '2'
                             else:
                                 winner[
-                                    'eq2_msg'] = f"{z2['name2']}'s **{move2['name']}** has successfully nullified {z1['name2']}'s {m_name}!"
+                                    'eq2_msg'] += f"{z2['name2']}'s **{move2['name']}** has successfully nullified {z1['name2']}'s {m_name}!"
                                 winner['winner'] = '2'
                             winner['eq2_name'] = buff_eqs[1]
                             winner['eq_name'] = buff_eqs[1]
@@ -633,13 +634,12 @@ def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, buff_eq
                             'stars'] > 0) else z2['moves'][6]['name']
                         if trigger:
                             decided = True
+                            winner['eq2_msg'] = f"✨**{buff_eqs[0]}**✨ ({z1['name2']})\n"
                             if random.randint(1, 2) == 1:
-                                winner[
-                                    'eq1_msg'] = f"{z1['name2']}'s **{move1['name']}** has miraculously pierced through {z2['name2']}'s {m_name}!"
+                                winner['eq1_msg'] += f"{z1['name2']}'s **{move1['name']}** has miraculously pierced through {z2['name2']}'s {m_name}!"
                                 winner['winner'] = '1'
                             else:
-                                winner[
-                                    'eq1_msg'] = f"{z1['name2']}'s **{move1['name']}** has successfully nullified {z2['name2']}'s {m_name}!"
+                                winner['eq1_msg'] += f"{z1['name2']}'s **{move1['name']}** has successfully nullified {z2['name2']}'s {m_name}!"
                                 winner['winner'] = '1'
                             winner['eq1_name'] = buff_eqs[0]
                             winner['eq_name'] = buff_eqs[0]

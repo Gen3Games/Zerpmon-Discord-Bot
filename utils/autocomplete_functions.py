@@ -2,7 +2,7 @@ import json
 import traceback
 
 import nextcord
-
+import config_extra
 import config
 import db_query
 from db_query import get_owned
@@ -10,6 +10,7 @@ from utils.checks import get_type_emoji
 
 
 async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
+    user_id = str(interaction.user.id)
     temp_mode = False
     params = []
     try:
@@ -17,6 +18,7 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
     except:
         pass
     main_type = ''
+    cache = config_extra.deck_item_cache
     # if params[1]['name'] == 'use_on':
     #     main_type = user_owned['equipments'][params[0]['value']]['attributes'][-1]['value']
     remove_items = [i['value'] for i in params if i['name'][0].isdigit()]
@@ -26,10 +28,16 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
     except:
         pass
     if temp_mode:
-        user_owned = db_query.get_temp_user(str(interaction.user.id))
+        cache = cache['temp']
+        if user_id not in cache:
+            cache[user_id] = db_query.get_temp_user(user_id, autoc=True)
+        user_owned = cache[user_id]
         zerps = [(str(k), v) for k, v in enumerate(user_owned['zerpmons'])]
     else:
-        user_owned = get_owned(interaction.user.id)
+        cache = cache['main']
+        if user_id not in cache:
+            cache[user_id] = db_query.get_owned(user_id, autoc=True)
+        user_owned = cache[user_id]
         zerps = user_owned['zerpmons'].items()
     cards = {k: v for k, v in zerps if
              item.lower() in v['name'].lower() and k not in remove_items and

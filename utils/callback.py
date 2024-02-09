@@ -771,7 +771,8 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
     user_address = user_owned_nfts['address']
     if not buy_offer:
         uuid, url, href = await xumm_functions.gen_zrp_txn_url(
-            to_addr if to_addr else (config.LOAN_ADDR if fee or loan else (config.ISSUER['ZRP'] if not safari else config.SAFARI_ADDR)),
+            to_addr if to_addr else (
+                config.LOAN_ADDR if fee or loan else (config.ISSUER['ZRP'] if not safari else config.SAFARI_ADDR)),
             user_address, amount)
     else:
         uuid, url, href = await xumm_functions.gen_nft_accept_txn(
@@ -2057,15 +2058,18 @@ def get_alloc_embeds(interaction: nextcord.Interaction, user_obj):
             value=f'> {type_map[nft_type]}\n', inline=False)
     return embed, embed2
 
+
 async def setup_gym_tower(interaction: nextcord.Interaction, user_d, reset=False):
     if not reset:
         zrp_price = await xrpl_functions.get_zrp_price_api()
         zrp_amt = round(5 / zrp_price, 2)
         await interaction.edit_original_message(
-            content=f"**Note**, You'll need to pay an entry ticket fee of `{zrp_amt} ZRP` to play and earn rewards!", embeds=[],
+            content=f"**Note**, You'll need to pay an entry ticket fee of `{zrp_amt} ZRP` to play and earn rewards!",
+            embeds=[],
             view=View())
         await asyncio.sleep(5)
-        addr, success = await zrp_purchase_callback(user_d, interaction, amount=zrp_amt, item='Tower Rush ticket fee', fee=True)
+        addr, success = await zrp_purchase_callback(user_d, interaction, amount=zrp_amt, item='Tower Rush ticket fee',
+                                                    fee=True)
     else:
         success = True
     if success:
@@ -2078,5 +2082,5 @@ async def setup_gym_tower(interaction: nextcord.Interaction, user_d, reset=False
             content=f"**Allotted these Zerpmon and Equipment**\n"
                     f"Note: Please create a **deck of your own choosing** to be able to battle against Tower leaders using"
                     f"\n`/add battle_deck deck_type: Tower Rush`\n\n"
-                    f"**Battle against**: {gym_t} Gym (**{config.LEADER_NAMES[gym_t]}**)", embeds=[embed, embed2],
+                    f" ❗ **Upcoming Battle** ❗ {gym_t} Leader **{config.LEADER_NAMES[gym_t]}**", embeds=[embed, embed2],
             view=View())
