@@ -304,7 +304,7 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
 
 
 async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type):
-    owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
+    owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
 
     # Sanity checks
 
@@ -356,7 +356,7 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
 
 
 async def check_boss_battle(user_id, interaction: nextcord.Interaction):
-    owned_nfts = {'data': db_query.get_owned(user_id), 'user': interaction.user.name}
+    owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
 
     # Sanity checks
 
@@ -408,8 +408,8 @@ def get_temp_candy(zerp_doc):
     return overcharge_c, normal_candy
 
 
-def get_show_zerp_embed(zerpmon, interaction, omni=False):
-    lvl, xp, w_candy, g_candy, l_candy = db_query.get_lvl_xp(zerpmon['name'], get_candies=True)
+async def get_show_zerp_embed(zerpmon, interaction, omni=False):
+    lvl, xp, w_candy, g_candy, l_candy = await db_query.get_lvl_xp(zerpmon['name'], get_candies=True)
     overcharge_c, temP_candy = get_temp_candy(zerpmon)
     ascended = zerpmon.get("ascended", False)
     embed = CustomEmbed(
@@ -450,7 +450,7 @@ def get_show_zerp_embed(zerpmon, interaction, omni=False):
         value=f"**{xp}/{w_candy[0]}**", inline=True)
 
     for i, move in enumerate([i for i in zerpmon['moves'] if i['name'] != ""]):
-        notes = f"{db_query.get_move(move['name'])['notes']}"
+        notes = f"{(await db_query.get_move(move['name']))['notes']}"
 
         embed.add_field(
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",

@@ -22,7 +22,7 @@ async def update_nft_holdings(client: nextcord.Client):
     while True:
         await asyncio.sleep(10)
         await check_and_reset_store()
-        all_users = db_query.get_all_users()
+        all_users = await db_query.get_all_users()
         guilds = client.guilds
 
         for old_user in all_users:
@@ -58,7 +58,7 @@ async def update_nft_holdings(client: nextcord.Client):
                                      "attributes": metadata['attributes'],
                                      "token_id": nft["NFTokenID"],
                                      }
-                            db_query.add_user_nft(user_obj['discord_id'], serial, new_z, True)
+                            await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, True)
                         await asyncio.sleep(2)
                     if nft["Issuer"] == config.ISSUER["Zerpmon"]:
                         serial = str(nft["nft_serial"])
@@ -80,7 +80,7 @@ async def update_nft_holdings(client: nextcord.Client):
                                      "token_id": nft["NFTokenID"],
                                      'active_t': active_t
                                      }
-                            db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
+                            await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
                         await asyncio.sleep(2)
                     if nft["Issuer"] == config.ISSUER["Equipment"]:
                         serial = str(nft["nft_serial"])
@@ -98,7 +98,7 @@ async def update_nft_holdings(client: nextcord.Client):
                                      "attributes": metadata['attributes'],
                                      "token_id": nft["NFTokenID"],
                                      }
-                            db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
+                            await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
                         await asyncio.sleep(2)
                 for serial in list(old_user['zerpmons'].keys()):
                     if serial not in serials:
@@ -107,15 +107,15 @@ async def update_nft_holdings(client: nextcord.Client):
                             serials.append(serial)
                         else:
                             # if False:
-                            db_query.remove_user_nft(user_obj['discord_id'], serial, False)
+                            await db_query.remove_user_nft(user_obj['discord_id'], serial, False)
                 for serial in list(old_user['trainer_cards'].keys()):
                     if serial not in t_serial:
                         # if False:
-                        db_query.remove_user_nft(user_obj['discord_id'], serial, True)
+                        await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
                 for serial in list(old_user['equipments'].keys()):
                     if serial not in e_serial:
                         # if False:
-                        db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
+                        await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
                 if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
                     for guild in guilds:
@@ -146,14 +146,14 @@ async def update_nft_holdings(client: nextcord.Client):
                                 print(f"USER already has the required role {e}")
                             await asyncio.sleep(2)
 
-                db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial)
+                await db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial)
             except Exception as e:
                 logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
 
             await asyncio.sleep(2)
         try:
             burnt = 1589000 - (await xrpl_functions.get_zrp_balance(address=config.ISSUER['ZRP'], issuer=True))
-            db_query.set_burnt(burnt)
+            await db_query.set_burnt(burnt)
         except:
             pass
         await asyncio.sleep(3600)

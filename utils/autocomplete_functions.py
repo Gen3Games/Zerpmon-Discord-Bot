@@ -2,15 +2,13 @@ import json
 import traceback
 
 import nextcord
-import config_extra
 import config
 import db_query
-from db_query import get_owned
 from utils.checks import get_type_emoji
 
 
+
 async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
-    user_id = str(interaction.user.id)
     temp_mode = False
     params = []
     try:
@@ -18,7 +16,6 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
     except:
         pass
     main_type = ''
-    cache = config_extra.deck_item_cache
     # if params[1]['name'] == 'use_on':
     #     main_type = user_owned['equipments'][params[0]['value']]['attributes'][-1]['value']
     remove_items = [i['value'] for i in params if i['name'][0].isdigit()]
@@ -28,16 +25,10 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
     except:
         pass
     if temp_mode:
-        cache = cache['temp']
-        if user_id not in cache:
-            cache[user_id] = db_query.get_temp_user(user_id, autoc=True)
-        user_owned = cache[user_id]
+        user_owned = await db_query.get_temp_user(str(interaction.user.id))
         zerps = [(str(k), v) for k, v in enumerate(user_owned['zerpmons'])]
     else:
-        cache = cache['main']
-        if user_id not in cache:
-            cache[user_id] = db_query.get_owned(user_id, autoc=True)
-        user_owned = cache[user_id]
+        user_owned = await db_query.get_owned(interaction.user.id)
         zerps = user_owned['zerpmons'].items()
     cards = {k: v for k, v in zerps if
              item.lower() in v['name'].lower() and k not in remove_items and
@@ -62,10 +53,10 @@ async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
     except:
         pass
     if temp_mode:
-        user_owned = db_query.get_temp_user(str(interaction.user.id))
+        user_owned = await db_query.get_temp_user(str(interaction.user.id))
         zerps = [(str(k), v) for k, v in enumerate(user_owned['zerpmons'])]
     else:
-        user_owned = get_owned(interaction.user.id)
+        user_owned = await db_query.get_owned(interaction.user.id)
         mission_zerps = user_owned['mission_deck']
     # print(params)
     focused = [i['name'] for i in params if i.get('focused', False)][0].split('_')[-1]
@@ -79,7 +70,7 @@ async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
     else:
         slot_zerpmon = [i['value'] for i in params if i['name'] == focused]
     slot_zerpmon = slot_zerpmon[0] if len(slot_zerpmon) > 0 else False
-    z_moves = [] if not slot_zerpmon else (user_owned['zerpmons'][int(slot_zerpmon)] if temp_mode else db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name']))['moves']
+    z_moves = [] if not slot_zerpmon else (user_owned['zerpmons'][int(slot_zerpmon)] if temp_mode else (await db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name'])))['moves']
     types = config.TYPE_MAPPING if not slot_zerpmon else [i['type'] for idx, i in enumerate(z_moves) if idx < 4]
     # print(slot_zerpmon, types)
     remove_items = [i['value'] for i in params if 'equipment' in i['name']]
@@ -128,11 +119,11 @@ async def loan_autocomplete(interaction: nextcord.Interaction, item: str):
     if 'relist' in flag:
         expired = True
     if not expired:
-        # c, latest_listings = db_query.get_loan_listings(page_no=1, docs_per_page=20, zerp_name=item)
-        latest_listings, extra = db_query.get_loaned(str(interaction.user.id))
+        # c, latest_listings = await db_query.get_loan_listings(page_no=1, docs_per_page=20, zerp_name=item)
+        latest_listings, extra = await db_query.get_loaned(str(interaction.user.id))
         latest_listings.extend(extra)
     else:
-        latest_listings, _ = db_query.get_loaned(str(interaction.user.id))
+        latest_listings, _ = await db_query.get_loaned(str(interaction.user.id))
     choices = {}
     for item in latest_listings:
         if len(choices) >= 24:
@@ -144,7 +135,7 @@ async def loan_autocomplete(interaction: nextcord.Interaction, item: str):
 
 async def zerp_flair_autocomplete(interaction: nextcord.Interaction, item: str):
     # Determine the choices for the trainer_name option based on a condition
-    user_owned = db_query.get_owned(interaction.user.id)
+    user_owned = await db_query.get_owned(interaction.user.id)
     if user_owned is not None and 'z_flair' in user_owned:
         vals = [i for i in user_owned['z_flair'] if item in i]
         choices = {i: i for i in vals}

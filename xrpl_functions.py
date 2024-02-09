@@ -20,7 +20,7 @@ last_checked_price = 0
 async def get_nfts(address):
     try:
         if address == config.SAFARI_ADDR:
-            return True, get_safari_nfts()
+            return True, await get_safari_nfts()
         async with AsyncWebsocketClient(config.NODE_URL) as client:
             all_nfts = []
 

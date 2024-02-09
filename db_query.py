@@ -10,8 +10,9 @@ import pytz
 from pymongo import MongoClient, ReturnDocument, DESCENDING, UpdateOne
 import config
 import config_extra
+from motor.motor_asyncio import AsyncIOMotorClient
 
-client = MongoClient(config.MONGO_URL)
+client = AsyncIOMotorClient(config.MONGO_URL)
 db = client['Zerpmon']
 
 # Instantiate Static collections
@@ -21,7 +22,7 @@ level_collection = db['levels']
 equipment_col = db['Equipment']
 
 
-def get_next_ts(days=1):
+async def get_next_ts(days=1):
     # Get the current time in UTC
     current_time = datetime.datetime.now(pytz.utc)
 
@@ -31,18 +32,18 @@ def get_next_ts(days=1):
     return target_time.timestamp()
 
 
-def is_monday():
+async def is_monday():
     current_time = datetime.datetime.now(pytz.utc)
     return current_time.weekday() == 0
 
 
-def update_address(new_addr, old_addr):
+async def update_address(new_addr, old_addr):
     users_collection = db['users']
-    res = users_collection.update_one({'address': old_addr}, {'$set': {'address': new_addr}})
+    res = await users_collection.update_one({'address': old_addr}, {'$set': {'address': new_addr}})
     return res.acknowledged
 
 
-def save_user(user):
+async def save_user(user):
     users_collection = db['users']
     # Upsert user
     # print(user)
@@ -50,7 +51,7 @@ def save_user(user):
     doc_str = json.dumps(user)
     user = json.loads(doc_str)
     print(user)
-    result = users_collection.update_one(
+    result = await users_collection.update_one(
         {'address': user['address']},
         {'$set': user},
         upsert=True
@@ -62,8 +63,8 @@ def save_user(user):
         print(f"Updated user")
 
 
-def update_user_decks(address, discord_id, serials, t_serial):
-    user_obj = get_owned(discord_id)
+async def update_user_decks(address, discord_id, serials, t_serial):
+    user_obj = await get_owned(discord_id)
 
     mission_trainer = user_obj["mission_trainer"] if 'mission_trainer' in user_obj else ""
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
@@ -97,16 +98,16 @@ def update_user_decks(address, discord_id, serials, t_serial):
                 new_gym_deck[k][serial] = v[serial]
 
     logging.error(f'Serials {serials} \nnew deck: {new_battle_deck}')
-    save_user({'mission_trainer': mission_trainer, 'mission_deck': new_mission_deck,
+    await save_user({'mission_trainer': mission_trainer, 'mission_deck': new_mission_deck,
                'battle_deck': new_battle_deck, 'gym_deck': new_gym_deck,
                'discord_id': user_obj["discord_id"], 'address': address})
 
 
-def remove_user_nft(discord_id, serial, trainer=False, equipment=False):
+async def remove_user_nft(discord_id, serial, trainer=False, equipment=False):
     users_collection = db['users']
     # Upsert user
     # print(user)
-    user_obj = get_owned(str(discord_id))
+    user_obj = await get_owned(str(discord_id))
     update_query = {"$unset": {f"equipments.{serial}": ""}} if equipment else (
         {"$unset": {f"zerpmons.{serial}": ""}} if not trainer else {"$unset": {f"trainer_cards.{serial}": ""}})
     if not trainer and not equipment:
@@ -114,13 +115,13 @@ def remove_user_nft(discord_id, serial, trainer=False, equipment=False):
             if serial in list(user_obj.get(deck, {}).values()):
                 update_query["$unset"][deck] = ""
 
-    result = users_collection.update_one(
+    result = await users_collection.update_one(
         {'discord_id': discord_id},
         update_query
     )
 
 
-def add_user_nft(discord_id, serial, zerpmon, trainer=False, equipment=False):
+async def add_user_nft(discord_id, serial, zerpmon, trainer=False, equipment=False):
     users_collection = db['users']
     # Upsert user
     # print(user)
@@ -131,20 +132,20 @@ def add_user_nft(discord_id, serial, zerpmon, trainer=False, equipment=False):
     update_query = {"$set": {f"equipments.{serial}": zerpmon}} if equipment else (
         {"$set": {f"zerpmons.{serial}": zerpmon}} if not trainer else
         {"$set": {f"trainer_cards.{serial}": zerpmon}})
-    result = users_collection.update_one(
+    result = await users_collection.update_one(
         {'discord_id': discord_id},
         update_query
     )
 
 
-def save_new_zerpmon(zerpmon):
+async def save_new_zerpmon(zerpmon):
     zerpmon_collection = db['MoveSets']
     print(zerpmon)
 
     doc_str = json.dumps(zerpmon)
     zerpmon = json.loads(doc_str)
 
-    result = zerpmon_collection.update_one(
+    result = await zerpmon_collection.update_one(
         {'name': zerpmon['name']},
         {'$set': zerpmon},
         upsert=True)
@@ -157,18 +158,18 @@ def save_new_zerpmon(zerpmon):
         return f"Successfully updated Zerpmon {zerpmon['name']}"
 
 
-def get_all_users():
+async def get_all_users():
     users_collection = db['users']
 
-    result = users_collection.find()
+    result = await users_collection.find().to_list(None)
     return [i for i in result if i.get('discord_id', None)]
 
 
-def get_owned(user_id, autoc=False):
+async def get_owned(user_id, autoc=False):
     users_collection = db['users']
     user_id = str(user_id)
     if not autoc:
-        result = users_collection.find_one({"discord_id": user_id})
+        result = await users_collection.find_one({"discord_id": user_id})
     else:
         pipeline = [{'$match': {'discord_id': user_id}},
                     {
@@ -207,7 +208,7 @@ def get_owned(user_id, autoc=False):
                         }
                     }
                     ]
-        res = list(users_collection.aggregate(pipeline))[0]
+        res = list(await users_collection.aggregate(pipeline).to_list(None))[0]
         print(res['trainer_cards'])
         for key in ['zerpmons', 'trainer_cards', 'equipments']:
             for idx in range(len(res[key])):
@@ -220,90 +221,90 @@ def get_owned(user_id, autoc=False):
     return result
 # print(get_owned('1017889758313197658', True))
 
-def check_wallet_exist(address):
+async def check_wallet_exist(address):
     users_collection = db['users']
     # Upsert user
     # print(address)
 
     user_id = str(address)
-    result = users_collection.find_one({"address": user_id})
+    result = await users_collection.find_one({"address": user_id})
     discord_user_exist = result is not None and result.get('discord_id') is not None
     # print(f"Found user {result}")
 
     return discord_user_exist
 
 
-def get_user(address):
+async def get_user(address):
     users_collection = db['users']
     # Upsert user
     # print(address)
 
     user_id = str(address)
-    result = users_collection.find_one({"address": user_id})
+    result = await users_collection.find_one({"address": user_id})
 
     # print(f"Found user {result}")
 
     return result
 
 
-def get_move(name):
+async def get_move(name):
     # print(name)
 
-    result = move_collection.find_one({"move_name": name})
+    result = await move_collection.find_one({"move_name": name})
 
     # print(f"Found move {result}")
 
     return result
 
 
-def get_zerpmon(name, mission=False, user_id=None, pvp=False):
+async def get_zerpmon(name, mission=False, user_id=None, pvp=False):
     candy = None
     if mission:
         zerpmon_collection = db['MoveSets2']
     else:
         zerpmon_collection = db['MoveSets']
         if user_id:
-            candy = get_active_candies(user_id).get(name)
+            candy = (await get_active_candies(user_id)).get(name)
     # print(name)
 
-    result = zerpmon_collection.find_one({"name": name})
+    result = await zerpmon_collection.find_one({"name": name})
     if result is None:
-        result = zerpmon_collection.find_one({"nft_id": str(name).upper()})
+        result = await zerpmon_collection.find_one({"nft_id": str(name).upper()})
     flair = result.get('z_flair', None)
     result['name2'] = result['name'] + (f' {flair}' if flair else '')
     if candy:
         if candy.get('type1', {}).get('expire_ts', 0) > time.time():
-            update_stats_candy(result, candy['type1']['type'])
+            await update_stats_candy(result, candy['type1']['type'])
         if not pvp and candy.get('type2', {}).get('expire_ts', 0) > time.time():
-            update_stats_candy(result, candy['type2']['type'])
+            await update_stats_candy(result, candy['type2']['type'])
     # print(f"Found Zerpmon {result}")
 
     return result
 
 
-def save_zerpmon_winrate(winner_name, loser_name):
+async def save_zerpmon_winrate(winner_name, loser_name):
     zerpmon_collection = db['MoveSets']
     # print(winner_name, loser_name)
 
-    winner = zerpmon_collection.find_one({"name": winner_name})
+    winner = await zerpmon_collection.find_one({"name": winner_name})
 
     total = 0 if 'total' not in winner else winner['total']
     new_wr = 100 if 'winrate' not in winner else ((winner['winrate'] * total) + 100) / (total + 1)
-    u1 = zerpmon_collection.find_one_and_update({"name": winner_name},
+    u1 = await zerpmon_collection.find_one_and_update({"name": winner_name},
                                                 {'$set': {'total': total + 1,
                                                           'winrate': new_wr}})
 
-    loser = zerpmon_collection.find_one({"name": loser_name})
+    loser = await zerpmon_collection.find_one({"name": loser_name})
     total = 0 if 'total' not in loser else loser['total']
     new_wr = 0 if 'winrate' not in loser else (loser['winrate'] * total) / (total + 1)
-    u2 = zerpmon_collection.find_one_and_update({"name": loser_name},
+    u2 = await zerpmon_collection.find_one_and_update({"name": loser_name},
                                                 {'$set': {'total': total + 1,
                                                           'winrate': new_wr}})
 
     return True
 
 
-def temp_move_update(document):
+async def temp_move_update(document):
     if document['level'] > 30:
         if int(document.get('number', 0)) < 100000:
             if 'Dragon' in [i['value'] for i in document['attributes'] if
@@ -334,66 +335,66 @@ def temp_move_update(document):
                 document['moves'][i] = move
 
 
-def get_rand_zerpmon(level, lure_type=None):
+async def get_rand_zerpmon(level, lure_type=None):
     zerpmon_collection = db['MoveSets2']
     if lure_type:
         query = {'$match': {'attributes': {'$elemMatch': {'trait_type': 'Type', 'value': lure_type}}}}
     else:
         query = {'$match': {}}
-    random_doc = list(zerpmon_collection.aggregate([
+    random_doc = list(await zerpmon_collection.aggregate([
         query,
         {'$sample': {'size': 1}},
         {'$limit': 1}
-    ]))
+    ]).to_list(None))
     zerp = random_doc[0]
     zerp['level'] = level
-    temp_move_update(zerp)
+    await temp_move_update(zerp)
     zerp['name2'] = zerp['name']
     # print(random_doc[0])
     return zerp
 
 
-def get_all_z():
+async def get_all_z():
     zerpmon_collection = db['MoveSets']
-    data = zerpmon_collection.find({})
+    data = await zerpmon_collection.find({}).to_list(None)
     return [i for i in data]
 
 
-def update_image(name, url):
+async def update_image(name, url):
     zerpmon_collection = db['MoveSets']
-    zerpmon_collection.find_one_and_update({'name': name}, {'$set': {'image': url}})
+    await zerpmon_collection.find_one_and_update({'name': name}, {'$set': {'image': url}})
 
 
-def update_type(name, attrs):
+async def update_type(name, attrs):
     zerpmon_collection = db['MoveSets']
-    zerpmon_collection.find_one_and_update({'name': name}, {'$set': {'attributes': attrs}})
+    await zerpmon_collection.find_one_and_update({'name': name}, {'$set': {'attributes': attrs}})
 
 
-def update_level(name, new_lvl):
+async def update_level(name, new_lvl):
     zerpmon_collection = db['MoveSets']
-    zerpmon_collection.find_one_and_update({'name': name}, {'$set': {'level': new_lvl}})
+    await zerpmon_collection.find_one_and_update({'name': name}, {'$set': {'level': new_lvl}})
 
 
-def update_zerpmon_alive(zerpmon, serial, user_id):
+async def update_zerpmon_alive(zerpmon, serial, user_id):
     users_collection = db['users']
     if 'buff_eq' in zerpmon:
         del zerpmon['buff_eq']
     if 'eq_applied' in zerpmon:
         del zerpmon['eq_applied']
-    r = users_collection.find_one_and_update({'discord_id': str(user_id)},
+    r = await users_collection.find_one_and_update({'discord_id': str(user_id)},
                                              {'$set': {f'zerpmons.{serial}': zerpmon}},
                                              return_document=ReturnDocument.AFTER)
     # print(r)
 
 
-def update_battle_count(user_id, num):
+async def update_battle_count(user_id, num):
     from utils.checks import get_next_ts
     users_collection = db['users']
     new_ts = get_next_ts()
-    r = users_collection.find_one({'discord_id': str(user_id)})
+    r = await users_collection.find_one({'discord_id': str(user_id)})
     if 'battle' in r and r['battle']['num'] > 0 and new_ts - r['battle']['reset_t'] > 80000:
         num = -1
-    users_collection.update_one({'discord_id': str(user_id)},
+    await users_collection.update_one({'discord_id': str(user_id)},
                                 {'$set': {'battle': {
                                     'num': num + 1,
                                     'reset_t': new_ts
@@ -401,16 +402,16 @@ def update_battle_count(user_id, num):
     # print(r)
 
 
-def update_user_wr(user_id, win):
+async def update_user_wr(user_id, win):
     users_collection = db['users']
 
     r = None
     if win == 1:
-        r = users_collection.update_one({'discord_id': str(user_id)},
+        r = await users_collection.update_one({'discord_id': str(user_id)},
                                         {'$inc': {'win': 1, 'loss': 0, 'total_matches': 1}},
                                         upsert=True)
     elif win == 0:
-        r = users_collection.update_one({'discord_id': str(user_id)},
+        r = await users_collection.update_one({'discord_id': str(user_id)},
                                         {'$inc': {'loss': 1, 'win': 0, 'total_matches': 1}},
                                         upsert=True)
 
@@ -420,7 +421,7 @@ def update_user_wr(user_id, win):
         return False
 
 
-def update_pvp_user_wr(user_id, win, recent_deck=None, b_type=None):
+async def update_pvp_user_wr(user_id, win, recent_deck=None, b_type=None):
     users_collection = db['users']
 
     query = {'$inc': {'pvp_win': win, 'pvp_loss': abs(1 - win)}}
@@ -437,29 +438,29 @@ def update_pvp_user_wr(user_id, win, recent_deck=None, b_type=None):
             z1_deck, eq1_deck = deck, e_deck
         recent_key = 'recent_deck' + (f'{b_type}' if b_type != 3 else '')
         query['$set'] = {recent_key: z1_deck, recent_key + '_eq': eq1_deck}
-    r = users_collection.update_one({'discord_id': str(user_id)},
+    r = await users_collection.update_one({'discord_id': str(user_id)},
                                     query,
                                     upsert=True)
 
     return r.acknowledged
 
 
-def save_mission_mode(user_id, mode):
+async def save_mission_mode(user_id, mode):
     users_collection = db['users']
     user_id = str(user_id)
-    r = users_collection.update_one({'discord_id': user_id}, {'$set': {'xp_mode': mode}})
+    r = await users_collection.update_one({'discord_id': user_id}, {'$set': {'xp_mode': mode}})
     return r.acknowledged
 
 
-def get_top_players(user_id):
+async def get_top_players(user_id):
     users_collection = db['users']
     user_id = str(user_id)
     query = {'win': {'$exists': True}}
-    top_users = users_collection.find(query).sort('win', DESCENDING).limit(10)
+    top_users = await users_collection.find(query).sort('win', DESCENDING).limit(10).to_list(None)
     top_users = [i for i in top_users]
 
     if user_id not in [i['discord_id'] for i in top_users]:
-        curr_user = users_collection.find_one({'discord_id': user_id})
+        curr_user = await users_collection.find_one({'discord_id': user_id})
         if curr_user and 'win' not in curr_user:
             curr_user['win'] = 0
             curr_user['loss'] = 0
@@ -467,21 +468,21 @@ def get_top_players(user_id):
 
             top_users.append(curr_user)
         elif curr_user:
-            curr_user_rank = users_collection.count_documents({'win': {'$gt': curr_user['win']}})
+            curr_user_rank = await users_collection.count_documents({'win': {'$gt': curr_user['win']}})
             curr_user['rank'] = curr_user_rank + 1
             top_users.append(curr_user)
 
     return top_users
 
 
-def get_pvp_top_players(user_id):
+async def get_pvp_top_players(user_id):
     users_collection = db['users']
     user_id = str(user_id)
     query = {'pvp_win': {'$exists': True}}
-    top_users = users_collection.find(query).sort('pvp_win', DESCENDING).limit(10)
+    top_users = await users_collection.find(query).sort('pvp_win', DESCENDING).limit(10).to_list(None)
     top_users = [i for i in top_users]
     if user_id not in [i['discord_id'] for i in top_users]:
-        curr_user = users_collection.find_one({'discord_id': user_id})
+        curr_user = await users_collection.find_one({'discord_id': user_id})
         if curr_user and 'pvp_win' not in curr_user:
             curr_user['pvp_win'] = 0
             curr_user['pvp_loss'] = 0
@@ -489,21 +490,21 @@ def get_pvp_top_players(user_id):
 
             top_users.append(curr_user)
         elif curr_user:
-            curr_user_rank = users_collection.count_documents({'pvp_win': {'$gt': curr_user['pvp_win']}})
+            curr_user_rank = await users_collection.count_documents({'pvp_win': {'$gt': curr_user['pvp_win']}})
             curr_user['rank'] = curr_user_rank + 1
             top_users.append(curr_user)
 
     return [i for i in top_users]
 
 
-def get_top_purchasers(user_id):
+async def get_top_purchasers(user_id):
     users_collection = db['users']
     user_id = str(user_id)
     query = {'xrp_spent': {'$exists': True}}
-    top_users = users_collection.find(query).sort('xrp_spent', DESCENDING).limit(10)
+    top_users = await users_collection.find(query).sort('xrp_spent', DESCENDING).limit(10).to_list(None)
     top_users = [i for i in top_users]
     if user_id not in [i['discord_id'] for i in top_users]:
-        curr_user = users_collection.find_one({'discord_id': user_id})
+        curr_user = await users_collection.find_one({'discord_id': user_id})
         if curr_user and 'xrp_spent' not in curr_user:
             curr_user['xrp_spent'] = 0
             curr_user['mission_purchase'] = 0
@@ -512,25 +513,25 @@ def get_top_purchasers(user_id):
 
             top_users.append(curr_user)
         elif curr_user:
-            curr_user_rank = users_collection.count_documents({'xrp_spent': {'$gt': curr_user['xrp_spent']}})
+            curr_user_rank = await users_collection.count_documents({'xrp_spent': {'$gt': curr_user['xrp_spent']}})
             curr_user['rank'] = curr_user_rank + 1
             top_users.append(curr_user)
 
     return [i for i in top_users]
 
 
-def get_ranked_players(user_id, field='rank'):
+async def get_ranked_players(user_id, field='rank'):
     users_collection = db['users']
     user_id = str(user_id)
     query = {field: {'$exists': True}}
-    top_users = users_collection.find(query).sort(f'{field}.points', DESCENDING)
-    curr_user = users_collection.find_one({'discord_id': user_id})
+    top_users = await users_collection.find(query).sort(f'{field}.points', DESCENDING).to_list(None)
+    curr_user = await users_collection.find_one({'discord_id': user_id})
     if curr_user:
-        curr_user_rank = users_collection.count_documents(
+        curr_user_rank = await users_collection.count_documents(
             {f'{field}.points': {'$gt': curr_user[field]['points'] if field
                                                                       in curr_user else 0}})
         curr_user['ranked'] = curr_user_rank + 1
-        top_users_count = users_collection.count_documents(query)
+        top_users_count = await users_collection.count_documents(query)
 
         rank_limit = 4  # Number of players above and below to show
         rank_above = max(0, curr_user['ranked'] - rank_limit)
@@ -553,7 +554,7 @@ def get_ranked_players(user_id, field='rank'):
         return users
 
 
-def get_same_ranked_p(user_id, rank_tier, field='rank'):
+async def get_same_ranked_p(user_id, rank_tier, field='rank'):
     users_collection = db['users']
     if rank_tier == 'Unranked':
         query = {
@@ -574,79 +575,79 @@ def get_same_ranked_p(user_id, rank_tier, field='rank'):
                 {f'{field}.tier': rank_list[h_tier]},
             ]
         }
-    top_users = users_collection.find(query).sort(f'{field}.points', DESCENDING)
+    top_users = await users_collection.find(query).sort(f'{field}.points', DESCENDING).to_list(None)
     return [i for i in top_users if i['discord_id'] != user_id]
 
 
-def add_revive_potion(address, inc_by, purchased=False, amount=0):
+async def add_revive_potion(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'revive_potion': inc_by}
     if purchased:
         query['xrp_spent'] = amount
         query['revive_purchase'] = inc_by
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
 
     return True
 
 
-def add_mission_potion(address, inc_by, purchased=False, amount=0):
+async def add_mission_potion(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
 
     query = {'mission_potion': inc_by}
     if purchased:
         query['xrp_spent'] = amount
         query['mission_purchase'] = inc_by
-    res = users_collection.update_one({'address': str(address)},
+    res = await users_collection.update_one({'address': str(address)},
                                       {'$inc': query},
                                       upsert=True)
     # print(r)
     return res.acknowledged
 
 
-def add_gym_refill_potion(address, inc_by, purchased=False, amount=0):
+async def add_gym_refill_potion(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
 
     query = {'gym.refill_potion': inc_by}
     if purchased:
         query['zrp_spent'] = amount
         query['gym.refill_purchase'] = inc_by
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
     # print(r)
 
 
-def reset_respawn_time(user_id):
+async def reset_respawn_time(user_id):
     users_collection = db['users']
-    old = users_collection.find_one({'discord_id': str(user_id)})
+    old = await users_collection.find_one({'discord_id': str(user_id)})
 
     for k, z in old['zerpmons'].items():
         old['zerpmons'][k]['active_t'] = 0
 
     old['battle'] = {'num': 0, 'reset_t': -1}
 
-    r = users_collection.find_one_and_update({'discord_id': str(user_id)},
+    r = await users_collection.find_one_and_update({'discord_id': str(user_id)},
                                              {'$set': old},
                                              return_document=ReturnDocument.AFTER)
 
 
-def reset_all_gyms():
+async def reset_all_gyms():
     users_collection = db['users']
-    old = users_collection.find()
+    old = await users_collection.find().to_list(None)
     for user in old:
         gym_obj = user.get('gym', {})
         gym_obj['won'] = {}
         gym_obj['active_t'] = 0
         gym_obj['gp'] = 0
         query = {'$set': {'gym': gym_obj}}
-        r = users_collection.find_one_and_update({'discord_id': user['discord_id']},
+        r = await users_collection.find_one_and_update({'discord_id': user['discord_id']},
                                                  query,
                                                  return_document=ReturnDocument.AFTER)
 
 
-def update_trainer_deck(trainer_serial, user_id, deck_no, gym=False):
+async def update_trainer_deck(trainer_serial, user_id, deck_no, gym=False):
     users_collection = db['users']
     if gym:
         update_query = {
@@ -657,7 +658,7 @@ def update_trainer_deck(trainer_serial, user_id, deck_no, gym=False):
             f'battle_deck.{deck_no}.trainer': trainer_serial
         }
 
-    r = users_collection.update_one({'discord_id': str(user_id)},
+    r = await users_collection.update_one({'discord_id': str(user_id)},
                                     {'$set': update_query})
 
     if r.acknowledged:
@@ -666,13 +667,13 @@ def update_trainer_deck(trainer_serial, user_id, deck_no, gym=False):
         return False
 
 
-def update_mission_trainer(trainer_serial, user_id):
+async def update_mission_trainer(trainer_serial, user_id):
     users_collection = db['users']
     update_query = {
         f'mission_trainer': trainer_serial
     }
 
-    r = users_collection.update_one({'discord_id': str(user_id)},
+    r = await users_collection.update_one({'discord_id': str(user_id)},
                                     {'$set': update_query})
 
     if r.acknowledged:
@@ -681,10 +682,10 @@ def update_mission_trainer(trainer_serial, user_id):
         return False
 
 
-def update_mission_deck(new_deck, user_id):
+async def update_mission_deck(new_deck, user_id):
     users_collection = db['users']
 
-    # doc = users_collection.find_one({'discord_id': str(user_id)})
+    # doc = await users_collection.find_one({'discord_id': str(user_id)})
 
     # add the element to the array
     # arr = {} if "mission_deck" not in doc or doc["mission_deck"] == {} else doc["mission_deck"]
@@ -696,7 +697,7 @@ def update_mission_deck(new_deck, user_id):
     # arr[str(place - 1)] = zerpmon_id
     arr = new_deck
     # save the updated document
-    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': arr}})
+    r = await users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': arr}})
 
     if r.acknowledged:
         return True
@@ -704,10 +705,10 @@ def update_mission_deck(new_deck, user_id):
         return False
 
 
-def clear_mission_deck(user_id):
+async def clear_mission_deck(user_id):
     users_collection = db['users']
     n_deck = {str(i): None for i in range(20)}
-    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': n_deck}})
+    r = await users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'mission_deck': n_deck}})
 
     if r.acknowledged:
         return True
@@ -715,10 +716,10 @@ def clear_mission_deck(user_id):
         return False
 
 
-def update_battle_deck(deck_no, new_deck, eqs, user_id):
+async def update_battle_deck(deck_no, new_deck, eqs, user_id):
     users_collection = db['users']
 
-    doc = users_collection.find_one({'discord_id': str(user_id)})
+    doc = await users_collection.find_one({'discord_id': str(user_id)})
 
     # add the element to the array
     arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
@@ -732,7 +733,7 @@ def update_battle_deck(deck_no, new_deck, eqs, user_id):
     #
     # arr[deck_no][str(place - 1)] = zerpmon_id
     arr[deck_no] = new_deck
-    r = users_collection.update_one({'discord_id': str(user_id)},
+    r = await users_collection.update_one({'discord_id': str(user_id)},
                                     {"$set": {f'equipment_decks.battle_deck.{deck_no}': eqs,
                                               'battle_deck': arr}})
 
@@ -742,12 +743,12 @@ def update_battle_deck(deck_no, new_deck, eqs, user_id):
         return False
 
 
-def clear_battle_deck(deck_no, user_id, gym=False):
+async def clear_battle_deck(deck_no, user_id, gym=False):
     users_collection = db['users']
     if gym:
-        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'gym_deck.{deck_no}': {}}})
+        r = await users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'gym_deck.{deck_no}': {}}})
     else:
-        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'battle_deck.{deck_no}': {}}})
+        r = await users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'battle_deck.{deck_no}': {}}})
 
     if r.acknowledged:
         return True
@@ -755,10 +756,10 @@ def clear_battle_deck(deck_no, user_id, gym=False):
         return False
 
 
-def update_gym_deck(deck_no, new_deck, eqs, user_id):
+async def update_gym_deck(deck_no, new_deck, eqs, user_id):
     users_collection = db['users']
 
-    doc = users_collection.find_one({'discord_id': str(user_id)})
+    doc = await users_collection.find_one({'discord_id': str(user_id)})
 
     # add the element to the array
     arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "gym_deck" not in doc or doc["gym_deck"] == {} else doc[
@@ -772,7 +773,7 @@ def update_gym_deck(deck_no, new_deck, eqs, user_id):
     #
     # arr[deck_no][str(place - 1)] = zerpmon_id
     arr[deck_no] = new_deck
-    r = users_collection.update_one({'discord_id': str(user_id)},
+    r = await users_collection.update_one({'discord_id': str(user_id)},
                                     {"$set": {f'equipment_decks.gym_deck.{deck_no}': eqs,
                                               'gym_deck': arr}})
 
@@ -782,16 +783,16 @@ def update_gym_deck(deck_no, new_deck, eqs, user_id):
         return False
 
 
-def clear_gym_deck(deck_no, user_id):
+async def clear_gym_deck(deck_no, user_id):
     users_collection = db['users']
-    r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'gym_deck.{deck_no}': {}}})
+    r = await users_collection.update_one({'discord_id': str(user_id)}, {"$set": {f'gym_deck.{deck_no}': {}}})
     if r.acknowledged:
         return True
     else:
         return False
 
 
-def set_default_deck(deck_no, doc, user_id, type_: str):
+async def set_default_deck(deck_no, doc, user_id, type_: str):
     users_collection = db['users']
 
     if type_ == config.GYM_DECK:
@@ -802,7 +803,7 @@ def set_default_deck(deck_no, doc, user_id, type_: str):
         eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
 
         # save the updated document
-        r = users_collection.update_one({'discord_id': str(user_id)},
+        r = await users_collection.update_one({'discord_id': str(user_id)},
                                         {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck}})
     elif type_ == config.BATTLE_DECK:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
@@ -811,7 +812,7 @@ def set_default_deck(deck_no, doc, user_id, type_: str):
         eq_deck = doc['equipment_decks']['battle_deck']
         eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
         # save the updated document
-        r = users_collection.update_one({'discord_id': str(user_id)},
+        r = await users_collection.update_one({'discord_id': str(user_id)},
                                         {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck}})
     else:
         users_collection = db['temp_user_data']
@@ -820,7 +821,7 @@ def set_default_deck(deck_no, doc, user_id, type_: str):
         eq_deck = doc['equipment_decks']
         eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
         # save the updated document
-        r = users_collection.update_one({'discord_id': str(user_id)},
+        r = await users_collection.update_one({'discord_id': str(user_id)},
                                         {"$set": {'battle_deck': arr, 'equipment_decks': eq_deck}})
 
     if r.acknowledged:
@@ -829,26 +830,26 @@ def set_default_deck(deck_no, doc, user_id, type_: str):
         return False
 
 
-def reset_deck():
+async def reset_deck():
     users_collection = db['users']
 
-    doc = users_collection.find()
+    doc = await users_collection.find().to_list(None)
 
     for user in doc:
-        r = users_collection.update_one({'discord_id': str(user['discord_id'])}, {"$set": {'battle_deck': {}}})
+        r = await users_collection.update_one({'discord_id': str(user['discord_id'])}, {"$set": {'battle_deck': {}}})
 
 
-def revive_zerpmon(user_id):
+async def revive_zerpmon(user_id):
     users_collection = db['users']
-    old = users_collection.find_one({'discord_id': str(user_id)})
+    old = await users_collection.find_one({'discord_id': str(user_id)})
     addr = old['address']
 
     for k, z in old['zerpmons'].items():
         old['zerpmons'][k]['active_t'] = 0
 
-    r = users_collection.update_one({'discord_id': str(user_id)},
+    r = await users_collection.update_one({'discord_id': str(user_id)},
                                     {'$set': {'zerpmons': old['zerpmons']}}, )
-    add_revive_potion(addr, -1)
+    await add_revive_potion(addr, -1)
 
     if r.acknowledged:
         return True
@@ -856,18 +857,18 @@ def revive_zerpmon(user_id):
         return False
 
 
-def mission_refill(user_id):
+async def mission_refill(user_id):
     users_collection = db['users']
-    old = users_collection.find_one({'discord_id': str(user_id)})
+    old = await users_collection.find_one({'discord_id': str(user_id)})
     addr = old['address']
     old['battle'] = {
         'num': 0,
         'reset_t': -1
     }
 
-    r = users_collection.update_one({'discord_id': str(user_id)},
+    r = await users_collection.update_one({'discord_id': str(user_id)},
                                     {'$set': old}, )
-    add_mission_potion(addr, -1)
+    await add_mission_potion(addr, -1)
 
     if r.acknowledged:
         return True
@@ -875,18 +876,18 @@ def mission_refill(user_id):
         return False
 
 
-def gym_refill(user_id):
+async def gym_refill(user_id):
     users_collection = db['users']
-    old = users_collection.find_one({'discord_id': str(user_id)})
+    old = await users_collection.find_one({'discord_id': str(user_id)})
     addr = old['address']
     if 'gym' in old:
         for i in old['gym']['won']:
             if old['gym']['won'][i]['lose_streak'] > 0:
                 old['gym']['won'][i]['next_battle_t'] = -1
                 old['gym']['won'][i]['lose_streak'] -= 1
-        r = users_collection.update_one({'discord_id': str(user_id)},
+        r = await users_collection.update_one({'discord_id': str(user_id)},
                                         {'$set': {'gym': old['gym']}}, )
-        add_gym_refill_potion(addr, -1)
+        await add_gym_refill_potion(addr, -1)
 
         if r.acknowledged:
             return True
@@ -895,42 +896,42 @@ def gym_refill(user_id):
     return False
 
 
-def add_xrp(user_id, amount):
+async def add_xrp(user_id, amount):
     users_collection = db['users']
 
-    r = users_collection.find_one_and_update({'discord_id': str(user_id)},
+    r = await users_collection.find_one_and_update({'discord_id': str(user_id)},
                                              {'$inc': {'xrp_earned': amount}},
                                              upsert=True,
                                              return_document=ReturnDocument.AFTER)
     # print(r)
 
 
-def add_candy_fragment(addr, qty=1):
+async def add_candy_fragment(addr, qty=1):
     users_collection = db['users']
-    users_collection.update_one({'address': addr}, {'$inc': {'candy_frag': qty}})
+    await users_collection.update_one({'address': addr}, {'$inc': {'candy_frag': qty}})
 
 
-def combine_candy_frag(addr, combine_to_key):
+async def combine_candy_frag(addr, combine_to_key):
     users_collection = db['users']
-    res = users_collection.update_one({'address': addr}, {'$inc': {'candy_frag': -7, combine_to_key: 1}})
+    res = await users_collection.update_one({'address': addr}, {'$inc': {'candy_frag': -7, combine_to_key: 1}})
     return res.acknowledged
 
 
-def add_candy_slot(zerp_name):
+async def add_candy_slot(zerp_name):
     zerpmon_collection = db['MoveSets']
-    res = zerpmon_collection.update_one({'name': zerp_name}, {'$inc': {'extra_candy_slot': 1}})
+    res = await zerpmon_collection.update_one({'name': zerp_name}, {'$inc': {'extra_candy_slot': 1}})
     return res.acknowledged
 
 
-def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
+async def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
     zerpmon_collection = db['MoveSets']
 
-    old = zerpmon_collection.find_one({'name': zerpmon_name}) if zerp_obj is None else zerp_obj
+    old = await zerpmon_collection.find_one({'name': zerpmon_name}) if zerp_obj is None else zerp_obj
     lvl_up, rewards = False, {}
     if old:
         level = old.get('level', 0)
         xp = old.get('xp', 0)
-        next_lvl = level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
+        next_lvl = await level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
 
         if next_lvl and xp + xp_add >= next_lvl['xp_required']:
             left_xp = (xp + xp_add) - next_lvl['xp_required']
@@ -939,7 +940,7 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
             query = {'$set': {'level': next_lvl['level'], 'xp': left_xp}}
             if zerp_obj:
                 query['$inc'] = {'licorice': 1}
-            doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, query,
+            doc = await zerpmon_collection.find_one_and_update({'name': zerpmon_name}, query,
                                                          return_document=ReturnDocument.AFTER)
             xp = doc.get('xp')
             r_potion = next_lvl['revive_potion_reward']
@@ -951,36 +952,36 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
             candy_reward_cnt = next_lvl.get('extra_candy_cnt', 0)
             lvl_up = True
             if r_potion + m_potion + gym_r_potion + candy_slot == 0:
-                add_candy_fragment(user_address)
+                await add_candy_fragment(user_address)
                 rewards['cf'] = 1
             else:
                 if r_potion + m_potion > 0:
-                    add_revive_potion(user_address, r_potion)
-                    add_mission_potion(user_address, m_potion)
+                    await add_revive_potion(user_address, r_potion)
+                    await add_mission_potion(user_address, m_potion)
                     rewards['rp'] = r_potion
                     rewards['mp'] = m_potion
                 if gym_r_potion:
-                    add_gym_refill_potion(user_address, gym_r_potion)
+                    await add_gym_refill_potion(user_address, gym_r_potion)
                     globals().get(f'add_{candy_reward}')(user_address, candy_reward_cnt)
                     rewards['grp'] = gym_r_potion
                     rewards['extra_candy'] = candy_reward
                     rewards['extra_candy_cnt'] = candy_reward_cnt
                 elif candy_slot > 0:
-                    add_candy_fragment(user_address, candy_frags)
-                    add_candy_slot(zerpmon_name)
+                    await add_candy_fragment(user_address, candy_frags)
+                    await add_candy_slot(zerpmon_name)
                     rewards['cs'] = 1
                     rewards['cf'] = candy_frags
             if (level + 1) >= 10 and (level + 1) % 10 == 0:
-                update_moves(doc)
+                await update_moves(doc)
 
         else:
             maxed = old.get('maxed_out', 0)
             if level < 30 or (ascended and level < 60):
-                doc = zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {'$inc': {'xp': xp_add}},
+                doc = await zerpmon_collection.find_one_and_update({'name': zerpmon_name}, {'$inc': {'xp': xp_add}},
                                                              return_document=ReturnDocument.AFTER)
                 xp = doc.get('xp')
             elif (level == 30 or level == 60) and maxed == 0:
-                zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'maxed_out': 1}})
+                await zerpmon_collection.update_one({'name': zerpmon_name}, {'$set': {'maxed_out': 1}})
     else:
         # Zerpmon not found, handle the case accordingly
         # For example, you can raise an exception or return False
@@ -990,10 +991,10 @@ def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=None):
     return True, lvl_up, rewards, xp
 
 
-def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=False, ret_doc=False) -> tuple:
+async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=False, ret_doc=False) -> tuple:
     zerpmon_collection = db['MoveSets']
 
-    old = zerpmon_collection.find_one({'name': zerpmon_name})
+    old = await zerpmon_collection.find_one({'name': zerpmon_name})
     level = old['level'] + 1 if 'level' in old else 1
     # maxed = old.get('maxed_out', 0)
     # if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (
@@ -1001,8 +1002,8 @@ def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=Fals
     #     update_moves(old)
     if level > 60:
         level = 60
-    last_lvl = level_collection.find_one({'level': (level - 1) if level > 1 else 1})
-    next_lvl = level_collection.find_one({'level': level})
+    last_lvl = await level_collection.find_one({'level': (level - 1) if level > 1 else 1})
+    next_lvl = await level_collection.find_one({'level': level})
     if 'level' in old and 'xp' in old:
 
         vals = old['level'], old['xp'], next_lvl['xp_required'] if not get_candies else (
@@ -1021,9 +1022,9 @@ def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=Fals
 
 # RANK QUERY
 
-def update_rank(user_id, win, decay=False, field='rank'):
+async def update_rank(user_id, win, decay=False, field='rank'):
     users_collection = db['users']
-    usr = get_owned(user_id)
+    usr = await get_owned(user_id)
     next_rank = None
     if field in usr:
         rank = usr[field]
@@ -1055,24 +1056,24 @@ def update_rank(user_id, win, decay=False, field='rank'):
     if rank['points'] > 8000:
         user_rank_d['win'] -= rank['points'] % 8000
         rank['points'] = 8000
-    users_collection.update_one({'discord_id': str(user_id)},
+    await users_collection.update_one({'discord_id': str(user_id)},
                                 {'$set': {field: rank}}
                                 )
     return 0 if win is None else (user_rank_d['win'] if win else user_rank_d['loss']), rank, next_rank
     # print(r)
 
 
-def get_random_doc_with_type(type_value=None, limit=5, level=None):
+async def get_random_doc_with_type(type_value=None, limit=5, level=None):
     collection = db['MoveSets2']
     if type_value is None:
         query = {}
     else:
         query = {'attributes': {'$elemMatch': {'trait_type': 'Type', 'value': type_value}}}
 
-    random_documents = collection.aggregate([
+    random_documents = await collection.aggregate([
         {'$match': query},
         {'$sample': {'size': limit}}
-    ])
+    ]).to_list(None)
 
     if random_documents:
         random_documents = list(random_documents)
@@ -1080,7 +1081,7 @@ def get_random_doc_with_type(type_value=None, limit=5, level=None):
             del doc['_id']
             if level is not None and level >= 10:
                 doc['level'] = level
-                update_moves(doc, False)
+                await update_moves(doc, False)
             doc['name2'] = doc['name']
 
         return random_documents
@@ -1088,7 +1089,7 @@ def get_random_doc_with_type(type_value=None, limit=5, level=None):
         return None
 
 
-def choose_gym_zerp():
+async def choose_gym_zerp():
     collection_name = 'gym_zerp'
     gym_col = db[collection_name]
     for leader_type in config.GYMS:
@@ -1098,20 +1099,20 @@ def choose_gym_zerp():
                    'image': f'./static/gym/{leader_name}.png',
                    'bg': f'./static/gym/{leader_type}.png'}
         while gym_obj['zerpmons'] is None:
-            gym_obj['zerpmons'] = get_random_doc_with_type(leader_type)
-        gym_col.update_one({'name': leader_name},
+            gym_obj['zerpmons'] = await get_random_doc_with_type(leader_type)
+        await gym_col.update_one({'name': leader_name},
                            {'$set': gym_obj}, upsert=True)
 
 
-def get_gym_leader(gym_type):
+async def get_gym_leader(gym_type):
     collection_name = 'gym_zerp'
     gym_col = db[collection_name]
     leader_name = f'{gym_type} Gym Leader'
-    res = gym_col.find_one({'name': leader_name})
+    res = await gym_col.find_one({'name': leader_name})
     return res
 
 
-def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
+async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
     users_collection = db['users']
     if gym_obj == {}:
         gym_obj = {
@@ -1139,13 +1140,13 @@ def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
                 gym_obj['won'][gym_type]['next_battle_t'] if gym_type in gym_obj['won'] else 0),
             'lose_streak': 0 if l_streak == reset_limit else (l_streak if skipped or lost else l_streak - 1)
         }
-    users_collection.update_one(
+    await users_collection.update_one(
         {'discord_id': str(discord_id)},
         {'$set': {'gym': gym_obj}}
     )
 
 
-def add_gp(discord_id, gym_obj, gym_type, stage):
+async def add_gp(discord_id, gym_obj, gym_type, stage):
     users_collection = db['users']
     if gym_obj == {}:
         gym_obj = {
@@ -1165,28 +1166,28 @@ def add_gp(discord_id, gym_obj, gym_type, stage):
         if 'gp' not in gym_obj:
             gym_obj['gp'] = 0
         if stage + 1 >= 11:
-            log_user_gym(discord_id, gym_type, stage)
+            await log_user_gym(discord_id, gym_type, stage)
         gym_obj['won'][gym_type] = {
             'stage': stage + 1 if stage < 20 else 1,
             'next_battle_t': config.gym_main_reset,
             'lose_streak': 0
         }
         gym_obj['gp'] += stage
-    users_collection.update_one(
+    await users_collection.update_one(
         {'discord_id': str(discord_id)},
         {'$set': {'gym': gym_obj}}
     )
 
 
-def get_gym_leaderboard(user_id):
+async def get_gym_leaderboard(user_id):
     users_collection = db['users']
     user_id = str(user_id)
     query = {'gym': {'$exists': True}}
-    top_users = users_collection.find(query).sort('gym.gp', DESCENDING)
-    curr_user = users_collection.find_one({'discord_id': user_id})
-    top_users_count = users_collection.count_documents(query)
+    top_users = await users_collection.find(query).sort('gym.gp', DESCENDING).to_list(None)
+    curr_user = await users_collection.find_one({'discord_id': user_id})
+    top_users_count = await users_collection.count_documents(query)
     if curr_user:
-        curr_user_rank = users_collection.count_documents(
+        curr_user_rank = await users_collection.count_documents(
             {'gym.gp': {'$gt': curr_user['gym']['gp'] if 'gym' in curr_user else 0}})
         curr_user['ranked'] = curr_user_rank + 1
 
@@ -1228,77 +1229,77 @@ def get_gym_leaderboard(user_id):
     return top_users
 
 
-def update_user_bg(user_id, gym_type):
+async def update_user_bg(user_id, gym_type):
     users_collection = db['users']
     user_id = str(user_id)
     bg_value = f'./static/gym/{gym_type}.png'
-    users_collection.update_one({'discord_id': user_id},
+    await users_collection.update_one({'discord_id': user_id},
                                 {'$push': {'bg': bg_value}})
 
 
-def update_user_flair(user_id, flair_name):
+async def update_user_flair(user_id, flair_name):
     users_collection = db['users']
     user_id = str(user_id)
-    users_collection.update_one({'discord_id': user_id},
+    await users_collection.update_one({'discord_id': user_id},
                                 {'$push': {'flair': flair_name}})
 
 
-def add_bg(user_id, gym_type, type_):
+async def add_bg(user_id, gym_type, type_):
     if type_ < 0:
         users_collection = db['users']
         user_id = str(user_id)
         bg_value = f'./static/gym/{gym_type}.png'
-        user_obj = users_collection.find_one({'discord_id': user_id}, {'bg': 1})
+        user_obj = await users_collection.find_one({'discord_id': user_id}, {'bg': 1})
         user_obj['bg'].remove(bg_value)
 
-        users_collection.update_one(
+        await users_collection.update_one(
             {'discord_id': user_id},
             {'$set': {'bg': user_obj['bg']}}
         )
     else:
-        update_user_bg(user_id, gym_type)
+        await update_user_bg(user_id, gym_type)
 
 
-def add_flair(user_id, flair_name, type_):
+async def add_flair(user_id, flair_name, type_):
     if type_ < 0:
         users_collection = db['users']
         user_id = str(user_id)
-        user_obj = users_collection.find_one({'discord_id': user_id}, {'flair': 1})
+        user_obj = await users_collection.find_one({'discord_id': user_id}, {'flair': 1})
         user_obj['flair'].remove(flair_name)
 
-        users_collection.update_one(
+        await users_collection.update_one(
             {'discord_id': user_id},
             {'$set': {'flair': user_obj['flair']}}
         )
     else:
-        update_user_flair(user_id, flair_name)
+        await update_user_flair(user_id, flair_name)
 
 
-def set_user_bg(user_obj, gym_type):
+async def set_user_bg(user_obj, gym_type):
     user_id = user_obj['discord_id']
     bgs = user_obj['bg']
     users_collection = db['users']
     bg_value = f'./static/gym/{gym_type}.png'
     index = bgs.index(bg_value)
     bgs[0], bgs[index] = bgs[index], bgs[0]
-    users_collection.update_one({'discord_id': user_id},
+    await users_collection.update_one({'discord_id': user_id},
                                 {'$set': {'bg': bgs}})
 
 
-def set_user_flair(user_obj, flair):
+async def set_user_flair(user_obj, flair):
     user_id = user_obj['discord_id']
     flairs = user_obj['flair']
     users_collection = db['users']
     index = flairs.index(flair)
     flairs[0], flairs[index] = flairs[index], flairs[0]
-    users_collection.update_one({'discord_id': user_id},
+    await users_collection.update_one({'discord_id': user_id},
                                 {'$set': {'flair': flairs}})
 
 
-def double_xp_24hr(user_id):
+async def double_xp_24hr(user_id):
     users_collection = db['users']
 
-    user_record = users_collection.find_one({'discord_id': str(user_id)})
+    user_record = await users_collection.find_one({'discord_id': str(user_id)})
     if user_record:
         current_time = time.time()
         if user_record.get('double_xp', 0) > current_time:
@@ -1306,7 +1307,7 @@ def double_xp_24hr(user_id):
         else:
             new_double_xp = current_time + 86400
 
-        r = users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'double_xp': new_double_xp}})
+        r = await users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'double_xp': new_double_xp}})
 
         if r.acknowledged:
             return True
@@ -1316,21 +1317,21 @@ def double_xp_24hr(user_id):
         return False
 
 
-def apply_lvl_candy(user_id, zerpmon_name):
+async def apply_lvl_candy(user_id, zerpmon_name):
     zerpmon_collection = db['MoveSets']
     users_collection = db['users']
-    user = users_collection.find_one({'discord_id': str(user_id)})
+    user = await users_collection.find_one({'discord_id': str(user_id)})
 
-    old = zerpmon_collection.find_one({'name': zerpmon_name})
+    old = await zerpmon_collection.find_one({'name': zerpmon_name})
     level = old.get('level', 0)
     ascended = old.get('ascended', False)
 
-    next_lvl = level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
+    next_lvl = await level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
     user_address = user['address']
     if next_lvl:
-        add_xp(zerpmon_name, user_address, next_lvl['xp_required'], ascended=ascended, zerp_obj=old)
+        await add_xp(zerpmon_name, user_address, next_lvl['xp_required'], ascended=ascended, zerp_obj=old)
 
-        add_lvl_candy(user_address, -1)
+        await add_lvl_candy(user_address, -1)
         return True
     return False
 
@@ -1339,113 +1340,113 @@ def apply_lvl_candy(user_id, zerpmon_name):
 # MOVES UPDATE QUERY
 
 
-def add_equipment(address, inc_by, purchased=False, amount=0):
+async def add_equipment(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'equipment': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
 
     return True
 
 
-def add_white_candy(address, inc_by, purchased=False, amount=0):
+async def add_white_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'white_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
     return True
 
 
-def add_gold_candy(address, inc_by, purchased=False, amount=0):
+async def add_gold_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'gold_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
 
     return True
 
 
-def add_lvl_candy(address, inc_by, purchased=False, amount=0):
+async def add_lvl_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'lvl_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
 
     return True
 
 
-def add_overcharge_candy(address, inc_by, purchased=False, amount=0):
+async def add_overcharge_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'overcharge_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
     return True
 
 
-def add_gummy_candy(address, inc_by, purchased=False, amount=0):
+async def add_gummy_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'gummy_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
     return True
 
 
-def add_sour_candy(address, inc_by, purchased=False, amount=0):
+async def add_sour_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'sour_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
     return True
 
 
-def add_star_candy(address, inc_by, purchased=False, amount=0):
+async def add_star_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'star_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
     return True
 
 
-def add_jawbreaker(address, inc_by, purchased=False, amount=0):
+async def add_jawbreaker(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'jawbreaker': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    users_collection.update_one({'address': str(address)},
+    await users_collection.update_one({'address': str(address)},
                                 {'$inc': query},
                                 upsert=True)
     return True
 
 
-def apply_white_candy(user_id, zerp_name, amt=1):
+async def apply_white_candy(user_id, zerp_name, amt=1):
     z_collection = db['MoveSets']
     users_collection = db['users']
-    user = users_collection.find_one({'discord_id': str(user_id)})
-    zerp = z_collection.find_one({'name': zerp_name})
+    user = await users_collection.find_one({'discord_id': str(user_id)})
+    zerp = await z_collection.find_one({'name': zerp_name})
     cnt = zerp.get('white_candy', 0)
     limit = 5 + zerp.get('extra_candy_slot', 0)
     if cnt >= limit or int(user.get('white_candy', 0)) < amt:
@@ -1453,7 +1454,7 @@ def apply_white_candy(user_id, zerp_name, amt=1):
     amt = min(amt, limit - cnt)
     print(amt)
 
-    original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
+    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'white':
             zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * (0.02 * amt)),
@@ -1461,23 +1462,23 @@ def apply_white_candy(user_id, zerp_name, amt=1):
     del zerp['_id']
     white_candy_usage = cnt
     zerp['white_candy'] = white_candy_usage + amt
-    save_new_zerpmon(zerp)
-    add_white_candy(user['address'], -amt)
+    await save_new_zerpmon(zerp)
+    await add_white_candy(user['address'], -amt)
     return True
 
 
-def apply_gold_candy(user_id, zerp_name, amt=1):
+async def apply_gold_candy(user_id, zerp_name, amt=1):
     z_collection = db['MoveSets']
     users_collection = db['users']
-    user = users_collection.find_one({'discord_id': str(user_id)})
-    zerp = z_collection.find_one({'name': zerp_name})
+    user = await users_collection.find_one({'discord_id': str(user_id)})
+    zerp = await z_collection.find_one({'name': zerp_name})
     limit = 5 + zerp.get('extra_candy_slot', 0)
     cnt = zerp.get('gold_candy', 0)
     if cnt >= limit or int(user.get('gold_candy', 0)) < amt:
         return False
     amt = min(amt, limit - cnt)
 
-    original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
+    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'gold':
             zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * (0.02 * amt),
@@ -1485,12 +1486,12 @@ def apply_gold_candy(user_id, zerp_name, amt=1):
     del zerp['_id']
     gold_candy_usage = cnt
     zerp['gold_candy'] = gold_candy_usage + amt
-    save_new_zerpmon(zerp)
-    add_gold_candy(user['address'], -amt)
+    await save_new_zerpmon(zerp)
+    await add_gold_candy(user['address'], -amt)
     return True
 
 
-def update_moves(document, save_z=True):
+async def update_moves(document, save_z=True):
     if 'level' in document and document['level'] / 10 >= 1:
         if document['level'] > 30:
             if int(document.get('number', 0)) < 100000:
@@ -1517,12 +1518,12 @@ def update_moves(document, save_z=True):
                     document['moves'][i] = move
         if save_z:
             del document['_id']
-            save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
+            await save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
 
     return document
 
 
-# def update_all_zerp_moves():
+# async def update_all_zerp_moves():
 #     for document in db['MoveSets'].find():
 #         if 'level' in document and document['level'] / 10 >= 1:
 #             miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
@@ -1545,41 +1546,41 @@ def update_moves(document, save_z=True):
 # print(len(get_ranked_players(0)))
 
 
-def get_trainer_buff_dmg(zerp_name):
-    original_zerp = db['MoveSets2'].find_one({'name': zerp_name})
+async def get_trainer_buff_dmg(zerp_name):
+    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name})
     extra_dmg_arr = []
     for i, move in enumerate(original_zerp['moves']):
         extra_dmg_arr.append(round(move.get('dmg', 0) * 0.1, 2))
     return extra_dmg_arr
 
 
-def get_zrp_stats():
+async def get_zrp_stats():
     stats_col = db['stats_log']
-    obj = stats_col.find_one({'name': 'zrp_stats'})
+    obj = await stats_col.find_one({'name': 'zrp_stats'})
     return obj
 
 
-def inc_loan_burn(inc):
+async def inc_loan_burn(inc):
     stats_col = db['stats_log']
 
-    stats_col.update_one({
+    await stats_col.update_one({
         'name': 'zrp_stats'
     },
         {'$inc': {'loan_burn_amount': inc}}, upsert=True
     )
 
 
-def get_loan_burn():
+async def get_loan_burn():
     stats_col = db['stats_log']
-    burn_amount = stats_col.find_one({'name': 'zrp_stats'}).get('loan_burn_amount', 0)
+    burn_amount = (await stats_col.find_one({'name': 'zrp_stats'})).get('loan_burn_amount', 0)
     return burn_amount
 
 
-def get_gym_reset():
+async def get_gym_reset():
     stats_col = db['stats_log']
-    reset_t = stats_col.find_one({'name': 'zrp_stats'}).get('gym_reset_t', 0)
+    reset_t = (await stats_col.find_one({'name': 'zrp_stats'})).get('gym_reset_t', 0)
     if reset_t < time.time() - 120:
-        stats_col.update_one({
+        await stats_col.update_one({
             'name': 'zrp_stats'
         },
             {'$set': {'gym_reset_t': get_next_ts(3)}}, upsert=True
@@ -1589,12 +1590,12 @@ def get_gym_reset():
         return reset_t
 
 
-def set_gym_reset():
+async def set_gym_reset():
     stats_col = db['stats_log']
-    reset_t = stats_col.find_one({'name': 'zrp_stats'}).get('gym_reset_t', 0)
+    reset_t = (await stats_col.find_one({'name': 'zrp_stats'})).get('gym_reset_t', 0)
     if reset_t < time.time() + 60:
         reset_t = get_next_ts(4) if reset_t > time.time() else get_next_ts(3)
-        stats_col.update_one({
+        await stats_col.update_one({
             'name': 'zrp_stats'
         },
             {'$set': {'gym_reset_t': reset_t}}, upsert=True
@@ -1602,7 +1603,7 @@ def set_gym_reset():
         config.gym_main_reset = reset_t
 
 
-def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_amount=0):
+async def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_amount=0):
     stats_col = db['stats_log']
     query = {'$inc': {'burnt': burn_amount, 'distributed': distributed_amount, 'jackpot_amount': jackpot_amount}}
     if left_amount is not None:
@@ -1610,16 +1611,16 @@ def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_
     else:
         query['$inc']['left_amount'] = 0
     print(query)
-    stats_col.update_one({
+    await stats_col.update_one({
         'name': 'zrp_stats'
     },
         query, upsert=True
     )
 
 
-def set_burnt(burn_amount):
+async def set_burnt(burn_amount):
     stats_col = db['stats_log']
-    stats_col.update_one({
+    await stats_col.update_one({
         'name': 'zrp_stats'
     },
         {'$set': {'burnt': burn_amount}}, upsert=True
@@ -1629,7 +1630,7 @@ def set_burnt(burn_amount):
 """BATTLE LOGS"""
 
 
-def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, user2_team, winner, battle_type):
+async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, user2_team, winner, battle_type):
     battle_log = db['battle_logs']
     bulk_operations = []
     if user1_id is not None:
@@ -1652,23 +1653,23 @@ def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, us
         )
         bulk_operations.append(user2_update)
 
-    battle_log.bulk_write(bulk_operations)
+    await battle_log.bulk_write(bulk_operations)
 
     if user1_id is not None:
-        battle_log.update_one({'discord_id': str(user1_id)}, {'$push': {'matches': {'$each': [], '$slice': -10}}})
+        await battle_log.update_one({'discord_id': str(user1_id)}, {'$push': {'matches': {'$each': [], '$slice': -10}}})
 
     if user2_id is not None:
-        battle_log.update_one({'discord_id': str(user2_id)}, {'$push': {'matches': {'$each': [], '$slice': -10}}})
+        await battle_log.update_one({'discord_id': str(user2_id)}, {'$push': {'matches': {'$each': [], '$slice': -10}}})
 
 
-def get_battle_log(user1_id):
+async def get_battle_log(user1_id):
     battle_log = db['battle_logs']
-    return battle_log.find_one({'discord_id': str(user1_id)})
+    return await battle_log.find_one({'discord_id': str(user1_id)})
 
 
-def log_user_gym(user_id, gym_type, stage=10):
+async def log_user_gym(user_id, gym_type, stage=10):
     battle_log = db['battle_logs']
-    battle_log.update_one(
+    await battle_log.update_one(
         {'discord_id': str(user_id)},
         {
             '$push': {
@@ -1684,43 +1685,43 @@ def log_user_gym(user_id, gym_type, stage=10):
     )
 
 
-def log_get_gym_cleared(user_id):
+async def log_get_gym_cleared(user_id):
     battle_log = db['battle_logs']
-    log = battle_log.find_one({'discord_id': str(user_id)})
+    log = await battle_log.find_one({'discord_id': str(user_id)})
     return log.get('gym_clear_history', None)
 
 
 """EQUIPMENT"""
 
 
-def set_equipment_on(user_id, equipments, deck_type, deck_no):
+async def set_equipment_on(user_id, equipments, deck_type, deck_no):
     users_collection = db['users']
     user_id = str(user_id)
     equipments = {str(i): eq for i, eq in enumerate(equipments)}
-    res = users_collection.update_one({'discord_id': user_id},
+    res = await users_collection.update_one({'discord_id': user_id},
                                       {'$set': {
                                           f'equipment_decks.{deck_type}{"." + deck_no if deck_no is not None else ""}': equipments}},
                                       upsert=True)
     print(res.acknowledged, res.matched_count, res.raw_result)
 
 
-def get_eq_by_name(name, gym=False):
+async def get_eq_by_name(name, gym=False):
     if gym:
-        return equipment_col.find_one({'type': name}, )
+        return await equipment_col.find_one({'type': name}, )
     else:
-        return equipment_col.find_one({'name': name}, )
+        return await equipment_col.find_one({'name': name}, )
 
 
-def get_all_eqs(limit=None):
-    return list(equipment_col.find({}, {'_id': 0}))
+async def get_all_eqs(limit=None):
+    return list(await equipment_col.find({}, {'_id': 0}).to_list(None))
 
 
 """LOAN"""
 
 
-def list_for_loan(zerp, sr, offer, user_id, username, addr, price, active_for, max_days=99999, min_days=3, xrp=True):
+async def list_for_loan(zerp, sr, offer, user_id, username, addr, price, active_for, max_days=99999, min_days=3, xrp=True):
     loan_col = db['loan']
-    found_in_listing = loan_col.find_one({'zerpmon_name': zerp['name'], 'offer': {'$ne': None}})
+    found_in_listing = await loan_col.find_one({'zerpmon_name': zerp['name'], 'offer': {'$ne': None}})
     if found_in_listing is not None:
         return False
     listing_obj = {
@@ -1745,11 +1746,11 @@ def list_for_loan(zerp, sr, offer, user_id, username, addr, price, active_for, m
         'loan_expires_at': None
     }
 
-    res = loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': listing_obj}, upsert=True)
+    res = await loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': listing_obj}, upsert=True)
     return res.acknowledged
 
 
-def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False):
+async def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False):
     loan_col = db['loan']
     if not is_id:
         query = {'zerpmon_name': zerp_name_or_id}
@@ -1759,7 +1760,7 @@ def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False):
     return r.acknowledged
 
 
-def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, discord_id=''):
+async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, discord_id=''):
     loan_col = db['loan']
     query = {
         'accepted_by': loanee,
@@ -1770,40 +1771,40 @@ def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, discor
     }
     if loan_ended:
         query['offer'] = None
-    res = loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': query}, upsert=True)
+    res = await loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': query}, upsert=True)
     if loan_ended:
-        remove_user_nft(discord_id, sr, )
+        await remove_user_nft(discord_id, sr, )
     else:
         zerp['loaned'] = True
-        add_user_nft(loanee['id'], sr, zerp)
+        await add_user_nft(loanee['id'], sr, zerp)
     return res.acknowledged
 
 
-def decrease_loan_pending(zerp_name, dec):
+async def decrease_loan_pending(zerp_name, dec):
     loan_col = db['loan']
-    res = loan_col.update_one({'zerpmon_name': zerp_name}, {'$inc': {'amount_pending': -dec}})
+    res = await loan_col.update_one({'zerpmon_name': zerp_name}, {'$inc': {'amount_pending': -dec}})
     return res.acknowledged
 
 
-def cancel_loan(zerp_name):
+async def cancel_loan(zerp_name):
     loan_col = db['loan']
-    res = loan_col.update_one({'zerpmon_name': zerp_name}, {'$set': {'loan_expires_at': 0}})
+    res = await loan_col.update_one({'zerpmon_name': zerp_name}, {'$set': {'loan_expires_at': 0}})
     return res.acknowledged
 
 
-def get_loaned(user_id=None, zerp_name=None):
+async def get_loaned(user_id=None, zerp_name=None):
     loan_col = db['loan']
     if user_id is not None:
-        listings = loan_col.find({'listed_by.id': user_id})
-        loanee_list = loan_col.find({'accepted_by.id': user_id})
+        listings = await loan_col.find({'listed_by.id': user_id}).to_list(None)
+        loanee_list = await loan_col.find({'accepted_by.id': user_id}).to_list(None)
         return [i for i in listings] if listings is not None else [], [i for i in
                                                                        loanee_list] if loanee_list is not None else []
     else:
-        listed = loan_col.find_one({'zerpmon_name': zerp_name})
+        listed = await loan_col.find_one({'zerpmon_name': zerp_name})
         return listed
 
 
-def get_loan_listings(page_no, docs_per_page=10, search_type='', xrp=None, listed_by='', price=None, zerp_name=''):
+async def get_loan_listings(page_no, docs_per_page=10, search_type='', xrp=None, listed_by='', price=None, zerp_name=''):
     loan_col = db['loan']
     skip_count = (page_no - 1) * docs_per_page
     query = {'offer': {'$ne': None}}
@@ -1818,15 +1819,15 @@ def get_loan_listings(page_no, docs_per_page=10, search_type='', xrp=None, liste
     if price is not None:
         query['per_day_cost'] = {'$lte': price}
 
-    listings = loan_col.find(query).sort("listed_at", pymongo.DESCENDING).skip(skip_count).limit(docs_per_page)
-    count = loan_col.count_documents(query)
+    listings = await loan_col.find(query).sort("listed_at", pymongo.DESCENDING).skip(skip_count).limit(docs_per_page).to_list(None)
+    count = await loan_col.count_documents(query)
     listings = [i for i in listings]
     for document in listings:
         print(document)
     return count, listings
 
 
-def set_loaners():
+async def set_loaners():
     loan_col = db['loan']
     projection = {
         '_id': 0,  # Exclude the MongoDB document ID
@@ -1834,7 +1835,7 @@ def set_loaners():
         'offer': 1,
         'token_id': 1,
     }
-    all_listings = loan_col.find(projection=projection)
+    all_listings = await loan_col.find(projection=projection).to_list(None)
     for listing in all_listings:
         if listing['offer'] is None:
             continue
@@ -1845,9 +1846,9 @@ def set_loaners():
     print(config.loaners)
 
 
-def get_active_loans():
+async def get_active_loans():
     loan_col = db['loan']
-    all_listings = loan_col.find()
+    all_listings = await loan_col.find().to_list(None)
     active = []
     expired = []
     for listing in all_listings:
@@ -1861,78 +1862,78 @@ def get_active_loans():
 """Backlogging"""
 
 
-def save_error_txn(user_address, amount, nft_id):
+async def save_error_txn(user_address, amount, nft_id):
     col = db['back_log']
     query = {'$inc': {'amount': amount}}
     if nft_id is not None:
         query['$push'] = {'nft_id': nft_id}
-    col.update_one({'address': user_address}, query, upsert=True)
+    await col.update_one({'address': user_address}, query, upsert=True)
 
 
-def save_br_dict(data):
+async def save_br_dict(data):
     col = db['back_log']
     query = {'$set': {'data': data}}
-    col.update_one({'address': '0x0'}, query, upsert=True)
+    await col.update_one({'address': '0x0'}, query, upsert=True)
 
 
-def get_br_dict():
+async def get_br_dict():
     col = db['back_log']
-    doc = col.find_one({'address': '0x0'})
+    doc = await col.find_one({'address': '0x0'})
     return doc.get('data', []) if doc else []
 
 
 """GIFT BOXES"""
 
 
-def get_boxes(addr):
+async def get_boxes(addr):
     col = db['gift']
-    obj = col.find_one({'address': addr})
+    obj = await col.find_one({'address': addr})
     if obj is None:
         return 0, 0
     return obj.get('zerpmon_box', 0), obj.get('xscape_box', 0)
 
 
-def dec_box(addr, zerpmon_box: bool, amt=1):
+async def dec_box(addr, zerpmon_box: bool, amt=1):
     col = db['gift']
     query = {'$inc': {}}
     if zerpmon_box:
         query['$inc']['zerpmon_box'] = -amt
     else:
         query['$inc']['xscape_box'] = -amt
-    col.update_one({'address': addr}, query)
+    await col.update_one({'address': addr}, query)
 
 
-def save_token_sent(token_id, to):
+async def save_token_sent(token_id, to):
     col = db['rewarded_nfts']
-    col.update_one({'nft': token_id}, {'$set': {'nft': token_id, 'to': to}}, upsert=True)
+    await col.update_one({'nft': token_id}, {'$set': {'nft': token_id, 'to': to}}, upsert=True)
 
 
-def remove_token_sent(token_id):
+async def remove_token_sent(token_id):
     col = db['rewarded_nfts']
     col.delete_one({'nft': token_id})
 
 
-def get_all_tokens_sent():
+async def get_all_tokens_sent():
     col = db['rewarded_nfts']
-    return [i['nft'] for i in col.find({})]
+    return [i['nft'] for i in await col.find({}).to_list(None)]
 
 
-def save_bought_eq(addr, eq_name):
+async def save_bought_eq(addr, eq_name):
     col = db['purchase_history_eq']
-    col.update_one({'address': addr}, {'$push': {'bought_eqs': eq_name}}, upsert=True)
+    await col.update_one({'address': addr}, {'$push': {'bought_eqs': eq_name}}, upsert=True)
 
 
-def remove_bought_eq(addr, eq_name):
+async def remove_bought_eq(addr, eq_name):
     col = db['purchase_history_eq']
-    col.update_one(
+    await col.update_one(
         {'address': addr},
         {'$pull': {'bought_eqs': {'$eq': eq_name}}},
     )
 
 
-def not_bought_eq(addr, eq_name):
+async def not_bought_eq(addr, eq_name):
     col = db['purchase_history_eq']
-    obj = col.find_one({'address': addr})
+    obj = await col.find_one({'address': addr})
     if obj is None:
         return True
     else:
@@ -1943,7 +1944,7 @@ def not_bought_eq(addr, eq_name):
 """BOSS BATTLE"""
 
 
-def get_trainer(nft_id):
+async def get_trainer(nft_id):
     try:
         with open("./static/metadata.json", "r") as f:
             data = json.load(f)
@@ -1956,30 +1957,30 @@ def get_trainer(nft_id):
         print(f"ERROR in getting metadata: {e}")
 
 
-def get_rand_boss():
+async def get_rand_boss():
     zerpmon_collection = db['MoveSets2']
-    random_doc = zerpmon_collection.find({'name': {'$regex': 'Experiment'}})
+    random_doc = await zerpmon_collection.find({'name': {'$regex': 'Experiment'}}).to_list(None)
     return random.choice([i for i in random_doc])
 
 
-def get_boss_reset(hp) -> [bool, int, int, int, bool]:
+async def get_boss_reset(hp) -> [bool, int, int, int, bool]:
     stats_col = db['stats_log']
-    obj = stats_col.find_one({'name': 'world_boss'})
+    obj = await stats_col.find_one({'name': 'world_boss'})
     if obj is None:
         obj = {}
     reset_t = obj.get('boss_reset_t', 0)
     msg_id = obj.get('boss_msg_id', None) if obj.get('boss_msg_id', None) else config.BOSS_MSG_ID
     if not obj or (reset_t < time.time()):
-        n_t = int(get_next_ts(7))
+        n_t = int(await get_next_ts(7))
         active = hp > 0
-        boss = get_rand_boss()
+        boss = await get_rand_boss()
         trainer = get_trainer('0008138805D83B701191193A067C4011056D3DEE2B298C553C7172B400000019')
         del boss['_id']
-        stats_col.update_one({
+        await stats_col.update_one({
             'name': 'world_boss'
         },
             {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp, 'boss_zerpmon': boss,
-                      'boss_trainer': trainer, 'boss_eq': random.choice(get_all_eqs()).get('name'),
+                      'boss_trainer': trainer, 'boss_eq': random.choice(await get_all_eqs()).get('name'),
                       "reward": 500 if not obj.get('boss_active', False) else obj['reward'] + 300,
                       'start_hp': hp, 'boss_msg_id': msg_id,
                       'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg']
@@ -1991,61 +1992,61 @@ def get_boss_reset(hp) -> [bool, int, int, int, bool]:
         return obj.get('boss_active'), obj.get('boss_hp'), reset_t, msg_id, False
 
 
-def get_boss_stats():
+async def get_boss_stats():
     stats_col = db['stats_log']
-    obj = stats_col.find_one({'name': 'world_boss'})
+    obj = await stats_col.find_one({'name': 'world_boss'})
     return obj
 
 
-def set_boss_battle_t(user_id, reset_next_t=False) -> None:
+async def set_boss_battle_t(user_id, reset_next_t=False) -> None:
     users_col = db['users']
-    users_col.update_one({'discord_id': str(user_id)},
-                         {'$set': {'boss_battle_stats.next_battle_t': get_next_ts() + 60 if not reset_next_t else 0}})
+    await users_col.update_one({'discord_id': str(user_id)},
+                         {'$set': {'boss_battle_stats.next_battle_t': await get_next_ts() + 60 if not reset_next_t else 0}})
 
 
-def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
+async def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
     users_col = db['users']
-    users_col.update_one({'discord_id': str(user_id)},
+    await users_col.update_one({'discord_id': str(user_id)},
                          {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done, 'boss_battle_stats.total_dmg': dmg_done},
                           '$max': {'boss_battle_stats.max_dmg': dmg_done}},
                          )
     stats_col = db['stats_log']
     new_hp = cur_hp - dmg_done
     if new_hp > 0:
-        stats_col.update_one({'name': 'world_boss'},
+        await stats_col.update_one({'name': 'world_boss'},
                              {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}})
     else:
-        stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
+        await stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
 
 
-def set_boss_msg_id(msg_id) -> None:
+async def set_boss_msg_id(msg_id) -> None:
     stats_col = db['stats_log']
-    stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_msg_id': msg_id}})
+    await stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_msg_id': msg_id}})
 
 
-def reset_weekly_dmg() -> None:
+async def reset_weekly_dmg() -> None:
     users_col = db['users']
-    users_col.update_many({'boss_battle_stats': {'$exists': True}},
+    await users_col.update_many({'boss_battle_stats': {'$exists': True}},
                           {'$set': {'boss_battle_stats.weekly_dmg': 0}})
     stats_col = db['stats_log']
-    stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_active': False}})
+    await stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_active': False}})
 
 
-def boss_reward_winners() -> list:
+async def boss_reward_winners() -> list:
     users_col = db['users']
 
     filter = {"boss_battle_stats": {"$exists": True}}
     projection = {"boss_battle_stats": 1, "address": 1, "discord_id": 1, "username": 1, '_id': 0}
-    li = users_col.find(filter, projection)
+    li = await users_col.find(filter, projection).to_list(None)
 
     return [i for i in li]
 
 
-def get_boss_leaderboard():
+async def get_boss_leaderboard():
     users_collection = db['users']
     filter = {'boss_battle_stats': {'$exists': True}}
     projection = {"boss_battle_stats": 1, "address": 1, "discord_id": 1, "username": 1, '_id': 0}
-    top_users = [i for i in users_collection.find(filter, projection).sort('boss_battle_stats.weekly_dmg', DESCENDING)]
+    top_users = [i for i in await users_collection.find(filter, projection).sort('boss_battle_stats.weekly_dmg', DESCENDING).to_list(None)]
     top_10 = []
     for i in range(10):
         if i < len(top_users):
@@ -2056,60 +2057,60 @@ def get_boss_leaderboard():
 """Store V2 item functions"""
 
 
-def verify_zerp_flairs():
+async def verify_zerp_flairs():
     stats_col = db['store_items']
-    flair_doc = stats_col.find_one({'name': 'Zerpmon Flair'})
+    flair_doc = await stats_col.find_one({'name': 'Zerpmon Flair'})
     if flair_doc is None:
-        stats_col.update_one({'name': 'Zerpmon Flair'}, {'variants': [i for i in config.ZERPMON_FLAIRS]}, upsert=True)
+        await stats_col.update_one({'name': 'Zerpmon Flair'}, {'variants': [i for i in config.ZERPMON_FLAIRS]}, upsert=True)
 
 
-def get_available_zerp_flairs(reverse=False):
+async def get_available_zerp_flairs(reverse=False):
     stats_col = db['store_items']
-    return {i: j for i, j in stats_col.find_one({'name': 'Zerpmon Flair'}).get('variants', []).items() if
+    return {i: j for i, j in (await stats_col.find_one({'name': 'Zerpmon Flair'})).get('variants', []).items() if
             (j is None and not reverse) or (j is not None and reverse)}
 
 
-def add_zerp_flair(user_id, flair_name):
+async def add_zerp_flair(user_id, flair_name):
     users_collection = db['users']
     stats_col = db['store_items']
     user_id = str(user_id)
-    users_collection.update_one({'discord_id': user_id},
+    await users_collection.update_one({'discord_id': user_id},
                                 {'$set': {f'z_flair.{flair_name}': None}})
-    r = stats_col.update_one({'name': 'Zerpmon Flair'}, {"$pull": {f'variants': flair_name, }})
+    r = await stats_col.update_one({'name': 'Zerpmon Flair'}, {"$pull": {f'variants': flair_name, }})
     return r.acknowledged
 
 
-def update_zerp_flair(discord_id, zerp_name, old_zerp_name, flair_name):
+async def update_zerp_flair(discord_id, zerp_name, old_zerp_name, flair_name):
     users_collection = db['users']
     zerpmon_collection = db['MoveSets']
 
-    r = users_collection.update_one({'discord_id': discord_id},
+    r = await users_collection.update_one({'discord_id': discord_id},
                                     {'$set': {f'z_flair.{flair_name}': zerp_name}})
     if old_zerp_name:
-        zerpmon_collection.update_one({'name': old_zerp_name}, {'$unset': {'z_flair': ""}})
-    zerpmon_collection.update_one({'name': zerp_name}, {'$set': {'z_flair': flair_name}})
+        await zerpmon_collection.update_one({'name': old_zerp_name}, {'$unset': {'z_flair': ""}})
+    await zerpmon_collection.update_one({'name': zerp_name}, {'$set': {'z_flair': flair_name}})
     return r.acknowledged
 
 
-def add_zerp_lure(user_addr, qty=1):
+async def add_zerp_lure(user_addr, qty=1):
     users_collection = db['users']
-    r = users_collection.update_one({'address': user_addr},
+    r = await users_collection.update_one({'address': user_addr},
                                     {'$inc': {'lure_cnt': qty}})
     return r.acknowledged
 
 
-def update_user_zerp_lure(user_id, lure_type):
+async def update_user_zerp_lure(user_id, lure_type):
     users_collection = db['users']
     user_id = str(user_id)
     lure_value = {
         'expire_ts': int(time.time() + 86400),
         'type': lure_type
     }
-    users_collection.update_one({'discord_id': user_id},
+    await users_collection.update_one({'discord_id': user_id},
                                 {'$set': {'zerp_lure': lure_value}})
 
 
-def apply_candy_24(user_id, addr, zerp_name, candy_type):
+async def apply_candy_24(user_id, addr, zerp_name, candy_type):
     candy_collection = db['active_candy_stats']
     zerpmon_collection = db['MoveSets']
     user_id = str(user_id)
@@ -2120,23 +2121,23 @@ def apply_candy_24(user_id, addr, zerp_name, candy_type):
     }
     adder_fn = globals().get(f'add_{candy_type}')
     query = {'$set': {f'active.{zerp_name}.{"type1" if candy_type == "overcharge_candy" else "type2"}': zerp_value}}
-    r = candy_collection.update_one({'discord_id': user_id},
+    r = await candy_collection.update_one({'discord_id': user_id},
                                     query, upsert=True)
-    adder_fn(addr, -1)
-    zerpmon_collection.update_one({'name': zerp_name}, {'$set': {candy_type: exp_ts}})
+    await adder_fn(addr, -1)
+    await zerpmon_collection.update_one({'name': zerp_name}, {'$set': {candy_type: exp_ts}})
     return r.acknowledged
 
 
-def get_active_candies(user_id):
+async def get_active_candies(user_id):
     candy_collection = db['active_candy_stats']
-    doc = candy_collection.find_one({'discord_id': str(user_id)})
+    doc = await candy_collection.find_one({'discord_id': str(user_id)})
     return doc.get('active', {}) if doc else {}
 
 
-def update_stats_candy(doc, candy_type):
+async def update_stats_candy(doc, candy_type):
     old_p = [(i.get('percent', None) if i['color'] != 'blue' else None) for i in doc['moves']]
     if candy_type == 'overcharge_candy':
-        new_p = battle_effect.update_array(old_p, 7, -10, own=True)
+        new_p = await battle_effect.update_array(old_p, 7, -10, own=True)
         for i, move in enumerate(doc['moves']):
             if move['color'] == 'blue':
                 continue
@@ -2146,19 +2147,19 @@ def update_stats_candy(doc, candy_type):
     else:
         match candy_type:
             case 'gummy_candy':
-                new_p = battle_effect.update_array(old_p, 0, 10, own=True, index2=1)
+                new_p = await battle_effect.update_array(old_p, 0, 10, own=True, index2=1)
                 for i, move in enumerate(doc['moves']):
                     if move['color'] == 'blue':
                         continue
                     move['percent'] = new_p[i]
             case 'sour_candy':
-                new_p = battle_effect.update_array(old_p, 2, 10, own=True, index2=3)
+                new_p = await battle_effect.update_array(old_p, 2, 10, own=True, index2=3)
                 for i, move in enumerate(doc['moves']):
                     if move['color'] == 'blue':
                         continue
                     move['percent'] = new_p[i]
             case 'star_candy':
-                new_p = battle_effect.update_array(old_p, 4, 10, own=True, index2=5)
+                new_p = await battle_effect.update_array(old_p, 4, 10, own=True, index2=5)
                 print(sum([i for i in new_p if i]))
                 for i, move in enumerate(doc['moves']):
                     if move['color'] == 'blue':
@@ -2173,12 +2174,12 @@ def update_stats_candy(doc, candy_type):
 """ascend fn"""
 
 
-def ascend_zerpmon(addr, zerp_name):
+async def ascend_zerpmon(addr, zerp_name):
     zerpmon_collection = db['MoveSets']
     users_collection = db['users']
-    result = zerpmon_collection.update_one({"name": zerp_name}, {'$set': {'ascended': True}})
+    result = await zerpmon_collection.update_one({"name": zerp_name}, {'$set': {'ascended': True}})
 
-    users_collection.update_one({'address': addr},
+    await users_collection.update_one({'address': addr},
                                 {'$inc': {'revive_potion': 10, 'mission_potion': 10}})
 
     return result.acknowledged
@@ -2187,8 +2188,8 @@ def ascend_zerpmon(addr, zerp_name):
 """Recycle"""
 
 
-def get_higher_lvls(lvl=1):
-    res = level_collection.find({'level': {'$gt': lvl}})
+async def get_higher_lvls(lvl=1):
+    res = await level_collection.find({'level': {'$gt': lvl}}).to_list(None)
     return [i for i in res]
 
 
@@ -2248,17 +2249,17 @@ def get_higher_lvls(lvl=1):
 #     }, 'active_t': 0, 'gp': 0}}})
 
 
-def remove_nft_from_safari_stat(nft_id) -> None:
+async def remove_nft_from_safari_stat(nft_id) -> None:
     stats_col = db['stats_log']
-    stats_col.update_one({'name': 'safari-nfts-bithomp'}, {'$pull': {'nfts': {'nftokenID': nft_id}}})
+    await stats_col.update_one({'name': 'safari-nfts-bithomp'}, {'$pull': {'nfts': {'nftokenID': nft_id}}})
 
 
-def get_safari_nfts():
+async def get_safari_nfts():
     stats_col = db['stats_log']
-    return stats_col.find_one({'name': 'safari-nfts-bithomp'}).get('nfts', [])
+    return (await stats_col.find_one({'name': 'safari-nfts-bithomp'})).get('nfts', [])
 
 
-def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
+async def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
     txn_log_col = db['safari-txn-queue']
     res = txn_log_col.insert_one({
         'type': 'Payment',
@@ -2271,7 +2272,7 @@ def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
     return res.acknowledged
 
 
-def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bool, issuer: str, uri: str, sr, ):
+async def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bool, issuer: str, uri: str, sr, ):
     txn_log_col = db['safari-txn-queue']
     res = txn_log_col.insert_one({
         'type': 'NFTokenCreateOffer',
@@ -2291,14 +2292,14 @@ def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bool, is
 """Gym tower"""
 
 
-def get_random_trainers(limit=5):
+async def get_random_trainers(limit=5):
     collection = db['trainers']
 
-    random_documents = collection.aggregate([
+    random_documents = await collection.aggregate([
         {'$match': {}},
         {'$sample': {'size': limit}},
         {'$project': {'_id': 0, 'image': 1, 'name': 1, 'type': 1, 'nft_id': 1, 'trainer number': 1, 'affinity': 1}}
-    ])
+    ]).to_list(None)
 
     if random_documents:
         return list(random_documents)
@@ -2306,10 +2307,10 @@ def get_random_trainers(limit=5):
         return None
 
 
-def get_temp_user(user_id: str, autoc=False):
+async def get_temp_user(user_id: str, autoc=False):
     temp_users_col = db['temp_user_data']
     if not autoc:
-        return temp_users_col.find_one({'discord_id': user_id})
+        return await temp_users_col.find_one({'discord_id': user_id})
     else:
         pipeline = [{'$match': {'discord_id': user_id}},
                     {
@@ -2349,7 +2350,7 @@ def get_temp_user(user_id: str, autoc=False):
                         }
                     }
                     ]
-        res = list(temp_users_col.aggregate(pipeline))[0]
+        res = list(await temp_users_col.aggregate(pipeline).to_list(None))[0]
         for idx in range(len(res['zerpmons'])):
             i = res['zerpmons'][idx]
             res['zerpmons'][idx] = {'name': i['name'],
@@ -2359,7 +2360,7 @@ def get_temp_user(user_id: str, autoc=False):
 
 # print(get_temp_user('1017889758313197658', autoc=True))
 
-def add_temp_user(user_d, fee_paid=True, is_reset=False):
+async def add_temp_user(user_d, fee_paid=True, is_reset=False):
     temp_users_col = db['temp_user_data']
     user_id, username, user_addr = user_d['discord_id'], user_d['username'], user_d['address']
 
@@ -2369,9 +2370,9 @@ def add_temp_user(user_d, fee_paid=True, is_reset=False):
     user_doc = {'username': username,
                 'address': user_addr,
                 'fee_paid': fee_paid,
-                'zerpmons': get_random_doc_with_type(limit=10, level=30),
-                'equipments': random.sample(get_all_eqs(), 10),
-                'trainers': get_random_trainers(10),
+                'zerpmons': await get_random_doc_with_type(limit=10, level=30),
+                'equipments': random.sample(await get_all_eqs(), 10),
+                'trainers': await get_random_trainers(10),
                 "battle_deck": {'0': {}},
                 "equipment_decks": eq_deck,
                 'reset': False,
@@ -2386,23 +2387,23 @@ def add_temp_user(user_d, fee_paid=True, is_reset=False):
         user_doc['tower_level'] = 1
         user_doc['gym_order'] = random.sample(config_extra.TOWER_SEQ[:-1], 19)
         user_doc['gym_order'].append('Dragon')
-    obj = temp_users_col.find_one_and_update({'discord_id': user_id},
+    obj = await temp_users_col.find_one_and_update({'discord_id': user_id},
                                              {'$set': user_doc, }, upsert=True,
                                              return_document=ReturnDocument.AFTER)
     return obj
 
 
-def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
+async def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
     users_collection = db['temp_user_data']
 
-    doc = users_collection.find_one({'discord_id': str(user_id)})
+    doc = await users_collection.find_one({'discord_id': str(user_id)})
 
     # add the element to the array
     arr = {'0': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
         doc["battle_deck"]
 
     arr['0'] = new_deck
-    r = users_collection.update_one({'discord_id': str(user_id)},
+    r = await users_collection.update_one({'discord_id': str(user_id)},
                                     {"$set": {f'equipment_decks.0': eqs,
                                               'battle_deck': arr}})
 
@@ -2412,30 +2413,31 @@ def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
         return False
 
 
-def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
+async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
     users_collection = db['temp_user_data']
-    res = users_collection.update_one({'discord_id': str(user_id)},
+    res = await users_collection.update_one({'discord_id': str(user_id)},
                                       {'$set': {'fee_paid': False},
                                        '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1}})
     return res.acknowledged
 
 
-def update_gym_tower(user_id, new_level):
+async def update_gym_tower(user_id, new_level):
     users_collection = db['temp_user_data']
     if new_level > 20:
         q = {'tower_level': 1, 'fee_paid': False}
     else:
         q = {'tower_level': new_level, 'reset': True}
-    res = users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
+    res = await users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
     return res.acknowledged
 
 
-def get_tower_rush_leaderboard(discord_id):
+async def get_tower_rush_leaderboard(discord_id):
     users_collection = db['temp_user_data']
     filter_ = {'tp': {'$exists': True}}
     projection = {"tp": 1, "address": 1, "discord_id": 1, "username": 1, "total_zrp_earned": 1, '_id': 0}
 
-    top_users = list(enumerate(users_collection.find(filter_, projection).sort('tp', DESCENDING), start=1))
+    cursor = users_collection.find(filter_, projection).sort('tp', DESCENDING)
+    top_users = list(enumerate(await cursor.to_list(length=None), start=1))
 
     # Find the user's rank and return the top 10 users or less
     user_rank = next((rank for rank, user in top_users if user['discord_id'] == discord_id), None)
@@ -2443,31 +2445,31 @@ def get_tower_rush_leaderboard(discord_id):
 
     # Append the user's rank to the result
     if user_rank and user_rank > top_10[-1][0]:
-        top_10.append((user_rank, users_collection.find_one({'discord_id': discord_id}, projection)))
+        top_10.append((user_rank, await users_collection.find_one({'discord_id': discord_id}, projection)))
 
     return top_10
 
 
 # Crossmark fn
 
-def save_sign_up_req(user_id: str, uuid: str) -> bool:
+async def save_sign_up_req(user_id: str, uuid: str) -> bool:
     req_collection = db['signin_requests']
-    res = req_collection.update_one({'discord_id': user_id},
+    res = await req_collection.update_one({'discord_id': user_id},
                                     {'$set': {'uuid': uuid, 'status': 'pending', 'address': ''}}, upsert=True)
     return res.acknowledged
 
 
 async def get_req_status(uuid: str) -> (bool, str):
     req_collection = db['signin_requests']
-    res = req_collection.find_one({'uuid': uuid})
+    res = await req_collection.find_one({'uuid': uuid})
     success = res['status'] == 'fulfilled'
     if success:
-        req_collection.delete_one({'uuid': uuid})
+        await req_collection.delete_one({'uuid': uuid})
     addr = res['address']
     return success, addr
 
 
-def del_sign_up_req(uuid: str) -> bool:
+async def del_sign_up_req(uuid: str) -> bool:
     req_collection = db['signin_requests']
-    res = req_collection.delete_one({'uuid': uuid})
+    res = await req_collection.delete_one({'uuid': uuid})
     return res.acknowledged

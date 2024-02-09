@@ -45,10 +45,10 @@ def gen_image(_id, path1, path3, path2='./static/rank_images/arrow.png'):
 
 
 async def send_last_embed(user: nextcord.Member, oppo: nextcord.Member, msg: Message, battle_instance, winner, b_type, mode='rank', hidden=False, view=None):
-    points1, t1, new_rank1 = db_query.update_rank(battle_instance["challenger"],
+    points1, t1, new_rank1 = await db_query.update_rank(battle_instance["challenger"],
                                                   True if winner == 1 else False,
                                                   field=config.RANK_MODES[b_type])
-    points2, t2, new_rank2 = db_query.update_rank(battle_instance["challenged"],
+    points2, t2, new_rank2 = await db_query.update_rank(battle_instance["challenged"],
                                                   None if mode == 'rank5' else (True if winner == 2 else False),
                                                   field=config.RANK_MODES[b_type])
     embed = CustomEmbed(title="Match Result", colour=0xfacf5a,

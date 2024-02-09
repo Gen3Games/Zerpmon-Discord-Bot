@@ -16,8 +16,8 @@ zerpmon_collection = db['MoveSets']
 move_collection = db['MoveList']
 
 
-def set_image_and_attrs():
-    data = db_query.get_all_z()
+async def set_image_and_attrs():
+    data = await db_query.get_all_z()
     for i in data:
 
         if ('image' in i and 'attributes' in i) or 'nft_id' not in i:
@@ -31,8 +31,8 @@ def set_image_and_attrs():
         meta = rr2.json()['metadata']['attributes']
         url = rr2.json()['metadata']['image']
         print(url)
-        db_query.update_type(i['name'], meta)
-        db_query.update_image(i['name'], url)
+        await db_query.update_type(i['name'], meta)
+        await db_query.update_image(i['name'], url)
 
 
 def clean_attrs():

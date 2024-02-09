@@ -17,7 +17,7 @@ async def post_signin_callback(interaction: nextcord.Interaction, address: str, 
         z_role = nextcord.utils.get(roles, name="Zerpmon Holder")
         t_role = nextcord.utils.get(roles, name="Trainer")
     # Sanity check (Dual Discord Account with 1 Wallet)
-    wallet_exist = db_query.check_wallet_exist(address)
+    wallet_exist = await db_query.check_wallet_exist(address)
     if wallet_exist:
         await interaction.send(f"This wallet address has already been verified!")
         return False
@@ -81,13 +81,13 @@ async def post_signin_callback(interaction: nextcord.Interaction, address: str, 
         await interaction.user.add_roles(t_role)
     # Save the address to stop dual accounts
     user_obj['address'] = address
-    db_query.save_user(user_obj)
+    await db_query.save_user(user_obj)
     for k in ['gym_deck', 'battle_deck', 'mission_deck']:
         if k != 'mission_deck':
             for i in range(5):
-                db_query.set_equipment_on(user_obj['discord_id'], [None, None, None, None, None], k, str(i))
+                await db_query.set_equipment_on(user_obj['discord_id'], [None, None, None, None, None], k, str(i))
         else:
-            db_query.set_equipment_on(user_obj['discord_id'], [None, None, None, None, None] * 4, k, None)
+            await db_query.set_equipment_on(user_obj['discord_id'], [None, None, None, None, None] * 4, k, None)
     return True
 
 
@@ -123,7 +123,7 @@ async def verify_wallet(interaction: nextcord.Interaction, force=False):
 async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
     guild = interaction.guild
     if old_address is not None:
-        if not db_query.update_address(user_doc['address'], old_address):
+        if not await db_query.update_address(user_doc['address'], old_address):
             return False
     user_obj = user_doc
     try:
@@ -157,7 +157,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                              "attributes": metadata['attributes'],
                              "token_id": nft["NFTokenID"],
                              }
-                    db_query.add_user_nft(user_obj['discord_id'], serial, new_z, True)
+                    await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, True)
                 await asyncio.sleep(2)
             if nft["Issuer"] == ISSUER["Zerpmon"]:
                 serial = str(nft["nft_serial"])
@@ -179,7 +179,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                              "token_id": nft["NFTokenID"],
                              'active_t': active_t
                              }
-                    db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
+                    await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
                 await asyncio.sleep(2)
             if nft["Issuer"] == ISSUER["Equipment"]:
                 serial = str(nft["nft_serial"])
@@ -197,7 +197,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                              "attributes": metadata['attributes'],
                              "token_id": nft["NFTokenID"],
                              }
-                    db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
+                    await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
                 await asyncio.sleep(2)
         for serial in list(user_obj['zerpmons'].keys()):
             if serial not in serials:
@@ -206,15 +206,15 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     serials.append(serial)
                 else:
                     # if False:
-                    db_query.remove_user_nft(user_obj['discord_id'], serial, False)
+                    await db_query.remove_user_nft(user_obj['discord_id'], serial, False)
         for serial in list(user_obj['trainer_cards'].keys()):
             if serial not in t_serial:
                 # if False:
-                db_query.remove_user_nft(user_obj['discord_id'], serial, True)
+                await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
         for serial in list(user_obj['equipments'].keys()):
             if serial not in e_serial:
                 # if False:
-                db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
+                await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
         if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
             if MAIN_GUILD == guild.id:
@@ -244,7 +244,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     print(f"USER already has the required role {e}")
                 await asyncio.sleep(2)
 
-        db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial)
+        await db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial)
         return True
     except Exception as e:
         logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
