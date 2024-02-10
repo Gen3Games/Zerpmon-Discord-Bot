@@ -38,7 +38,7 @@ async def get_time_left_utc(days=1):
     return int(hours_left), int(minutes_left), int(seconds_left)
 
 
-def get_next_ts():
+async def get_next_ts():
     current_time = datetime.datetime.now(pytz.utc)
     next_day = current_time + datetime.timedelta(days=1)
     target_time = next_day.replace(hour=0, minute=0, second=0, microsecond=0)

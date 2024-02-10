@@ -76,7 +76,7 @@ async def send_reset_message(client: nextcord.Client):
     await db_query.choose_gym_zerp()
     while True:
         await asyncio.sleep(20)
-        next_day_ts = get_next_ts()
+        next_day_ts = await get_next_ts()
         reset_time = next_day_ts - time.time()
         # print(reset_time)
         if reset_time < 300:
@@ -158,6 +158,30 @@ async def send_reset_message(client: nextcord.Client):
             for guild in guilds:
                 try:
                     if guild.id in config.MAIN_GUILD:
+                        # TOWER EMBED
+                        users = await db_query.get_tower_rush_leaderboard(None)
+                        embed = CustomEmbed(color=0xa56cc1,
+                                            title=f"TOWER RUSH LEADERBOARD")
+
+                        for i, user in users:
+                            msg = '#{0:<4} {1:<25} TRP : {3:>2}      ZRP earned: {2:<20}'.format(i, user['username'],
+                                                                                                 user.get(
+                                                                                                     'total_zrp_earned',
+                                                                                                     0),
+                                                                                                 user['tp'])
+                            embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
+                        tower_channel = nextcord.utils.get(guild.channels, id=config.TOWER_CHANNEL)
+                        if config.TOWER_MSG_ID:
+                            try:
+                                msg_ = await tower_channel.fetch_message(config.TOWER_MSG_ID)
+                                await msg_.edit(embed=embed)
+                            except Exception as e:
+                                logging.error(f"ERROR in sending TOWER Rankings message: {traceback.format_exc()}")
+                                r_msg = await tower_channel.send(embed=embed)
+                                config.TOWER_MSG_ID = r_msg.id
+                        else:
+                            r_msg = await tower_channel.send(embed=embed)
+                            config.TOWER_MSG_ID = r_msg.id
                         # BOSS EMBED
                         if config.zerpmon_holders > 0:
                             boss_channel = nextcord.utils.get(guild.channels, id=config.BOSS_CHANNEL)

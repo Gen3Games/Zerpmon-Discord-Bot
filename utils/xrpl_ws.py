@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 import traceback
-
+from motor.motor_asyncio import AsyncIOMotorClient
 import httpx
 import requests
 from xrpl.models.requests import AccountInfo, AccountLines
@@ -214,11 +214,11 @@ async def send_txn(to: str, amount: float, sender, memo=None):
         except Exception as e:
             logging.error(f"XRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
-    await db_query.save_error_txn(to, amount, None)
+    # await db_query.save_error_txn(to, amount, None)
     return False
 
 
-async def listener(client, store_address, wager_address):
+async def listener(client, db_sep, store_address, wager_address):
     async for msg in client:
         # do something with a message
         try:
@@ -232,7 +232,7 @@ async def listener(client, store_address, wager_address):
                 if 'TransactionType' in message and message['TransactionType'] == "Payment" and \
                         'Destination' in message and (
                         message['Destination'] in [store_address, wager_address, config.SAFARI_ADDR,
-                                                   config.ISSUER['ZRP'], config.LOAN_ADDR] or message[
+                                                   config.ISSUER['ZRP'], config.LOAN_ADDR, config.TOWER_ADDR] or message[
                             'Destination'] in [i['to'] for i in
                                                config.track_zrp_txn.values()]):
 
@@ -249,14 +249,15 @@ async def listener(client, store_address, wager_address):
                                     config.track_zrp_txn[message['Account']]['amount'] = amount
 
                             if message['Destination'] == config.SAFARI_ADDR or message['Destination'] == config.ISSUER[
-                                'ZRP']:
+                                'ZRP'] or message['Destination'] == config.TOWER_ADDR:
 
                                 #  ZRP TXN
-                                user = await db_query.get_user(message['Account'])
+                                user = await db_query.get_user(message['Account'], db_sep=db_sep, )
                                 user_id = user['discord_id']
                                 config.zrp_purchases[user_id] = amount
+                                print(config.zrp_purchases)
                             elif message['Destination'] == config.LOAN_ADDR:
-                                user = await db_query.get_user(message['Account'])
+                                user = await db_query.get_user(message['Account'], db_sep=db_sep, )
                                 user_id = user['discord_id']
                                 config.loan_payers_zrp[user_id] = amount
                             elif message['Destination'] == wager_address:
@@ -267,7 +268,7 @@ async def listener(client, store_address, wager_address):
                                 amount = float(int(message['Amount']) / 10 ** 6)
                                 print(
                                     f"XRP: {amount}\nrevive_potion_buyers: {config.revive_potion_buyers}\nmission_potion_buyers: {config.mission_potion_buyers}")
-                                user = await db_query.get_user(message['Account'])
+                                user = await db_query.get_user(message['Account'], db_sep=db_sep, )
                                 if user is None:
                                     print(f"User not found: {message['Account']}")
                                 else:
@@ -281,7 +282,7 @@ async def listener(client, store_address, wager_address):
                                                                     6) and user_id not in config.store_24_hr_buyers):
                                                 # If it's a Revive potion transaction
                                                 await db_query.add_revive_potion(message['Account'], qty, purchased=True,
-                                                                           amount=amount)
+                                                                           amount=amount, db_sep=db_sep, )
                                                 config.store_24_hr_buyers.append(user_id)
                                                 config.latest_purchases[user_id] = amount
                                                 del config.revive_potion_buyers[user_id]
@@ -294,7 +295,7 @@ async def listener(client, store_address, wager_address):
                                                                     6) and user_id not in config.store_24_hr_buyers):
                                                 # If it's a Mission refill potion transaction
                                                 await db_query.add_mission_potion(message['Account'], qty, purchased=True,
-                                                                            amount=amount)
+                                                                            amount=amount, db_sep=db_sep, )
                                                 config.store_24_hr_buyers.append(user_id)
                                                 config.latest_purchases[user_id] = amount
                                                 del config.mission_potion_buyers[user_id]
@@ -347,7 +348,7 @@ async def listener(client, store_address, wager_address):
                     else:
                         if message.get('Flags', 0) == 1 and message['Account'] in config.loaners and message[
                             'NFTokenID'] in config.loaners[message['Account']]:
-                            await db_query.remove_listed_loan(message['NFTokenID'], message['Account'], is_id=True)
+                            await db_query.remove_listed_loan(message['NFTokenID'], message['Account'], is_id=True, db_sep=db_sep, )
                             config.loaners[message['Account']] = [i for i in config.loaners[message['Account']] if
                                                                   i != message['NFTokenID']]
 
@@ -384,8 +385,9 @@ async def main():
         try:
             async with AsyncWebsocketClient(config.NODE_URL) as client:
                 # set up the `listener` function as a Task
-                asyncio.create_task(listener(client, Address, config.WAGER_ADDR))
-
+                db_sep = AsyncIOMotorClient(config.MONGO_URL)['Zerpmon']
+                asyncio.create_task(listener(client, db_sep, Address, config.WAGER_ADDR))
+                print((await db_query.get_user('raUXAEo9dT6NWWDrpPs6muPQbmrAyxj7Xm', db_sep)))
                 # now, the `listener` function will run as if
                 # it were "in the background", doing whatever you
                 # want as soon as it has a message.
@@ -394,7 +396,7 @@ async def main():
                 subscribe_request = Subscribe(
                     # streams=[StreamParameter.TRANSACTIONS],
                     accounts=[config.STORE_ADDR, config.WAGER_ADDR, config.SAFARI_ADDR, config.LOAN_ADDR,
-                              config.ISSUER['ZRP']]
+                              config.ISSUER['ZRP'], config.TOWER_ADDR]
                 )
                 await client.send(subscribe_request)
                 while True:
@@ -559,7 +561,7 @@ async def send_nft(from_, to_address, token_id):
                 break
     except Exception as e:
         logging.error(f"Something went wrong while sending NFT outside loop: {e}")
-    await db_query.save_error_txn(to_address, 0, token_id)
+    # await db_query.save_error_txn(to_address, 0, token_id)
     return False
 
 
@@ -688,7 +690,7 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
         except Exception as e:
             logging.error(f"ZRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
-    await db_query.save_error_txn(to, amount, None)
+    # await db_query.save_error_txn(to, amount, None)
     return False
 
 

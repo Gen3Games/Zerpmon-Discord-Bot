@@ -634,7 +634,7 @@ async def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, b
                             'stars'] > 0) else z2['moves'][6]['name']
                         if trigger:
                             decided = True
-                            winner['eq2_msg'] = f"✨**{buff_eqs[0]}**✨ ({z1['name2']})\n"
+                            winner['eq1_msg'] = f"✨**{buff_eqs[0]}**✨ ({z1['name2']})\n"
                             if random.randint(1, 2) == 1:
                                 winner['eq1_msg'] += f"{z1['name2']}'s **{move1['name']}** has miraculously pierced through {z2['name2']}'s {m_name}!"
                                 winner['winner'] = '1'
@@ -2345,7 +2345,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
                                        battle_log['teamA'],
                                        battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
-            z1['active_t'] = checks.get_next_ts()
+            z1['active_t'] = await checks.get_next_ts()
 
             await db_query.update_zerpmon_alive(z1, serial, user_id)
             await db_query.update_user_wr(user_id, 0)

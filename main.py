@@ -81,7 +81,7 @@ async def check_auction():
             embed.set_image(url=image)
             await auc_channel.send(embed=embed,
                                    content=f"<@{auc['bids_track'][-1]['bidder']}> congratulations!\n<@&{1135412428163788921}>")
-            uAddress = await db_query.get_owned(auc['bids_track'][-1]['bidder'])["address"]
+            uAddress = (await db_query.get_owned(auc['bids_track'][-1]['bidder']))["address"]
             auction_functions.update_to_be_claimed(auc['name'], auc['bids_track'][-1]['bidder'], uAddress,
                                                    auction_functions.get_auction_by_name(auc['name'])["nft_id"],
                                                    auc["currency"], auc["bids_track"][-1]["bid"])
@@ -548,7 +548,7 @@ async def mission_refill(interaction: nextcord.Interaction, qty: int,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, qty, user, 'mission_potion', 'Mission Refill Potion',
-                                 await db_query.add_mission_potion)
+                                 db_query.add_mission_potion)
 
 
 @gift.subcommand(name='revive_potion', description="Gift revive all potion")
@@ -557,7 +557,7 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, qty, user, 'revive_potion', 'Revive All Potion',
-                                 await db_query.add_revive_potion)
+                                 db_query.add_revive_potion)
 
 
 @gift.subcommand(name='double_xp', description="Gift double XP potion (only Admins)")
@@ -569,7 +569,7 @@ async def xp_potion(interaction: nextcord.Interaction,
         await interaction.send('You must be an Admin to use this command')
         return
     await callback.gift_callback(interaction, 1, user, 'double_xp', 'Double XP Potion',
-                                 await db_query.double_xp_24hr)
+                                 db_query.double_xp_24hr)
 
 
 @gift.subcommand(name='white_candy', description="Gift White Power Candy")
@@ -578,7 +578,7 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, qty, user, 'white_candy', 'Power Candy (White)',
-                                 await db_query.add_white_candy)
+                                 db_query.add_white_candy)
 
 
 @gift.subcommand(name='gold_candy', description="Gift Gold Power Candy")
@@ -587,7 +587,7 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, qty, user, 'gold_candy', 'Power Candy (Gold)',
-                                 await db_query.add_gold_candy)
+                                  db_query.add_gold_candy)
 
 
 @gift.subcommand(name='liquorice', description="Gift Golden Liquorice")
@@ -596,7 +596,7 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, qty, user, 'lvl_candy', 'Golden Liquorice',
-                                 await db_query.add_lvl_candy)
+                                 db_query.add_lvl_candy)
 
 
 @gift.subcommand(name='gym_refill', description="Gift Gym Refill")
@@ -605,7 +605,7 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, qty, user, 'gym_refill', 'Gym Refill',
-                                 await db_query.add_gym_refill_potion)
+                                 db_query.add_gym_refill_potion)
 
 
 @gift.subcommand(name='battle_zone', description="Gift Battle Zone")
@@ -615,7 +615,7 @@ async def gift_battle_zone(interaction: nextcord.Interaction,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, 1, user, 'bg', 'Battle Zone',
-                                 await db_query.add_bg, item=zone)
+                                 db_query.add_bg, item=zone)
 
 
 @gift.subcommand(name='name_flair', description="Gift Name Flair")
@@ -625,7 +625,7 @@ async def gift_name_flair(interaction: nextcord.Interaction,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, 1, user, 'flair', 'Name Flair',
-                                 await db_query.add_flair, item=flair)
+                                 db_query.add_flair, item=flair)
 
 
 @client.slash_command(name="add",
@@ -1064,18 +1064,25 @@ async def battle_deck(interaction: nextcord.Interaction,
     else:
         if temp_mode and 'trainer' in new_deck:
             timg = user_obj['trainers'][int(new_deck['trainer'])]
-            imgs = []
+            imgs = {'z': [], 'op': []}
             for i in range(5):
                 try:
                     zerp = user_obj['zerpmons'][int(new_deck[str(i)])]
-                    url = zerp['image'] if "https:/" in zerp['image'] else 'https://cloudflare-ipfs.com/ipfs/' + zerp['image'].replace("ipfs://", "")
-                    imgs.append((f"./static/images/{zerp['name']}.png", url))
+                    url = zerp['image'] if "https:/" in zerp['image'] else 'https://cloudflare-ipfs.com/ipfs/' + zerp[
+                        'image'].replace("ipfs://", "")
+                    entry = [f"./static/images/{zerp['name']}.png", url, None]
+                    if eqs[str(i)]:
+                        eq = user_obj['equipments'][int(eqs[str(i)])]['name']
+                        entry[2] = eq
+                    imgs['z'].append(entry)
                 except:
                     pass
             url = timg['image'] if "https:/" in timg['image'] else 'https://cloudflare-ipfs.com/ipfs/' + timg['image'].replace("ipfs://", "")
-            imgs.append((f"./static/images/{timg['name']}.png", url))
+            imgs['z'].append((f"./static/images/{timg['name']}.png", url, None))
+            lvl = user_obj['tower_level']
+            imgs['op'] = (f"./static/gym/{user_obj['gym_order'][lvl-1]} Gym Leader.png", lvl)
             embed = CustomEmbed(title='Tower Rush deck', colour=0x42b883)
-
+            print(imgs)
             output = f"{interaction.id}.png"
             await callback.join_images(imgs, output)
             file = nextcord.File(output, filename="image.png")
@@ -1883,7 +1890,7 @@ async def nft(interaction: nextcord.Interaction, your_nft_id: str, opponent_nft_
                 nft_id = your_nft_id
             else:
                 nft_id = opponent_nft_id
-            user_address = await db_query.get_owned(_i.user.id)['address']
+            user_address = (await db_query.get_owned(_i.user.id))['address']
             uuid, url, href = await xumm_functions.gen_nft_txn_url(user_address, nft_id)
             embed = CustomEmbed(color=0x01f39d,
                                 title=f"Please sign the transaction using this QR code or click here.",
@@ -2284,7 +2291,7 @@ async def battle_royale(interaction: nextcord.Interaction,
                         ), ):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
-    user_address = await db_query.get_owned(interaction.user.id).get('address', None)
+    user_address = (await db_query.get_owned(interaction.user.id)).get('address', None)
     if user_address is None:
         await interaction.edit_original_message(
             content='Please verify your wallet before starting a Battle Royale.')
@@ -2454,7 +2461,7 @@ async def trade_nft(interaction: nextcord.Interaction, your_nft_id: str, opponen
                 nft_id = your_nft_id
             else:
                 nft_id = opponent_nft_id
-            user_address = await db_query.get_owned(_i.user.id)['address']
+            user_address = (await db_query.get_owned(_i.user.id))['address']
             uuid, url, href = await xumm_functions.gen_nft_txn_url(user_address, nft_id)
             embed = CustomEmbed(color=0x01f39d,
                                 title=f"Please sign the transaction using this QR code or click here.",
@@ -2719,7 +2726,7 @@ async def free_battle_royale(interaction: nextcord.Interaction,
     user_id = interaction.user.id
     await interaction.response.defer(ephemeral=True)
     try:
-        user_address = await db_query.get_owned(interaction.user.id).get('address', None)
+        user_address = (await db_query.get_owned(interaction.user.id)).get('address', None)
         if user_address is None:
             await interaction.edit_original_message(
                 content='Please verify your wallet before starting a Battle Royale.')
@@ -2805,7 +2812,7 @@ async def free_battle_royale(interaction: nextcord.Interaction,
                                  description="Battle **beginning!**")
         players_obj = config.free_battle_royale_p[msg.id].copy()
         for i, user_obj in enumerate(players_obj):
-            user_zerps = await db_query.get_owned(user_obj['id'])['zerpmons']
+            user_zerps = (await db_query.get_owned(user_obj['id']))['zerpmons']
             if len(user_zerps) > 0:
                 zerp = random.choice(list(user_zerps.keys()))
                 z_name = user_zerps[zerp]["name"]
@@ -3227,7 +3234,7 @@ async def bid(
     if interaction.user.id == 739375301578194944:
         uAddress = "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L"
     else:
-        uAddress = await db_query.get_owned(interaction.user.id)["address"]
+        uAddress = (await db_query.get_owned(interaction.user.id))["address"]
     # if uAddress != "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L":
     if uAddress is None:
         await interaction.edit_original_message(
@@ -3355,7 +3362,7 @@ async def forceend(interaction: nextcord.Interaction, *, name: str, claimable: b
     if highestBidder == 739375301578194944:
         uAddress = "rbKoFeFtQr2cRMK2jRwhgTa1US9KU6v4L"
     else:
-        uAddress = await db_query.get_owned(highestBidder)["address"]
+        uAddress = (await db_query.get_owned(highestBidder))["address"]
     auction_functions.update_to_be_claimed(name, highestBidder, uAddress,
                                            auction_functions.get_auction_by_name(name)["nft_id"], currency, highestBid)
     auction_functions.delete_auction(name)
@@ -4030,7 +4037,7 @@ async def reverify(interaction: nextcord.Interaction,
             content=f"Generating **verification** link...", )
         embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this link.", url=req_url)
         await interaction.edit_original_message(embed=embed)
-        v_fn = await db_query.get_req_status
+        v_fn = db_query.get_req_status
     else:
         await interaction.edit_original_message(content=f"Generating a QR code")
         unique_id, url, href = await xumm_functions.gen_signIn_url()
