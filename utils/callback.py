@@ -8,7 +8,7 @@ import traceback
 from collections import Counter, defaultdict
 from functools import partial
 import nextcord
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from nextcord import ButtonStyle
 from nextcord.ui import Button, View
 
@@ -755,9 +755,9 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
                                 offerId='',
                                 token_id='', fee=False, loan=False, ascend=False, recycle_fee=False, to_addr=None):
     # Sanity checks
-    if _i.user.id in config.ADMINS:
-        return user_owned_nfts['address'], True
-        amount = round(amount / 100, 2)
+    # if _i.user.id in config.ADMINS:
+    #     return user_owned_nfts['address'], True
+    #     amount = round(amount / 100, 2)
     if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
@@ -795,7 +795,7 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
                 if not buy_offer:
                     del track_list[user_id]
                     await _i.edit_original_message(embed=CustomEmbed(title="**Success**",
-                                                                     description=item if fee or loan or recycle_fee else (
+                                                                     description=item if fee or loan or recycle_fee or to_addr else (
                                                                          f"Ascending **{ascend}** ..." if ascend else (
                                                                              f"Bought {item}." if 'Equipment' not in item else f'Sent `{amount} ZRP`\nCreating Sell Offer...')))
                                                    )
@@ -912,25 +912,52 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
 
 
 async def join_images(image_path_arr, output_path):
-    ilen, openedImagePtrs = len(image_path_arr), []
-    for idx, (img, url) in enumerate(image_path_arr):
+    ilen, openedImagePtrs = len(image_path_arr['z']), []
+    for idx, (img, url, eq) in enumerate(image_path_arr['z']):
         for i in range(2):
             try:
                 if idx == ilen-1:
-                    openedImagePtrs.append(Image.open(img).resize((600, 600)))
+                    timg = Image.open(img)
+                    timg.thumbnail((600, 600))
+                    openedImagePtrs.append(timg)
                 else:
-                    openedImagePtrs.append(Image.open(img).resize((400, 400)))
+                    # Case of Zerpmon img paste equipment on it
+                    zimg = Image.open(img)
+                    zimg.thumbnail((400, 400))
+                    if eq:
+                        extra_img1 = Image.open(f"./static/images/_eq/{eq}.png")
+                        extra_img1.thumbnail((100, 100))
+                        # Paste the extra images at the top right corner of img1 and img2
+                        zimg.paste(extra_img1, (400 - 170, 400 - 140), mask=extra_img1)
+                    openedImagePtrs.append(zimg)
                 break
             except:
                 await battle_function.download_image(url, img)
-
+    timg = Image.open(image_path_arr['op'][0])
+    timg.thumbnail((600, 600))
+    openedImagePtrs.append(timg)
     # Create a new image with double the width (side by side)
     bg_img = Image.open('./static/images/_Rush_.png').resize((1920, 1080))
     combined_img = Image.new('RGBA', bg_img.size, (0, 0, 0, 0))
 
     # Paste the background image onto the new image
     combined_img.paste(bg_img, (0, 0))
+
+    path2 = f"./static/images/vs.png"
+    img2 = Image.open(path2)
+    combined_img.paste(img2, (800, 200), mask=img2)
+
     # Paste the resized images onto the new image
+    t_img = openedImagePtrs.pop()
+    combined_img.paste(t_img, (1100, 0), mask=t_img)
+    draw = ImageDraw.Draw(combined_img)
+
+    # Choose a font
+    font = ImageFont.truetype(r'./static/Lato-Black.ttf', 80)
+
+    # Set the text color
+    draw.text((1270, 550), f"Level {image_path_arr['op'][1]}", font=font, fill=(104, 7, 71))
+
     t_img = openedImagePtrs.pop()
     combined_img.paste(t_img, (200, 0), mask=t_img)
     i = 0
@@ -939,7 +966,7 @@ async def join_images(image_path_arr, output_path):
         i += 300
 
     # Save the final image
-    combined_img.save(output_path)
+    combined_img.save(output_path, quality=50)
 
 # join_images(['./static/images/Ampsy.png', './static/images/Amparc.png', './static/images/Accountant Nancy.png'], 'n1.png')
 async def send_general_message(guild, text, image, embed=None, file=None):
@@ -1099,10 +1126,10 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                     lower_label = label.lower()
                     if 'white' in lower_label:
                         await db_query.add_white_candy(addr, selected_option, purchased=True, amount=amt)
-                    elif 'gold' in lower_label:
-                        await db_query.add_gold_candy(addr, selected_option, purchased=True, amount=amt)
                     elif 'liquorice' in lower_label:
                         await db_query.add_lvl_candy(addr, selected_option, purchased=True, amount=amt)
+                    elif 'gold' in lower_label:
+                        await db_query.add_gold_candy(addr, selected_option, purchased=True, amount=amt)
                     elif 'liquorice' in lower_label:
                         await db_query.add_lvl_candy(addr, selected_option, purchased=True, amount=amt)
                     elif 'jawbreaker' in lower_label:
@@ -2078,7 +2105,7 @@ async def setup_gym_tower(interaction: nextcord.Interaction, user_d, reset=False
             view=View())
         await asyncio.sleep(5)
         addr, success = await zrp_purchase_callback(user_d, interaction, amount=zrp_amt, item='Tower Rush ticket fee',
-                                                    fee=True, to_addr=config.TOWER_ADDR)
+                                                    to_addr=config.TOWER_ADDR)
     else:
         success = True
     if success:
