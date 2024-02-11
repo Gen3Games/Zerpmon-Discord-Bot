@@ -218,7 +218,7 @@ async def get_owned(user_id, autoc=False, db_sep=None):
             for idx in range(len(res[key])):
                 i = res[key][idx]
                 res[key][idx] = {'name': i['name'],
-                                 'type': [_i['value'] for _i in i['attributes'] if _i['trait_type'] == 'Type'],
+                                 'type': [_i['value'] for _i in i['attributes'] if _i['trait_type'] in ['Type', 'Affinity']],
                                  'sr': i['sr']}
 
         return res

@@ -4423,27 +4423,34 @@ async def gym_autocomplete(interaction: nextcord.Interaction, item: str):
 async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
     # Determine the choices for the trainer_name option based on a condition
     temp_mode = False
+    user_id = str(interaction.user.id)
     try:
         temp_mode = [i for i in interaction.data['options'][0]['options'] if i['name'] == 'deck_type'][0]['value'] == 'gym_tower'
     except:
         pass
+    cache = config_extra.deck_item_cache
     if temp_mode:
-        user_owned = await db_query.get_temp_user(str(interaction.user.id))
-        cards = {str(k): v for k, v in enumerate(user_owned['trainers']) if item.lower() in v['name'].lower()}
+        cache = cache['temp']
+        if user_id not in cache:
+            cache[user_id] = await db_query.get_temp_user(user_id, autoc=True)
+        user_owned = cache[user_id]
+        cards = [(str(k), v) for k, v in enumerate(user_owned['trainers'])]
     else:
-        user_owned = await db_query.get_owned(interaction.user.id)
-        cards = {k: v for k, v in user_owned['trainer_cards'].items() if item.lower() in v['name'].lower()}
+        cache = cache['main']
+        if user_id not in cache:
+            cache[user_id] = await db_query.get_owned(user_id, autoc=True)
+        user_owned = cache[user_id]
+        cards = [(i['sr'], i) for i in user_owned['trainer_cards']]
     choices = {}
+    print(cards)
     if (len(cards)) == 0:
         pass
     else:
-        for k, v in cards.items():
+        for k, v in cards:
             if len(choices) == 25:
                 break
-            if temp_mode:
-                emj = v['type'] if 'type' in v else v['affinity']
-            else:
-                emj = checks.get_type_emoji(v["attributes"], emoji=False)
+            emj = v['type'][0]
+
             choices[f'{v["name"]} ({emj})'] = k
     await interaction.response.send_autocomplete(choices)
 

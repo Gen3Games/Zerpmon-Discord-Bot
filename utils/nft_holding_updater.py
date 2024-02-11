@@ -5,6 +5,7 @@ import traceback
 import nextcord
 
 import config
+import config_extra
 import xrpl_functions
 import db_query
 from datetime import date
@@ -156,4 +157,8 @@ async def update_nft_holdings(client: nextcord.Client):
             await db_query.set_burnt(burnt)
         except:
             pass
+        config_extra.deck_item_cache = deck_item_cache = {
+            'temp': {},
+            'main': {}
+        }
         await asyncio.sleep(3600)

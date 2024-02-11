@@ -1,16 +1,16 @@
 import json
 import traceback
-
+import config_extra
 import nextcord
 import config
 import db_query
 from utils.checks import get_type_emoji
 
 
-
 async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
     temp_mode = False
     params = []
+    user_id = str(interaction.user.id)
     try:
         params = interaction.data['options'][0]['options']
     except:
@@ -21,18 +21,27 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
     remove_items = [i['value'] for i in params if i['name'][0].isdigit()]
     # print(interaction.data)
     try:
-        temp_mode = [i for i in interaction.data['options'][0]['options'] if i['name'] == 'deck_type'][0]['value'] == 'gym_tower'
+        temp_mode = [i for i in interaction.data['options'][0]['options'] if i['name'] == 'deck_type'][0][
+                        'value'] == 'gym_tower'
     except:
         pass
+    cache = config_extra.deck_item_cache
+
     if temp_mode:
-        user_owned = await db_query.get_temp_user(str(interaction.user.id))
+        cache = cache['temp']
+        if user_id not in cache:
+            cache[user_id] = await db_query.get_temp_user(user_id, autoc=True)
+        user_owned = cache[user_id]
         zerps = [(str(k), v) for k, v in enumerate(user_owned['zerpmons'])]
     else:
-        user_owned = await db_query.get_owned(interaction.user.id)
-        zerps = user_owned['zerpmons'].items()
+        cache = cache['main']
+        if user_id not in cache:
+            cache[user_id] = await db_query.get_owned(user_id, autoc=True)
+        user_owned = cache[user_id]
+        zerps = [(i['sr'], i) for i in user_owned['zerpmons']]
     cards = {k: v for k, v in zerps if
              item.lower() in v['name'].lower() and k not in remove_items and
-             (main_type == '' or main_type in [i['value'] for i in v['attributes'] if i['trait_type'] == 'Type'])}
+             (main_type == '' or main_type in v['type'])}
     choices = {}
     if (len(cards)) == 0:
         pass
@@ -40,7 +49,7 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
         for k, v in cards.items():
             if len(choices) == 24:
                 break
-            choices[f'{v["name"]} ({get_type_emoji(v["attributes"], emoji=False)})'] = k
+            choices[f'{v["name"]} ({", ".join(v["type"])})'] = k
     choices['Empty slot'] = ''
     await interaction.response.send_autocomplete(choices)
 
@@ -52,9 +61,9 @@ async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
         temp_mode = [i for i in params if i['name'] == 'deck_type'][0]['value'] == 'gym_tower'
     except:
         pass
+    cache = config_extra.deck_item_cache
     if temp_mode:
         user_owned = await db_query.get_temp_user(str(interaction.user.id))
-        zerps = [(str(k), v) for k, v in enumerate(user_owned['zerpmons'])]
     else:
         user_owned = await db_query.get_owned(interaction.user.id)
         mission_zerps = user_owned['mission_deck']
@@ -70,17 +79,21 @@ async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
     else:
         slot_zerpmon = [i['value'] for i in params if i['name'] == focused]
     slot_zerpmon = slot_zerpmon[0] if len(slot_zerpmon) > 0 else False
-    z_moves = [] if not slot_zerpmon else (user_owned['zerpmons'][int(slot_zerpmon)] if temp_mode else (await db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name'])))['moves']
+    z_moves = [] if not slot_zerpmon else (user_owned['zerpmons'][int(slot_zerpmon)] if temp_mode else (
+        await db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name'])))['moves']
     types = config.TYPE_MAPPING if not slot_zerpmon else [i['type'] for idx, i in enumerate(z_moves) if idx < 4]
     # print(slot_zerpmon, types)
     remove_items = [i['value'] for i in params if 'equipment' in i['name']]
     if user_owned is not None and 'equipments' in user_owned:
         if temp_mode:
             choices = {f'{i["name"]} ({i["type"]})': str(k) for k, i in
-                       enumerate(user_owned['equipments']) if item in i['name'] and str(k) not in remove_items and (i["type"] == 'Omni' or i["type"] in types)}
+                       enumerate(user_owned['equipments']) if
+                       item in i['name'] and str(k) not in remove_items and (i["type"] == 'Omni' or i["type"] in types)}
         else:
-            choices = {f'{i["name"]} ({get_type_emoji(i["attributes"], emoji=False)})': k for k, i in user_owned['equipments'].items() if item in i['name'] and k not in remove_items and
-                   any((_i['value'] == 'Omni' or _i['value'] in types) for _i in i['attributes'] if _i['trait_type'] == 'Type')}
+            choices = {f'{i["name"]} ({get_type_emoji(i["attributes"], emoji=False)})': k for k, i in
+                       user_owned['equipments'].items() if item in i['name'] and k not in remove_items and
+                       any((_i['value'] == 'Omni' or _i['value'] in types) for _i in i['attributes'] if
+                           _i['trait_type'] == 'Type')}
     else:
         choices = {}
     sorted_c = sorted(choices.items())
@@ -98,7 +111,7 @@ async def trade_autocomplete(interaction: nextcord.Interaction, item: str):
         user_id = str(interaction.user.id) if len(own) > 0 else op_id
         trade_t = json.loads(params[0]['value'])['key']
 
-        user_owned = get_owned(user_id)
+        user_owned = await db_query.get_owned(user_id)
         if user_owned is not None and trade_t in user_owned:
             if trade_t == 'flair':
                 vals = [i for i in user_owned['flair'] if item in i]
