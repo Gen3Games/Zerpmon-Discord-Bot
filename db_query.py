@@ -2275,7 +2275,7 @@ async def get_safari_nfts():
 
 async def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
     txn_log_col = db['safari-txn-queue']
-    res = txn_log_col.insert_one({
+    res = await txn_log_col.insert_one({
         'type': 'Payment',
         'from': from_addr,
         'destination': to_addr,
@@ -2288,7 +2288,7 @@ async def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
 
 async def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bool, issuer: str, uri: str, sr, ):
     txn_log_col = db['safari-txn-queue']
-    res = txn_log_col.insert_one({
+    res = await txn_log_col.insert_one({
         'type': 'NFTokenCreateOffer',
         'destination': to_addr,
         'from': from_addr,

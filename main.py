@@ -4446,14 +4446,14 @@ async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
     cache = config_extra.deck_item_cache
     if temp_mode:
         cache = cache['temp']
-        if user_id not in cache:
-            cache[user_id] = await db_query.get_temp_user(user_id, autoc=True)
+        # if user_id not in cache:
+        cache[user_id] = await db_query.get_temp_user(user_id, autoc=True)
         user_owned = cache[user_id]
         cards = [(str(k), v) for k, v in enumerate(user_owned['trainers'])]
     else:
         cache = cache['main']
-        if user_id not in cache:
-            cache[user_id] = await db_query.get_owned(user_id, autoc=True)
+        # if user_id not in cache:
+        cache[user_id] = await db_query.get_owned(user_id, autoc=True)
         user_owned = cache[user_id]
         cards = [(i['sr'], i) for i in user_owned['trainer_cards']]
     choices = {}
@@ -4464,7 +4464,10 @@ async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
         for k, v in cards:
             if len(choices) == 25:
                 break
-            emj = v['type'][0]
+            if temp_mode:
+                emj = v['type'] if 'type' in v else v['affinity']
+            else:
+                emj = v['type'][0] if v['type'] else ''
 
             choices[f'{v["name"]} ({emj})'] = k
     await interaction.response.send_autocomplete(choices)

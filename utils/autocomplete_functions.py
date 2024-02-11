@@ -29,14 +29,13 @@ async def zerpmon_autocomplete(interaction: nextcord.Interaction, item: str):
 
     if temp_mode:
         cache = cache['temp']
-        if user_id not in cache:
-            cache[user_id] = await db_query.get_temp_user(user_id, autoc=True)
+        cache[user_id] = await db_query.get_temp_user(user_id, autoc=True)
         user_owned = cache[user_id]
         zerps = [(str(k), v) for k, v in enumerate(user_owned['zerpmons'])]
     else:
         cache = cache['main']
-        if user_id not in cache:
-            cache[user_id] = await db_query.get_owned(user_id, autoc=True)
+        # if user_id not in cache:
+        cache[user_id] = await db_query.get_owned(user_id, autoc=True)
         user_owned = cache[user_id]
         zerps = [(i['sr'], i) for i in user_owned['zerpmons']]
     cards = {k: v for k, v in zerps if
