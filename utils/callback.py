@@ -1516,7 +1516,7 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                         value=f"{asc_amt} XRP",
                         inline=False)
     embed.add_field(name=f"{zerp_doc['name']} will reach:",
-                    value=f"{f_lvl} LvL",
+                    value=f"Level **{f_lvl}**",
                     inline=False)
     view = View()
     b1 = Button(label="Yes", style=ButtonStyle.success, emoji='✅')
@@ -1634,11 +1634,11 @@ async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextc
         else:
             # Put potions on hold os user doesn't spam
             if potion_key not in ['bg', 'flair']:
-                fn(sender['address'], -qty)
-                fn(user_owned_nfts['data']['address'], qty)
+                await fn(sender['address'], -qty)
+                await fn(user_owned_nfts['data']['address'], qty)
             else:
-                fn(sender['discord_id'], item, -qty)
-                fn(user_id, item, qty)
+                await fn(sender['discord_id'], item, -qty)
+                await fn(user_id, item, qty)
             await interaction.send(
                 f"Successfully gifted {f'**{item}**' if item else f'**{qty}**'} {potion} to **{user.name}**!",
                 ephemeral=False)
@@ -1651,9 +1651,9 @@ async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextc
             return
 
     if potion_key != 'double_xp':
-        fn(user_owned_nfts['data']['address'], qty)
+        await fn(user_owned_nfts['data']['address'], qty)
     else:
-        fn(user_id, )
+        await fn(user_id, )
     await interaction.send(
         f"**Success!**",
         ephemeral=True)

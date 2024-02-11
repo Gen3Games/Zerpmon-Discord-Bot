@@ -1022,7 +1022,7 @@ async def battle_deck(interaction: nextcord.Interaction,
                 eqs[eq_i] = None
                 continue
             zerp_types = all_types[eq_i]
-            eq = user_obj['equipments'][int(equipment)]
+            eq = user_obj['equipments'][int(equipment)] if temp_mode else user_obj['equipments'][equipment]
             if temp_mode:
                 if eq['type'] not in zerp_types and eq['type'] != 'Omni':
                     fail_msg += f"Sorry, **{eq['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"

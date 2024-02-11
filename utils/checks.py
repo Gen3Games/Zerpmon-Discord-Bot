@@ -175,7 +175,10 @@ def get_deck_embed(deck_type, owned_nfts, sIdx=0, eIdx=5):
                                   f"> {emj}**{trainer['name']}**{emj}\t[view]({my_button})\n" \
                                   f"> \n" + msg_str
                     else:
-                        eq_name = owned_nfts['equipments'][int(eqs[k][serial])]['name'] if (eqs[k][serial] and int(eqs[k][serial]) < 10) else None
+                        if temp_mode:
+                            eq_name = owned_nfts['equipments'][int(eqs[k][serial])]['name'] if (eqs[k][serial] and int(eqs[k][serial]) < 10) else None
+                        else:
+                            eq_name = owned_nfts['equipments'].get(eqs[k][serial], {'name': None})['name'] if (eqs[k][serial]) else None
                         msg_str += f'> #{int(serial) + 1} ⭐ {nft["name"]} ⭐ {" - " + eq_name if eq_name is not None else ""}\n'
                 embed2.add_field(name='\u200B', value=msg_str, inline=False)
                 embed2.add_field(name='\u200b', value='\u200B', inline=False)

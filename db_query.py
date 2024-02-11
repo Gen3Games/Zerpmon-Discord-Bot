@@ -1979,7 +1979,7 @@ async def get_boss_reset(hp) -> [bool, int, int, int, bool]:
         n_t = int(await get_next_ts(7))
         active = hp > 0
         boss = await get_rand_boss()
-        trainer = get_trainer('0008138805D83B701191193A067C4011056D3DEE2B298C553C7172B400000019')
+        trainer = await get_trainer('0008138805D83B701191193A067C4011056D3DEE2B298C553C7172B400000019')
         del boss['_id']
         await stats_col.update_one({
             'name': 'world_boss'
