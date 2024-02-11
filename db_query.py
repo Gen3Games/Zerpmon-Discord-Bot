@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import logging
@@ -180,6 +181,7 @@ async def get_owned(user_id, autoc=False, db_sep=None):
                                     'input': {'$objectToArray': '$zerpmons'},
                                     'as': 'zerpmon',
                                     'in': {
+                                        'sr': '$$zerpmon.k',
                                         'name': '$$zerpmon.v.name',
                                         'attributes': '$$zerpmon.v.attributes'
                                     }
@@ -190,6 +192,7 @@ async def get_owned(user_id, autoc=False, db_sep=None):
                                     'input': {'$objectToArray': '$trainer_cards'},
                                     'as': 'trainer',
                                     'in': {
+                                        'sr': '$$trainer.k',
                                         'name': '$$trainer.v.name',
                                         'attributes': '$$trainer.v.attributes'
                                     }
@@ -200,6 +203,7 @@ async def get_owned(user_id, autoc=False, db_sep=None):
                                     'input': {'$objectToArray': '$equipments'},
                                     'as': 'equipment',
                                     'in': {
+                                        'sr': '$$equipment.k',
                                         'name': '$$equipment.v.name',
                                         'attributes': '$$equipment.v.attributes'
                                     }
@@ -214,7 +218,8 @@ async def get_owned(user_id, autoc=False, db_sep=None):
             for idx in range(len(res[key])):
                 i = res[key][idx]
                 res[key][idx] = {'name': i['name'],
-                                 'type': [_i['value'] for _i in i['attributes'] if _i['trait_type'] == 'Type']}
+                                 'type': [_i['value'] for _i in i['attributes'] if _i['trait_type'] == 'Type'],
+                                 'sr': i['sr']}
 
         return res
 
@@ -2367,7 +2372,7 @@ async def get_temp_user(user_id: str, autoc=False):
         return res
 
 
-# print(get_temp_user('1017889758313197658', autoc=True))
+# print(asyncio.run(get_owned('1017889758313197658', autoc=True)))
 
 async def add_temp_user(user_d, fee_paid=True, is_reset=False):
     temp_users_col = db['temp_user_data']
@@ -2394,6 +2399,7 @@ async def add_temp_user(user_d, fee_paid=True, is_reset=False):
         if 'display_name' in user_d:
             user_doc['display_name'] = user_d['display_name']
         user_doc['tower_level'] = 1
+        user_doc['lives'] = 1
         user_doc['gym_order'] = random.sample(config_extra.TOWER_SEQ[:-1], 19)
         user_doc['gym_order'].append('Dragon')
     obj = await temp_users_col.find_one_and_update({'discord_id': user_id},
@@ -2427,6 +2433,13 @@ async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
     res = await users_collection.update_one({'discord_id': str(user_id)},
                                             {'$set': {'fee_paid': False},
                                              '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1}})
+    return res.acknowledged
+
+
+async def dec_life_gym_tower(user_id):
+    users_collection = db['temp_user_data']
+    res = await users_collection.update_one({'discord_id': str(user_id)},
+                                            {'$set': {'lives': 0}})
     return res.acknowledged
 
 

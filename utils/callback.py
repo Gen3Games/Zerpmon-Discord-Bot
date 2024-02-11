@@ -29,7 +29,7 @@ class CustomEmbed(nextcord.Embed):
                         icon_url=config.ICON_URL)
 
 
-button_cache = {'revive': [], 'mission': []}
+button_cache = {'revive': {}, 'mission': {}}
 SAFARI_REWARD_CHANCES = {
     "zrp": 88.2832,
     "battle_zone": 0.8667,
@@ -395,23 +395,21 @@ async def use_missionP_callback(interaction: nextcord.Interaction, button=False)
 
     if button:
         i_id = interaction.id
-        if len(button_cache['mission']) > 300:
-            button_cache['mission'] = button_cache['mission'][200:]
-        if i_id in button_cache['mission']:
-            return
+        if time.time() - button_cache['mission'].get(i_id, 0) < 60:
+            return False
         else:
-            button_cache['mission'].append(i_id)
+            button_cache['mission'][i_id] = time.time()
     # Sanity checks
     if user.id in config.ongoing_missions:
         await interaction.send(f"Please wait, potions can't be used during a Battle.",
                                ephemeral=True)
-        return
+        return False
 
     for owned_nfts in [user_owned_nfts]:
         if owned_nfts['data'] is None:
             await interaction.send(
                 f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
-            return
+            return False
 
         if 'mission_potion' not in owned_nfts['data'] or int(owned_nfts['data']['mission_potion']) <= 0:
             return (await store_callback(interaction))
@@ -439,12 +437,10 @@ async def use_reviveP_callback(interaction: nextcord.Interaction, button=False):
 
     if button:
         i_id = interaction.id
-        if len(button_cache['revive']) > 300:
-            button_cache['revive'] = button_cache['revive'][200:]
-        if i_id in button_cache['revive']:
-            return
+        if time.time() - button_cache['revive'].get(i_id, 0) < 60:
+            return False
         else:
-            button_cache['revive'].append(i_id)
+            button_cache['revive'][i_id] = time.time()
     # Sanity checks
     if user.id in config.ongoing_missions:
         await interaction.send(f"Please wait, potions can't be used during a Battle.",

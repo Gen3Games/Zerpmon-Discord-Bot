@@ -165,9 +165,7 @@ async def send_reset_message(client: nextcord.Client):
 
                         for i, user in users:
                             msg = '#{0:<4} {1:<25} TRP : {3:>2}      ZRP earned: {2:<20}'.format(i, user['username'],
-                                                                                                 user.get(
-                                                                                                     'total_zrp_earned',
-                                                                                                     0),
+                                                                                                 round(user.get('total_zrp_earned', 0), 2),
                                                                                                  user['tp'])
                             embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
                         tower_channel = nextcord.utils.get(guild.channels, id=config.TOWER_CHANNEL)

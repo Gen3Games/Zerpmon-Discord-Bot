@@ -3324,21 +3324,31 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                             description=f"{user_mention} vs {leader_name} {config.TYPE_MAPPING[gym_type]}")
 
         embed.add_field(name='\u200B', value='\u200B')
+        if stage > 5 or user_doc.get('lives', 0) <= 0:
+            embed.add_field(
+                name=f"TRP gained:",
+                value=f"{stage - 1}",
+                inline=False)
 
-        embed.add_field(
-            name=f"Reached Tower Level",
-            value=f"{stage}",
-            inline=False)
-        zrp_price = await xrpl_functions.get_zrp_price_api()
-        amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
-        await db_query.reset_gym_tower(_data1['discord_id'], amt, stage)
-        embed.add_field(name=f"ZRP won", value=amt, inline=True)
-        response = None
-        if amt > 0:
-            response = await xrpl_ws.send_zrp(_data1['address'], amt, 'tower', )
-        await interaction.send(
-            f"Sorry you **LOST** 💀 \nYou can try competing in **Gym Tower Rush** again by purchasing another ticket\n" + (f"**Failed**, something went wrong." if response == False else (f"**Successfully** sent `{amt}` ZRP" if response else "")),
-            ephemeral=True, embed=embed)
+            embed.add_field(
+                name=f"Reached Tower Level",
+                value=f"{stage}",
+                inline=False)
+            zrp_price = await xrpl_functions.get_zrp_price_api()
+            amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
+            await db_query.reset_gym_tower(_data1['discord_id'], amt, stage)
+            embed.add_field(name=f"ZRP won", value=amt, inline=True)
+            response = None
+            if amt > 0:
+                response = await xrpl_ws.send_zrp(_data1['address'], amt, 'tower', )
+            await interaction.send(
+                f"Sorry you **LOST** 💀 \nYou can try competing in **Gym Tower Rush** again by purchasing another ticket\n" + (f"**Failed**, something went wrong." if response == False else (f"**Successfully** sent `{amt}` ZRP" if response else "")),
+                ephemeral=True, embed=embed)
+        else:
+            await db_query.dec_life_gym_tower(_data1['discord_id'])
+            await interaction.send(
+                f"Sorry you **LOST** 💀 \nYou still have got **one** attempt left, **Good luck**!",
+                ephemeral=True, embed=embed)
         return 2
     elif len(user2_zerpmons) == 0:
         # battle_log['teamA']['zerpmons'].append(
