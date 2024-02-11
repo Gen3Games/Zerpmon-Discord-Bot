@@ -4191,7 +4191,22 @@ async def gym_tower_dashboard(interaction: nextcord.Interaction):
     embed.add_field(
         name=f"**Next battle against**",
         value=f"{gym_t} Gym (**{config.LEADER_NAMES[gym_t]}**)", inline=False)
-
+    leader = await db_query.get_gym_leader(gym_t)
+    zerps = leader["zerpmons"]
+    zerps = sorted(zerps, key=lambda i: i['name'])
+    type_map = config.TYPE_MAPPING if interaction.guild.id != config.MAIN_GUILD[0] else config_extra.O_TYPE_MAPPING
+    emj = type_map[gym_t]
+    embed.add_field(
+        name=f'__{emj} {gym_t} Gym {emj}__',
+        value=f'> {zerps[0]["name"]}\t({checks.get_type_emoji(zerps[0]["attributes"])})\n'
+              f'> {zerps[1]["name"]}\t({checks.get_type_emoji(zerps[1]["attributes"])})\n'
+              f'> {zerps[2]["name"]}\t({checks.get_type_emoji(zerps[2]["attributes"])})\n'
+              f'> {zerps[3]["name"]}\t({checks.get_type_emoji(zerps[3]["attributes"])})\n'
+              f'> {zerps[4]["name"]}\t({checks.get_type_emoji(zerps[4]["attributes"])})\n',
+        inline=False)
+    embed.add_field(
+        name='\u200B',
+        value='\u200B', inline=False)
     embed.add_field(
         name=f"**Tower Rush Points**",
         value=f"`{owned_nfts.get('tp', 0)}`", inline=False)
