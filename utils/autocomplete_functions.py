@@ -165,7 +165,28 @@ async def deck_num_autocomplete(interaction: nextcord.Interaction, item: str):
     except:
         pass
     if not temp_mode:
-        choices = {"1st": '0', "2nd": '1', "3rd": '2', "4th": '3', "5th": '4'}
+        choices = {"1st": '0', "2nd": '1', "3rd": '2', "4th": '3', "5th": '4', "6th": '5', "7th": '6', "8th": '7',
+                   "9th": '8', "10th": '9', "11th": '10', "12th": '11', "13th": '12', "14th": '13', "15th": '14',
+                   "16th": '15', "17th": '16', "18th": '17', "19th": '18', "20th": '19'}
     else:
         choices = {"1st": '0'}
     await interaction.response.send_autocomplete(choices)
+
+
+async def def_deck_autocomplete(_i: nextcord.Interaction, item: str):
+    params = _i.data['options'][0]['options']
+
+    deck_type = [i for i in params if i['name'] == 'deck_type'][0]['value']
+
+    choices = [('1st', '0'), ('2nd', '1'), ('3rd', '2'), ('4th', '3'), ('5th', '4'), ('6th', '5'), ('7th', '6'),
+               ('8th', '7'), ('9th', '8'), ('10th', '9'), ('11th', '10'), ('12th', '11'), ('13th', '12'),
+               ('14th', '13'), ('15th', '14'), ('16th', '15'), ('17th', '16'), ('18th', '17'), ('19th', '18'),
+               ('20th', '19')]
+
+    deck_n_key = deck_type + 's'
+    deck_names = (await db_query.get_deck_names(str(_i.user.id))).get('deck_names', {}).get(deck_n_key, {})
+
+    for idx, (k, i) in enumerate(choices):
+        if i in deck_names:
+            choices[idx] = (deck_names[i] + f' ({k})', i)
+    await _i.response.send_autocomplete(dict(choices))

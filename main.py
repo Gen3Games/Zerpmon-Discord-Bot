@@ -26,7 +26,7 @@ from utils import battle_function, nft_holding_updater, xrpl_ws, db_cleaner, che
 from xrpl.utils import xrp_to_drops
 from utils.trade import trade_item
 from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete, \
-    loan_autocomplete, zerp_flair_autocomplete, deck_num_autocomplete
+    loan_autocomplete, zerp_flair_autocomplete, deck_num_autocomplete, def_deck_autocomplete
 from utils.callback import wager_battle_r_callback
 
 intents = nextcord.Intents.all()
@@ -329,7 +329,7 @@ async def show(interaction: nextcord.Interaction):
                 button.callback = lambda i: show_callback(i, sorted_dict[start + 15:], start=start + 15)
                 break
             (lvl, xp, w_candy, g_candy, l_candy), zerp_doc = await db_query.get_lvl_xp(nft['name'], get_candies=True,
-                                                                                 ret_doc=True)
+                                                                                       ret_doc=True)
 
             my_button = f"https://xrp.cafe/nft/{nft['token_id']}"
             nft_type = ', '.join([i['value'] for i in nft['attributes'] if i['trait_type'] in ['Type', 'Affinity']])
@@ -587,7 +587,7 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
     await callback.gift_callback(interaction, qty, user, 'gold_candy', 'Power Candy (Gold)',
-                                  db_query.add_gold_candy)
+                                 db_query.add_gold_candy)
 
 
 @gift.subcommand(name='liquorice', description="Gift Golden Liquorice")
@@ -885,12 +885,14 @@ async def battle_deck(interaction: nextcord.Interaction,
                       ),
                       deck_type: str = SlashOption(
                           name="deck_type",
-                          choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK, "Tower Rush": config.TOWER_DECK},
+                          choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK,
+                                   "Tower Rush": config.TOWER_DECK},
                       ),
                       deck_number: str = SlashOption(
                           name="deck_number",
                           autocomplete_callback=deck_num_autocomplete,
                       ),
+                      deck_name: str = SlashOption("deck_name", description="Name your decks to easily switch between them", required=False, default=''),
                       trainer_name: str = SlashOption("trainer_name", required=False, default=''),
                       zerpmon_name1: str = SlashOption("1st", autocomplete_callback=zerpmon_autocomplete,
                                                        required=False, default=''),
@@ -920,7 +922,9 @@ async def battle_deck(interaction: nextcord.Interaction,
     user = interaction.user
     temp_mode = deck_type == 'gym_tower'
     await interaction.response.defer(ephemeral=True)
-    user_owned_nfts = {'data': await db_query.get_temp_user(str(user.id)) if temp_mode else await db_query.get_owned(user.id), 'user': user.name}
+    user_owned_nfts = {
+        'data': await db_query.get_temp_user(str(user.id)) if temp_mode else await db_query.get_owned(user.id),
+        'user': user.name}
     if temp_mode:
         deck_number = '0'
     # Sanity checks
@@ -961,8 +965,10 @@ async def battle_deck(interaction: nextcord.Interaction,
     user_obj = user_owned_nfts['data']
     eqs = [eq1, eq2, eq3, eq4, eq5]
     new_deck = {}
-    old_deck = user_obj['battle_deck'][deck_number] if temp_mode else user_obj[deck_type][deck_number]
-    old_eq_deck = user_obj['equipment_decks'][deck_number] if temp_mode else user_obj['equipment_decks'][deck_type][deck_number]
+    empty_eq_deck = {str(i): None for i in range(5)}
+    old_deck = user_obj['battle_deck'][deck_number] if temp_mode else user_obj[deck_type].get(deck_number, {})
+    old_eq_deck = user_obj['equipment_decks'][deck_number] if temp_mode else user_obj['equipment_decks'][deck_type].get(
+        deck_number, empty_eq_deck)
     for i, zerpmon_name in enumerate([zerpmon_name1, zerpmon_name2, zerpmon_name3, zerpmon_name4, zerpmon_name5]):
         if zerpmon_name != '' and zerpmon_name is not None and zerpmon_name not in list(new_deck.values()):
             new_deck[str(i)] = zerpmon_name
@@ -992,7 +998,8 @@ async def battle_deck(interaction: nextcord.Interaction,
             pass
         for i in range(5):
             try:
-                zerp = user_obj['zerpmons'][deck_copy[str(i)]] if not temp_mode else user_obj['zerpmons'][int(deck_copy[str(i)])]
+                zerp = user_obj['zerpmons'][deck_copy[str(i)]] if not temp_mode else user_obj['zerpmons'][
+                    int(deck_copy[str(i)])]
                 zerp_obj = await db_query.get_zerpmon(zerp['name']) if not temp_mode else zerp
                 user1_z.append(zerp_obj)
             except:
@@ -1050,9 +1057,9 @@ async def battle_deck(interaction: nextcord.Interaction,
     else:
         eqs = {str(i): eq for i, eq in enumerate(eqs)}
     if deck_type == 'gym_deck':
-        saved = await db_query.update_gym_deck(str(deck_number), new_deck, eqs, user.id)
+        saved = await db_query.update_gym_deck(str(deck_number), deck_name, new_deck, eqs, user.id)
     elif deck_type == 'battle_deck':
-        saved = await db_query.update_battle_deck(str(deck_number), new_deck, eqs, user.id)
+        saved = await db_query.update_battle_deck(str(deck_number), deck_name, new_deck, eqs, user.id)
     else:
         saved = await db_query.update_gym_tower_deck(str(deck_number), new_deck, eqs, user.id)
 
@@ -1077,10 +1084,11 @@ async def battle_deck(interaction: nextcord.Interaction,
                     imgs['z'].append(entry)
                 except:
                     pass
-            url = timg['image'] if "https:/" in timg['image'] else 'https://cloudflare-ipfs.com/ipfs/' + timg['image'].replace("ipfs://", "")
+            url = timg['image'] if "https:/" in timg['image'] else 'https://cloudflare-ipfs.com/ipfs/' + timg[
+                'image'].replace("ipfs://", "")
             imgs['z'].append((f"./static/images/{timg['name']}.png", url, None))
             lvl = user_obj['tower_level']
-            imgs['op'] = (f"./static/gym/{user_obj['gym_order'][lvl-1]} Gym Leader.png", lvl)
+            imgs['op'] = (f"./static/gym/{user_obj['gym_order'][lvl - 1]} Gym Leader.png", lvl)
             embed = CustomEmbed(title='Tower Rush deck', colour=0x42b883)
             print(imgs)
             output = f"{interaction.id}.png"
@@ -1104,7 +1112,7 @@ async def default_deck(interaction: nextcord.Interaction,
                        ),
                        deck_number: str = SlashOption(
                            name="deck_number",
-                           choices={"1st": '0', "2nd": '1', "3rd": '2', '4th': '3', '5th': '4'},
+                           autocomplete_callback=def_deck_autocomplete,
                        ),
                        ):
     execute_before_command(interaction)
@@ -1114,7 +1122,9 @@ async def default_deck(interaction: nextcord.Interaction,
     user = interaction.user
     temp_mode = deck_type == 'gym_tower'
 
-    user_owned_nfts = {'data':  await db_query.get_temp_user(str(user.id)) if temp_mode else await db_query.get_owned(user.id), 'user': user.name}
+    user_owned_nfts = {
+        'data': await db_query.get_temp_user(str(user.id)) if temp_mode else await db_query.get_owned(user.id),
+        'user': user.name}
 
     # Sanity checks
     if deck_type == 'battle_deck' and user.id in [i['id'] for i in config.battle_royale_participants]:
@@ -1190,7 +1200,8 @@ async def clear_battle_deck(interaction: nextcord.Interaction,
     # await interaction.send(
     #     f"**Adding to deck...**",
     #     ephemeral=True)
-    saved = await db_query.clear_battle_deck(deck_no=deck_number, user_id=user.id, gym=True if deck_type == 'Gym' else False)
+    saved = await db_query.clear_battle_deck(deck_no=deck_number, user_id=user.id,
+                                             gym=True if deck_type == 'Gym' else False)
     if not saved:
         await interaction.send(
             f"**Failed**",
@@ -1450,8 +1461,9 @@ async def use_zerpmon_flair(interaction: nextcord.Interaction,
                                ephemeral=True)
         return
     try:
-        await db_query.update_zerp_flair(str(user.id), user_obj['zerpmons'][zerpmon_sr]['name'], user_obj['z_flair'][flair],
-                                   flair)
+        await db_query.update_zerp_flair(str(user.id), user_obj['zerpmons'][zerpmon_sr]['name'],
+                                         user_obj['z_flair'][flair],
+                                         flair)
         await interaction.send(
             f"**Success**",
             ephemeral=True)
@@ -2983,7 +2995,8 @@ async def ranked_battle_instant(interaction: nextcord.Interaction,
     user_owned_nfts['user'] += u_flair
     user_mention = interaction.user.mention + u_flair
     r_key = config.RANK_MODES[b_type]
-    opponents = await db_query.get_same_ranked_p(str(user_id), user_d.get(r_key, {'tier': 'Unranked'})['tier'], field=r_key)
+    opponents = await db_query.get_same_ranked_p(str(user_id), user_d.get(r_key, {'tier': 'Unranked'})['tier'],
+                                                 field=r_key)
     if len(opponents) == 0:
         await interaction.send("Sorry, can't find anyone with the same Rank.", ephemeral=True)
         return
@@ -4012,7 +4025,7 @@ async def refresh(interaction: nextcord.Interaction):
 
 
 @client.slash_command(name="reverify",
-                      description="Reverify your Wallet",)
+                      description="Reverify your Wallet", )
 async def reverify(interaction: nextcord.Interaction,
                    is_crossm: str = SlashOption(
                        name="wallet_type",
@@ -4090,7 +4103,7 @@ async def verify_crossmark(interaction: nextcord.Interaction):
     if await db_query.save_sign_up_req(str(user_id), unique_id):
         embed = CustomEmbed(color=0x01f39d, title=f"Please sign in using this link.", url=req_url)
         await interaction.edit_original_message(embed=embed)
-        for i in range(18):
+        for i in range(60):
             logged_in, address = await db_query.get_req_status(unique_id)
             if logged_in:
                 # Proceed
@@ -4109,7 +4122,6 @@ async def verify_crossmark(interaction: nextcord.Interaction):
                                                 embed=CustomEmbed(title="Link **expired** please generate a new one.",
                                                                   color=0x000))
         await db_query.del_sign_up_req(unique_id)
-
 
 
 # Refresh CMD
@@ -4136,7 +4148,8 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
         await interaction.send('Wallet not verified yet, starting verification...', ephemeral=True)
         await wallet(interaction)
     elif user_temp_d is None or user_temp_d.get('reset', False) or not user_temp_d.get('fee_paid', False):
-        await callback.setup_gym_tower(interaction, user_doc, reset=False if not user_temp_d else user_temp_d.get('reset', False))
+        await callback.setup_gym_tower(interaction, user_doc,
+                                       reset=False if not user_temp_d else user_temp_d.get('reset', False))
     else:
         if await checks.verify_gym_tower(interaction, user_temp_d):
             await interaction.edit_original_message(content='**Battle beginning**...')
@@ -4173,9 +4186,9 @@ async def gym_tower_dashboard(interaction: nextcord.Interaction):
         await interaction.edit_original_message(content=f"Sorry you don't seem to be participating in Tower rush")
         return
     embed = CustomEmbed(
-            title=f"**Tower rush** dashboard:\n",
-            color=0xa2a8d3,
-        )
+        title=f"**Tower rush** dashboard:\n",
+        color=0xa2a8d3,
+    )
     lvl = owned_nfts['tower_level']
     gym_t = owned_nfts['gym_order'][lvl - 1]
     zrp_price = await xrpl_functions.get_zrp_price_api()
@@ -4227,11 +4240,12 @@ async def gym_ld(interaction: nextcord.Interaction):
 
     for i, user in users:
         msg = '#{0:<4} {1:<25} TRP : {3:>2}      ZRP earned: {2:<20}'.format(i, user['username'],
-                                                                 user.get('total_zrp_earned', 0),
-                                                                 user['tp'])
+                                                                             user.get('total_zrp_earned', 0),
+                                                                             user['tp'])
         embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
 
     await interaction.edit_original_message(embed=embed)
+
 
 # Gym Tower CMD
 
@@ -4440,7 +4454,8 @@ async def trainer_autocomplete(interaction: nextcord.Interaction, item: str):
     temp_mode = False
     user_id = str(interaction.user.id)
     try:
-        temp_mode = [i for i in interaction.data['options'][0]['options'] if i['name'] == 'deck_type'][0]['value'] == 'gym_tower'
+        temp_mode = [i for i in interaction.data['options'][0]['options'] if i['name'] == 'deck_type'][0][
+                        'value'] == 'gym_tower'
     except:
         pass
     cache = config_extra.deck_item_cache

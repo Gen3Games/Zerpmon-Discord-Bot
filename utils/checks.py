@@ -119,14 +119,18 @@ def get_deck_embed(deck_type, owned_nfts, sIdx=0, eIdx=5):
     embed2.add_field(name='\u200b', value='\u200B', inline=False)
     eqs = owned_nfts['equipment_decks'][f'{deck_type}_deck'] if not temp_mode else owned_nfts['equipment_decks']
     deck_key = f'{deck_type}_deck' if not temp_mode else 'battle_deck'
+    deck_n_key = deck_key + 's'
+    deck_names = owned_nfts.get('deck_names', {}).get(deck_n_key, {})
     for k in range(sIdx, eIdx):
+        deck_no = int(k) + 1
         k = str(k)
+        deck_name = deck_names.get(k)
         if k in owned_nfts[deck_key]:
             v = owned_nfts[deck_key][k]
             print(v)
             found = True
             nfts = {}
-            embed2.add_field(name=f"__{deck_type.title()} Deck #{int(k) + 1 if int(k) != 0 else 'Default'}__:\n",
+            embed2.add_field(name=f"__{deck_name if deck_name else deck_type.title()} Deck #{deck_no if deck_no != 1 else 'Default'}__:\n",
                              value='\u200B',
                              inline=False)
             # embed2.add_field(name='\u200b', value='\u200B', inline=False)
@@ -149,7 +153,7 @@ def get_deck_embed(deck_type, owned_nfts, sIdx=0, eIdx=5):
 
             else:
                 msg_str = '> __**Battle Zerpmon**__:\n' \
-                          f'> \n'
+                          f'> \u200B\n'
                 sorted_keys = sorted(nfts.keys(),
                                      key=lambda _k: (_k != "trainer", int(_k) if _k.isdigit() else float('inf')))
                 print(sorted_keys)

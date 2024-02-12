@@ -218,7 +218,8 @@ async def get_owned(user_id, autoc=False, db_sep=None):
             for idx in range(len(res[key])):
                 i = res[key][idx]
                 res[key][idx] = {'name': i['name'],
-                                 'type': [_i['value'] for _i in i['attributes'] if _i['trait_type'] in ['Type', 'Affinity']],
+                                 'type': [_i['value'] for _i in i['attributes'] if
+                                          _i['trait_type'] in ['Type', 'Affinity']],
                                  'sr': i['sr']}
 
         return res
@@ -723,7 +724,7 @@ async def clear_mission_deck(user_id):
         return False
 
 
-async def update_battle_deck(deck_no, new_deck, eqs, user_id):
+async def update_battle_deck(deck_no, deck_name, new_deck, eqs, user_id):
     users_collection = db['users']
 
     doc = await users_collection.find_one({'discord_id': str(user_id)})
@@ -731,18 +732,14 @@ async def update_battle_deck(deck_no, new_deck, eqs, user_id):
     # add the element to the array
     arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
         doc["battle_deck"]
-    if deck_no not in arr:
-        arr[deck_no] = {}
-    # if arr[deck_no] != {}:
-    #     for k, v in arr[deck_no].copy().items():
-    #         if v == zerpmon_id:
-    #             del arr[deck_no][k]
-    #
-    # arr[deck_no][str(place - 1)] = zerpmon_id
+
     arr[deck_no] = new_deck
+    q = {f'equipment_decks.battle_deck.{deck_no}': eqs,
+         'battle_deck': arr}
+    if deck_name:
+        q[f'deck_names.battle_decks.{deck_no}'] = deck_name
     r = await users_collection.update_one({'discord_id': str(user_id)},
-                                          {"$set": {f'equipment_decks.battle_deck.{deck_no}': eqs,
-                                                    'battle_deck': arr}})
+                                          {"$set": q})
 
     if r.acknowledged:
         return True
@@ -763,7 +760,7 @@ async def clear_battle_deck(deck_no, user_id, gym=False):
         return False
 
 
-async def update_gym_deck(deck_no, new_deck, eqs, user_id):
+async def update_gym_deck(deck_no, deck_name, new_deck, eqs, user_id):
     users_collection = db['users']
 
     doc = await users_collection.find_one({'discord_id': str(user_id)})
@@ -771,18 +768,16 @@ async def update_gym_deck(deck_no, new_deck, eqs, user_id):
     # add the element to the array
     arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "gym_deck" not in doc or doc["gym_deck"] == {} else doc[
         "gym_deck"]
-    if deck_no not in arr:
-        arr[deck_no] = {}
-    # if arr[deck_no] != {}:
-    #     for k, v in arr[deck_no].copy().items():
-    #         if v == zerpmon_id:
-    #             del arr[deck_no][k]
-    #
-    # arr[deck_no][str(place - 1)] = zerpmon_id
+
     arr[deck_no] = new_deck
+    q = {f'equipment_decks.gym_deck.{deck_no}': eqs,
+         'gym_deck': arr,
+
+         }
+    if deck_name:
+        q[f'deck_names.gym_decks.{deck_no}'] = deck_name
     r = await users_collection.update_one({'discord_id': str(user_id)},
-                                          {"$set": {f'equipment_decks.gym_deck.{deck_no}': eqs,
-                                                    'gym_deck': arr}})
+                                          {"$set": q})
 
     if r.acknowledged:
         return True
@@ -805,28 +800,44 @@ async def set_default_deck(deck_no, doc, user_id, type_: str):
     if type_ == config.GYM_DECK:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "gym_deck" not in doc or doc["gym_deck"] == {} else doc[
             "gym_deck"]
-        arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
+        # Deck names exchange
+        deck_name_key = type_ + 's'
+        deck_names = doc.get('deck_names', {}).get(deck_name_key, {})
+        if deck_names.get(deck_no):
+            deck_names['0'] = deck_names[deck_no]
+        if deck_names.get('0'):
+            deck_names[deck_no] = deck_names['0']
+        #
+        arr[deck_no], arr['0'] = arr['0'], arr.get(deck_no, {})
         eq_deck = doc['equipment_decks']['gym_deck']
-        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
+        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck.get(deck_no, {})
 
         # save the updated document
         r = await users_collection.update_one({'discord_id': str(user_id)},
-                                              {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck}})
+                                              {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck, f'deck_names.{deck_name_key}': deck_names}})
     elif type_ == config.BATTLE_DECK:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
             doc["battle_deck"]
-        arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
+        # Deck names exchange
+        deck_name_key = type_ + 's'
+        deck_names = doc.get('deck_names', {}).get(deck_name_key, {})
+        if deck_names.get(deck_no):
+            deck_names['0'] = deck_names[deck_no]
+        if deck_names.get('0'):
+            deck_names[deck_no] = deck_names['0']
+        #
+        arr[deck_no], arr['0'] = arr['0'], arr.get(deck_no, {})
         eq_deck = doc['equipment_decks']['battle_deck']
-        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
+        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck.get(deck_no, {})
         # save the updated document
         r = await users_collection.update_one({'discord_id': str(user_id)},
-                                              {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck}})
+                                              {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck, f'deck_names.{deck_name_key}': deck_names}})
     else:
         users_collection = db['temp_user_data']
         arr = doc["battle_deck"]
-        arr[deck_no], arr['0'] = arr['0'], arr[deck_no]
+        arr[deck_no], arr['0'] = arr['0'], arr.get(deck_no, {})
         eq_deck = doc['equipment_decks']
-        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck[deck_no]
+        eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck.get(deck_no, {})
         # save the updated document
         r = await users_collection.update_one({'discord_id': str(user_id)},
                                               {"$set": {'battle_deck': arr, 'equipment_decks': eq_deck}})
@@ -844,6 +855,12 @@ async def reset_deck():
 
     for user in doc:
         r = await users_collection.update_one({'discord_id': str(user['discord_id'])}, {"$set": {'battle_deck': {}}})
+
+
+async def get_deck_names(d_id: str):
+    users_collection = db['users']
+    doc = await users_collection.find_one({'discord_id': d_id}, {'_id': 0, 'deck_names': 1})
+    return doc
 
 
 async def revive_zerpmon(user_id):
