@@ -2486,7 +2486,7 @@ async def get_tower_rush_leaderboard(discord_id):
         if user_rank and user_rank > top_10[-1][0]:
             top_10.append((user_rank, await users_collection.find_one({'discord_id': discord_id}, projection)))
 
-    return top_10 if len(top_10) <= 10 else top_10[:11]
+    return top_10 if len(top_10) <= 10 else top_10[:10]
 
 
 # Crossmark fn
