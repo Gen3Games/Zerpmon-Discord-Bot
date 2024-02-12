@@ -751,9 +751,9 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
                                 offerId='',
                                 token_id='', fee=False, loan=False, ascend=False, recycle_fee=False, to_addr=None):
     # Sanity checks
-    # if _i.user.id in config.ADMINS:
-    #     return user_owned_nfts['address'], True
-    #     amount = round(amount / 100, 2)
+    if _i.user.id in config.ADMINS:
+        return user_owned_nfts['address'], True
+        amount = round(amount / 100, 2)
     if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",

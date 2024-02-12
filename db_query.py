@@ -969,7 +969,7 @@ async def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=No
                     rewards['mp'] = m_potion
                 if gym_r_potion:
                     await add_gym_refill_potion(user_address, gym_r_potion)
-                    globals().get(f'add_{candy_reward}')(user_address, candy_reward_cnt)
+                    await globals().get(f'add_{candy_reward}')(user_address, candy_reward_cnt)
                     rewards['grp'] = gym_r_potion
                     rewards['extra_candy'] = candy_reward
                     rewards['extra_candy_cnt'] = candy_reward_cnt
