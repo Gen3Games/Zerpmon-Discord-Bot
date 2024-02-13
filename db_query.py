@@ -794,19 +794,26 @@ async def clear_gym_deck(deck_no, user_id):
         return False
 
 
+async def swap_names(deck_names, deck_no):
+    if deck_names.get(deck_no) and deck_names.get('0'):
+        deck_names['0'], deck_names[deck_no] = deck_names[deck_no], deck_names['0']
+    elif deck_names.get('0'):
+        deck_names[deck_no] = deck_names['0']
+        del deck_names['0']
+    elif deck_names.get(deck_no):
+        deck_names['0'] = deck_names[deck_no]
+        del deck_names[deck_no]
+
+
 async def set_default_deck(deck_no, doc, user_id, type_: str):
     users_collection = db['users']
-
     if type_ == config.GYM_DECK:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "gym_deck" not in doc or doc["gym_deck"] == {} else doc[
             "gym_deck"]
         # Deck names exchange
         deck_name_key = type_ + 's'
         deck_names = doc.get('deck_names', {}).get(deck_name_key, {})
-        if deck_names.get(deck_no):
-            deck_names['0'] = deck_names[deck_no]
-        if deck_names.get('0'):
-            deck_names[deck_no] = deck_names['0']
+        await swap_names(deck_names, deck_no)
         #
         arr[deck_no], arr['0'] = arr['0'], arr.get(deck_no, {})
         eq_deck = doc['equipment_decks']['gym_deck']
@@ -814,24 +821,23 @@ async def set_default_deck(deck_no, doc, user_id, type_: str):
 
         # save the updated document
         r = await users_collection.update_one({'discord_id': str(user_id)},
-                                              {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck, f'deck_names.{deck_name_key}': deck_names}})
+                                              {"$set": {'gym_deck': arr, 'equipment_decks.gym_deck': eq_deck,
+                                                        f'deck_names.{deck_name_key}': deck_names}})
     elif type_ == config.BATTLE_DECK:
         arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "battle_deck" not in doc or doc["battle_deck"] == {} else \
             doc["battle_deck"]
         # Deck names exchange
         deck_name_key = type_ + 's'
         deck_names = doc.get('deck_names', {}).get(deck_name_key, {})
-        if deck_names.get(deck_no):
-            deck_names['0'] = deck_names[deck_no]
-        if deck_names.get('0'):
-            deck_names[deck_no] = deck_names['0']
+        await swap_names(deck_names, deck_no)
         #
         arr[deck_no], arr['0'] = arr['0'], arr.get(deck_no, {})
         eq_deck = doc['equipment_decks']['battle_deck']
         eq_deck[deck_no], eq_deck['0'] = eq_deck['0'], eq_deck.get(deck_no, {})
         # save the updated document
         r = await users_collection.update_one({'discord_id': str(user_id)},
-                                              {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck, f'deck_names.{deck_name_key}': deck_names}})
+                                              {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck,
+                                                        f'deck_names.{deck_name_key}': deck_names}})
     else:
         users_collection = db['temp_user_data']
         arr = doc["battle_deck"]

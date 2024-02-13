@@ -704,7 +704,8 @@ async def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, b
                                                                                 [[], [note]])
                     p1_temp, p2_temp = percentages1, percentages2
                     winner['winner'] = '2'
-                    winner['status_effect'] = note if not rage else 'knock out'
+                    winner['status_effect'] = note
+                    # winner['status_effect'] = note if not rage else 'knock out'
                     winner['move2']['msg'] = _m2
                 elif move1['color'] == 'white' and winner['move1']['dmg'] > 0:
                     winner['winner'] = '1'
@@ -773,7 +774,8 @@ async def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, b
                                                                                         [[], [note]])
                             p1_temp, p2_temp = percentages1, percentages2
                             winner['winner'] = '2'
-                            winner['status_effect'] = note if not rage else 'knock out'
+                            winner['status_effect'] = note
+                            # winner['status_effect'] = note if not rage else 'knock out'
                             winner['move2']['msg'] = _m2
                         else:
                             winner['winner'] = ""
@@ -825,7 +827,8 @@ async def battle_zerpmons(zerpmon1, zerpmon2, types, status_affects, eq_lists, b
                                                                                 [[], [m2['notes']]])
                     p1_temp, p2_temp = percentages1, percentages2
                     winner['winner'] = '2'
-                    winner['status_effect'] = m2['notes'].lower() if not rage else 'knock out'
+                    winner['status_effect'] = m2['notes'].lower()
+                    # winner['status_effect'] = m2['notes'].lower() if not rage else 'knock out'
                     winner['move2']['msg'] = _m2
 
             case ("miss", "miss"):
@@ -2861,6 +2864,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             except:
                 logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
                 await asyncio.sleep(10)
+        logging.error(f'BossRewards: {reward_dict}')
         total_txn = len(reward_dict)
         success_txn = 0
         failed_str = ''
