@@ -58,7 +58,7 @@ def import_boxes():
 
 
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List_091123.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_140224-1.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -77,7 +77,7 @@ def import_moves():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_140224.csv', 'r') as csvfile:
         collection = db['MoveSets']
         # c2 = db['MoveSets2']
         # c2.drop()
@@ -524,7 +524,7 @@ def clear_slot_reward():
 # switch_cached()
 # import_boxes()
 
-# import_moves()
+import_moves()
 import_movesets()
 # import_level()
 # import_ascend_levels()

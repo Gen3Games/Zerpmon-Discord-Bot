@@ -2453,8 +2453,13 @@ async def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
 
 async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
     users_collection = db['temp_user_data']
+    eq_deck = {}
+    for i in range(5):
+        eq_deck[str(i)] = {str(i): None for i in range(5)}
     res = await users_collection.update_one({'discord_id': str(user_id)},
-                                            {'$set': {'fee_paid': False},
+                                            {'$set': {'fee_paid': False,
+                                                      "battle_deck": {'0': {}},
+                                                      "equipment_decks": eq_deck, },
                                              '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1}})
     return res.acknowledged
 
@@ -2468,10 +2473,15 @@ async def dec_life_gym_tower(user_id):
 
 async def update_gym_tower(user_id, new_level):
     users_collection = db['temp_user_data']
+    eq_deck = {}
+    for i in range(5):
+        eq_deck[str(i)] = {str(i): None for i in range(5)}
     if new_level > 20:
         q = {'tower_level': 1, 'fee_paid': False}
     else:
-        q = {'tower_level': new_level, 'reset': True}
+        q = {'tower_level': new_level, 'reset': True,
+             "battle_deck": {'0': {}},
+             "equipment_decks": eq_deck, }
     res = await users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
     return res.acknowledged
 

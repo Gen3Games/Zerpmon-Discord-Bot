@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import random
+import re
 import threading
 import time
 import traceback
@@ -404,6 +405,32 @@ async def show_equipment(interaction: nextcord.Interaction):
                 value=f'[view]({my_button})' + (f'\n[view]({my_button2})' if my_button2 is not None else ''),
                 inline=False)
     await interaction.edit_original_message(content="FOUND", embeds=[embed3])
+
+
+@client.slash_command(name="show_battlezone", description="Show owned Battle zones")
+async def show_battlezone(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    owned_nfts = await db_query.get_owned(interaction.user.id)
+    embed3 = CustomEmbed(title=f"YOUR **BATTLEZONE** HOLDINGS:\n",
+                         color=0xffc93c,
+                         )
+    counter = Counter(owned_nfts.get('bg', []))
+    type_map = config.TYPE_MAPPING if interaction.guild.id != config.MAIN_GUILD[0] else config_extra.O_TYPE_MAPPING
+    name_values = sorted(list(counter.keys()))
+    for i, name in enumerate(name_values):
+        if len(embed3.fields) > 24:
+            break
+        count = counter[name]
+        del counter[name]
+        name = re.search(r'/([^/]+)\.png$', name)
+        if name:
+            name = name.group(1)
+            embed3.add_field(
+                name=f" **{name}** ({type_map[name]}x{count})",
+                value=f'\u200B',
+                inline=False)
+    await interaction.edit_original_message(embeds=[embed3])
 
 
 @client.slash_command(name="battle",
@@ -3082,7 +3109,6 @@ async def equipment(interaction: nextcord.Interaction):
 async def show_equipments(interaction: nextcord.Interaction):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
-    owned_nfts = await db_query.get_owned(interaction.user.id)
     embed3 = CustomEmbed(title=f"**ZERPMON** EQUIPMENTS\n",
                          color=0x962071,
                          )

@@ -165,11 +165,11 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             percent_c = float(match.group()) if match is not None else 0
             if 'oppo' in eq1_lower:
-                blue_dict['new_b2'] = z2_blue_percent - percent_c
+                blue_dict['new_b2'] -= percent_c
                 z1['op_eq_applied'] = z2['name']
             else:
                 # z1['eq_applied'] = z2['name']
-                blue_dict['new_b1'] = z1_blue_percent + percent_c
+                blue_dict['new_b1'] += percent_c
                 z1['eq_applied'] = ''
         else:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
@@ -198,11 +198,11 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             percent_c = float(match.group()) if match is not None else 0
             if 'oppo' in eq2_lower:
-                blue_dict['new_b1'] = z1_blue_percent - percent_c
+                blue_dict['new_b1'] -= percent_c
                 z2['op_eq_applied'] = z1['name']
             else:
                 # z2['eq_applied'] = z1['name']
-                blue_dict['new_b2'] = z2_blue_percent + percent_c
+                blue_dict['new_b2'] += percent_c
                 z2['eq_applied'] = ''
         else:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
