@@ -73,18 +73,23 @@ async def send_message(msg_hook, hidden, embeds, files, content, view=None):
         await msg_hook.send(content=content, embeds=embeds, files=files, view=view)
 
 
-async def show_single_embed(i, z1, omni=False):
-    zerpmon = await db_query.get_zerpmon(z1.lower().title(), user_id=i.user.id)
+async def show_single_embed(i, z1, is_tower_rush, omni=False, ):
+    if is_tower_rush:
+        zerpmon = await db_query.get_zerpmon(z1.lower().title(), mission=True)
+        zerpmon['level'] = 30
+        await db_query.update_moves(zerpmon, save_z=False, effective=True)
+    else:
+        zerpmon = await db_query.get_zerpmon(z1.lower().title(), user_id=i.user.id)
     embed1 = await checks.get_show_zerp_embed(zerpmon, None, omni=omni)
     await i.send(content="\u200B", embeds=[embed1], files=[], ephemeral=True)
 
 
-async def get_battle_view(msg, z1, z2):
+async def get_battle_view(msg, z1, z2, is_tower_rush=False):
     view = nextcord.ui.View(timeout=120)
     b1 = nextcord.ui.Button(label=f'View {z1}', style=nextcord.ButtonStyle.green, )
-    b1.callback = lambda i: show_single_embed(i, z1)
+    b1.callback = lambda i: show_single_embed(i, z1, is_tower_rush)
     b2 = nextcord.ui.Button(label=f'View {z2}', style=nextcord.ButtonStyle.green, )
-    b2.callback = lambda i: show_single_embed(i, z2)
+    b2.callback = lambda i: show_single_embed(i, z2, is_tower_rush)
     view.add_item(b1)
     view.add_item(b2)
     print('get_battle_view', view.children)
@@ -3025,12 +3030,15 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                                                                                                 p1.copy() if p1 is not None else p1,
                                                                                                 p2.copy() if p2 is not None else p2)
         await asyncio.sleep(1)
+        main_embed.clear_fields()
+        show_view = await get_battle_view(msg_hook, z1['name'], z2['name'], True)
+
         if msg_hook is None:
             msg_hook = interaction
             await interaction.send(content="\u200B", embeds=[trainer_embed, main_embed], files=[file2, file],
-                                   ephemeral=True)
+                                   ephemeral=True, view=show_view)
         else:
-            await msg_hook.send(content="\u200B", embed=main_embed, file=file, ephemeral=True)
+            await msg_hook.send(content="\u200B", embed=main_embed, file=file, ephemeral=True, view=show_view)
 
         eliminate = ""
         move_counter = 0

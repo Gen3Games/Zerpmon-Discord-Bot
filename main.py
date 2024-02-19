@@ -2932,169 +2932,169 @@ async def free_battle_royale(interaction: nextcord.Interaction,
 
 # RANKED COMMANDS
 
-@client.slash_command(name="ranked_battle",
-                      description="1v1/3v3/5v5 Ranked battle among Trainers (require: 1-5 Zerpmon and 1 Trainer card)",
-                      )
-async def ranked_battle(interaction: nextcord.Interaction,
-                        b_type: int = SlashOption(required=True, name='battle_type',
-                                                  choices={'1v1': 1, '3v3': 3, '5v5': 5}),
-                        opponent: Optional[nextcord.Member] = SlashOption(required=True), ):
-    execute_before_command(interaction)
-    # msg = await interaction.send(f"Searching...")
-    user_id = interaction.user.id
-    # Sanity checks
-    if interaction.guild_id not in config.MAIN_GUILD:
-        await interaction.send("Sorry, you can do Ranked Battles only in Official Server.")
-        return
-    user_owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
-    u_flair = f' | {user_owned_nfts["data"].get("flair", [])[0]}' if len(
-        user_owned_nfts["data"].get("flair", [])) > 0 else ''
-    user_owned_nfts['user'] += u_flair
-    user_mention = interaction.user.mention + u_flair
-
-    opponent_owned_nfts = {'data': await db_query.get_owned(opponent.id), 'user': opponent.name}
-    o_flair = f' | {opponent_owned_nfts["data"].get("flair", [])[0]}' if len(
-        opponent_owned_nfts["data"].get("flair", [])) > 0 else ''
-    opponent_owned_nfts['user'] += o_flair
-    oppo_mention = opponent.mention + o_flair
-    proceed = await checks.check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction,
-                                        battle_nickname='Ranked', battle_type=b_type)
-    if not proceed:
-        return
-        #  Proceed with the challenge if check success
-
-    await interaction.send("Ranked Battle conditions met", ephemeral=True)
-    config.ongoing_battles.append(user_id)
-    config.ongoing_battles.append(opponent.id)
-    try:
-        msg = await interaction.channel.send(
-            f"**{b_type}v{b_type}** Ranked **battle** challenge to {oppo_mention} by {user_mention}. Click the **swords** to accept!")
-        await msg.add_reaction("⚔")
-        config.battle_dict[msg.id] = {
-            "type": 'ranked',
-            "challenger": user_id,
-            "p1_deck": {'z': user_owned_nfts['data']['battle_deck']['0'],
-                        'e': user_owned_nfts['data']['equipment_decks']['battle_deck']['0']},
-            "username1": user_mention,
-            "challenged": opponent.id,
-            "p2_deck": {'z': opponent_owned_nfts['data']['battle_deck']['0'],
-                        'e': opponent_owned_nfts['data']['equipment_decks']['battle_deck']['0']},
-            "username2": oppo_mention,
-            "oppo_obj": opponent,
-            "active": False,
-            "channel_id": interaction.channel_id,
-            "timeout": time.time() + 60,
-            'battle_type': b_type,
-        }
-        # Sleep for a while and notify timeout
-        await asyncio.sleep(60)
-        if msg.id in config.battle_dict and config.battle_dict[msg.id]['active'] == False:
-            del config.battle_dict[msg.id]
-            await msg.edit(
-                f"Timed out! <t:{int(time.time())}:R>\n**Info**: Challenge to {oppo_mention} by {user_mention}")
-            await msg.add_reaction("❌")
-            config.ongoing_battles.remove(user_id)
-            config.ongoing_battles.remove(opponent.id)
-    except Exception as e:
-        logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
-        config.ongoing_battles.remove(user_id)
-        config.ongoing_battles.remove(opponent.id)
-
-
-@client.slash_command(name="ranked_battle_instant",
-                      description="Instant 1v1/3v3/5v5 Ranked battle among Trainers (require: 1-5 Zerpmon and 1 Trainer card)",
-                      )
-async def ranked_battle_instant(interaction: nextcord.Interaction,
-                                b_type: int = SlashOption(required=True, name='battle_type',
-                                                          choices={'1v1': 1, '3v3': 3, '5v5': 5}),
-                                ):
-    execute_before_command(interaction)
-    user_id = interaction.user.id
-    # Sanity checks
-    if interaction.guild_id not in config.MAIN_GUILD:
-        await interaction.send("Sorry, you can do Ranked Battles only in Official Server.")
-        return
-    msg = await interaction.send(f"Searching Opponent...", ephemeral=True)
-    user_owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
-    user_d = user_owned_nfts['data']
-    u_flair = f' | {user_d.get("flair", [])[0]}' if len(
-        user_d.get("flair", [])) > 0 else ''
-    user_owned_nfts['user'] += u_flair
-    user_mention = interaction.user.mention + u_flair
-    r_key = config.RANK_MODES[b_type]
-    opponents = await db_query.get_same_ranked_p(str(user_id), user_d.get(r_key, {'tier': 'Unranked'})['tier'],
-                                                 field=r_key)
-    if len(opponents) == 0:
-        await interaction.send("Sorry, can't find anyone with the same Rank.", ephemeral=True)
-        return
-    recent_deck = 'recent_deck' if b_type == 3 else f'recent_deck{b_type}'
-    recent_eq_deck = recent_deck + '_eq'
-
-    def deck_getter(user):
-        return {i: j for i, j in user.get('battle_deck', {}).get('0', {}).items() if j}
-
-    valid_opponents = [i for i in opponents if
-                       len(i.get(recent_deck, deck_getter(i))) >= b_type + 1]
-    if len(valid_opponents) == 0:
-        await interaction.send("Sorry, can't find anyone within the same Rank and with a compatible Battle deck.",
-                               ephemeral=True)
-        return
-    real_oppo = random.choice(valid_opponents)
-    # opponent = interaction.guild.get_member(int(real_oppo['discord_id']))
-    opponent = client.get_user(int(real_oppo['discord_id']))
-    opponent_owned_nfts = {'data': real_oppo, 'user': opponent.name}
-    oppo_d = opponent_owned_nfts['data']
-    o_flair = f' | {oppo_d.get("flair", [])[0]}' if len(
-        oppo_d.get("flair", [])) > 0 else ''
-    opponent_owned_nfts['user'] += o_flair
-    oppo_mention = opponent.mention + o_flair
-    proceed = await checks.check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction,
-                                        battle_nickname='Instant Ranked', battle_type=b_type)
-    if not proceed:
-        return
-        #  Proceed with the challenge if check success
-    config.ongoing_battles.append(user_id)
-    # config.ongoing_battles.append(opponent.id)
-    try:
-        msg = await interaction.send(content="Ranked Battle **beginning**", ephemeral=True)
-        battle_instance = {
-            "type": 'ranked',
-            "challenger": user_id,
-            "username1": user_mention,
-            "challenged": int(oppo_d['discord_id']),
-            "username2": oppo_mention,
-            "active": False,
-            "channel_id": interaction.channel_id,
-            "timeout": time.time() + 60,
-            'battle_type': b_type,
-        }
-        config.battle_dict[msg.id] = battle_instance
-        # Sleep for a while and notify timeout
-        bt_deck = oppo_d.get('battle_deck', {'0': {}})['0']
-        eq_bt_deck = oppo_d['equipment_decks']['battle_deck']['0']
-        winner = await battle_function.proceed_battle(interaction, battle_instance,
-                                                      battle_instance['battle_type'],
-                                                      battle_name='Instant Ranked Battle',
-                                                      p1_deck={'z': user_d['battle_deck']['0'],
-                                                               'e': user_d['equipment_decks']['battle_deck']['0']},
-                                                      p2_deck=
-                                                      {'z': oppo_d.get(recent_deck, bt_deck),
-                                                       'e': oppo_d.get(recent_eq_deck, eq_bt_deck)}
-                                                      , hidden=True)
-        view = View()
-        b1 = Button(label="Battle Again", style=ButtonStyle.green)
-        view.add_item(b1)
-        b1.callback = lambda i: ranked_battle_instant(i, b_type)
-        await post_rank_fn.send_last_embed(interaction.user, opponent, interaction, battle_instance, winner, b_type,
-                                           mode='rank5', hidden=True, view=view)
-
-    except Exception as e:
-        logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
-    finally:
-        del config.battle_dict[msg.id]
-        config.ongoing_battles.remove(user_id)
-        # config.ongoing_battles.remove(opponent.id)
-        # config.ongoing_battles.remove(battle_instance["challenged"])
+# @client.slash_command(name="ranked_battle",
+#                       description="1v1/3v3/5v5 Ranked battle among Trainers (require: 1-5 Zerpmon and 1 Trainer card)",
+#                       )
+# async def ranked_battle(interaction: nextcord.Interaction,
+#                         b_type: int = SlashOption(required=True, name='battle_type',
+#                                                   choices={'1v1': 1, '3v3': 3, '5v5': 5}),
+#                         opponent: Optional[nextcord.Member] = SlashOption(required=True), ):
+#     execute_before_command(interaction)
+#     # msg = await interaction.send(f"Searching...")
+#     user_id = interaction.user.id
+#     # Sanity checks
+#     if interaction.guild_id not in config.MAIN_GUILD:
+#         await interaction.send("Sorry, you can do Ranked Battles only in Official Server.")
+#         return
+#     user_owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
+#     u_flair = f' | {user_owned_nfts["data"].get("flair", [])[0]}' if len(
+#         user_owned_nfts["data"].get("flair", [])) > 0 else ''
+#     user_owned_nfts['user'] += u_flair
+#     user_mention = interaction.user.mention + u_flair
+#
+#     opponent_owned_nfts = {'data': await db_query.get_owned(opponent.id), 'user': opponent.name}
+#     o_flair = f' | {opponent_owned_nfts["data"].get("flair", [])[0]}' if len(
+#         opponent_owned_nfts["data"].get("flair", [])) > 0 else ''
+#     opponent_owned_nfts['user'] += o_flair
+#     oppo_mention = opponent.mention + o_flair
+#     proceed = await checks.check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction,
+#                                         battle_nickname='Ranked', battle_type=b_type)
+#     if not proceed:
+#         return
+#         #  Proceed with the challenge if check success
+#
+#     await interaction.send("Ranked Battle conditions met", ephemeral=True)
+#     config.ongoing_battles.append(user_id)
+#     config.ongoing_battles.append(opponent.id)
+#     try:
+#         msg = await interaction.channel.send(
+#             f"**{b_type}v{b_type}** Ranked **battle** challenge to {oppo_mention} by {user_mention}. Click the **swords** to accept!")
+#         await msg.add_reaction("⚔")
+#         config.battle_dict[msg.id] = {
+#             "type": 'ranked',
+#             "challenger": user_id,
+#             "p1_deck": {'z': user_owned_nfts['data']['battle_deck']['0'],
+#                         'e': user_owned_nfts['data']['equipment_decks']['battle_deck']['0']},
+#             "username1": user_mention,
+#             "challenged": opponent.id,
+#             "p2_deck": {'z': opponent_owned_nfts['data']['battle_deck']['0'],
+#                         'e': opponent_owned_nfts['data']['equipment_decks']['battle_deck']['0']},
+#             "username2": oppo_mention,
+#             "oppo_obj": opponent,
+#             "active": False,
+#             "channel_id": interaction.channel_id,
+#             "timeout": time.time() + 60,
+#             'battle_type': b_type,
+#         }
+#         # Sleep for a while and notify timeout
+#         await asyncio.sleep(60)
+#         if msg.id in config.battle_dict and config.battle_dict[msg.id]['active'] == False:
+#             del config.battle_dict[msg.id]
+#             await msg.edit(
+#                 f"Timed out! <t:{int(time.time())}:R>\n**Info**: Challenge to {oppo_mention} by {user_mention}")
+#             await msg.add_reaction("❌")
+#             config.ongoing_battles.remove(user_id)
+#             config.ongoing_battles.remove(opponent.id)
+#     except Exception as e:
+#         logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
+#         config.ongoing_battles.remove(user_id)
+#         config.ongoing_battles.remove(opponent.id)
+#
+#
+# @client.slash_command(name="ranked_battle_instant",
+#                       description="Instant 1v1/3v3/5v5 Ranked battle among Trainers (require: 1-5 Zerpmon and 1 Trainer card)",
+#                       )
+# async def ranked_battle_instant(interaction: nextcord.Interaction,
+#                                 b_type: int = SlashOption(required=True, name='battle_type',
+#                                                           choices={'1v1': 1, '3v3': 3, '5v5': 5}),
+#                                 ):
+#     execute_before_command(interaction)
+#     user_id = interaction.user.id
+#     # Sanity checks
+#     if interaction.guild_id not in config.MAIN_GUILD:
+#         await interaction.send("Sorry, you can do Ranked Battles only in Official Server.")
+#         return
+#     msg = await interaction.send(f"Searching Opponent...", ephemeral=True)
+#     user_owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
+#     user_d = user_owned_nfts['data']
+#     u_flair = f' | {user_d.get("flair", [])[0]}' if len(
+#         user_d.get("flair", [])) > 0 else ''
+#     user_owned_nfts['user'] += u_flair
+#     user_mention = interaction.user.mention + u_flair
+#     r_key = config.RANK_MODES[b_type]
+#     opponents = await db_query.get_same_ranked_p(str(user_id), user_d.get(r_key, {'tier': 'Unranked'})['tier'],
+#                                                  field=r_key)
+#     if len(opponents) == 0:
+#         await interaction.send("Sorry, can't find anyone with the same Rank.", ephemeral=True)
+#         return
+#     recent_deck = 'recent_deck' if b_type == 3 else f'recent_deck{b_type}'
+#     recent_eq_deck = recent_deck + '_eq'
+#
+#     def deck_getter(user):
+#         return {i: j for i, j in user.get('battle_deck', {}).get('0', {}).items() if j}
+#
+#     valid_opponents = [i for i in opponents if
+#                        len(i.get(recent_deck, deck_getter(i))) >= b_type + 1]
+#     if len(valid_opponents) == 0:
+#         await interaction.send("Sorry, can't find anyone within the same Rank and with a compatible Battle deck.",
+#                                ephemeral=True)
+#         return
+#     real_oppo = random.choice(valid_opponents)
+#     # opponent = interaction.guild.get_member(int(real_oppo['discord_id']))
+#     opponent = client.get_user(int(real_oppo['discord_id']))
+#     opponent_owned_nfts = {'data': real_oppo, 'user': opponent.name}
+#     oppo_d = opponent_owned_nfts['data']
+#     o_flair = f' | {oppo_d.get("flair", [])[0]}' if len(
+#         oppo_d.get("flair", [])) > 0 else ''
+#     opponent_owned_nfts['user'] += o_flair
+#     oppo_mention = opponent.mention + o_flair
+#     proceed = await checks.check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, interaction,
+#                                         battle_nickname='Instant Ranked', battle_type=b_type)
+#     if not proceed:
+#         return
+#         #  Proceed with the challenge if check success
+#     config.ongoing_battles.append(user_id)
+#     # config.ongoing_battles.append(opponent.id)
+#     try:
+#         msg = await interaction.send(content="Ranked Battle **beginning**", ephemeral=True)
+#         battle_instance = {
+#             "type": 'ranked',
+#             "challenger": user_id,
+#             "username1": user_mention,
+#             "challenged": int(oppo_d['discord_id']),
+#             "username2": oppo_mention,
+#             "active": False,
+#             "channel_id": interaction.channel_id,
+#             "timeout": time.time() + 60,
+#             'battle_type': b_type,
+#         }
+#         config.battle_dict[msg.id] = battle_instance
+#         # Sleep for a while and notify timeout
+#         bt_deck = oppo_d.get('battle_deck', {'0': {}})['0']
+#         eq_bt_deck = oppo_d['equipment_decks']['battle_deck']['0']
+#         winner = await battle_function.proceed_battle(interaction, battle_instance,
+#                                                       battle_instance['battle_type'],
+#                                                       battle_name='Instant Ranked Battle',
+#                                                       p1_deck={'z': user_d['battle_deck']['0'],
+#                                                                'e': user_d['equipment_decks']['battle_deck']['0']},
+#                                                       p2_deck=
+#                                                       {'z': oppo_d.get(recent_deck, bt_deck),
+#                                                        'e': oppo_d.get(recent_eq_deck, eq_bt_deck)}
+#                                                       , hidden=True)
+#         view = View()
+#         b1 = Button(label="Battle Again", style=ButtonStyle.green)
+#         view.add_item(b1)
+#         b1.callback = lambda i: ranked_battle_instant(i, b_type)
+#         await post_rank_fn.send_last_embed(interaction.user, opponent, interaction, battle_instance, winner, b_type,
+#                                            mode='rank5', hidden=True, view=view)
+#
+#     except Exception as e:
+#         logging.error(f"ERROR during friendly/ranked battle: {e}\n{traceback.format_exc()}")
+#     finally:
+#         del config.battle_dict[msg.id]
+#         config.ongoing_battles.remove(user_id)
+#         # config.ongoing_battles.remove(opponent.id)
+#         # config.ongoing_battles.remove(battle_instance["challenged"])
 
 
 @client.slash_command(name="equipment",

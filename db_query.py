@@ -236,7 +236,7 @@ async def check_wallet_exist(address):
 
     user_id = str(address)
     result = await users_collection.find_one({"address": user_id})
-    discord_user_exist = result is not None and result.get('discord_id') is not None
+    discord_user_exist = result is not None and result.get('discord_id')
     # print(f"Found user {result}")
 
     return discord_user_exist
@@ -1111,7 +1111,7 @@ async def get_random_doc_with_type(type_value=None, limit=5, level=None):
             del doc['_id']
             if level is not None and level >= 10:
                 doc['level'] = level
-                await update_moves(doc, False)
+                await update_moves(doc, False, effective=True)
             doc['name2'] = doc['name']
 
         return random_documents
@@ -1521,7 +1521,7 @@ async def apply_gold_candy(user_id, zerp_name, amt=1):
     return True
 
 
-async def update_moves(document, save_z=True):
+async def update_moves(document, save_z=True, effective=False):
     if 'level' in document and document['level'] / 10 >= 1:
         if document['level'] > 30:
             if int(document.get('number', 0)) < 100000:
@@ -1536,6 +1536,10 @@ async def update_moves(document, save_z=True):
         else:
             miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
             dec_percent = 3.34 if document['level'] >= 30 else 3.33
+            if effective:
+                dec_percent = 3.33 * (document['level'] // 10)
+                if dec_percent == 9.99:
+                    dec_percent = 10
             percent_change = dec_percent if dec_percent < miss_percent else miss_percent
             count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
             print(document)
@@ -2459,15 +2463,32 @@ async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
     res = await users_collection.update_one({'discord_id': str(user_id)},
                                             {'$set': {'fee_paid': False,
                                                       "battle_deck": {'0': {}},
-                                                      "equipment_decks": eq_deck, },
+                                                      "equipment_decks": eq_deck,
+                                                      'zerpmons': [],
+                                                      'equipments': [],
+                                                      'trainers': [],
+                                                      },
                                              '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1}})
     return res.acknowledged
 
 
 async def dec_life_gym_tower(user_id):
     users_collection = db['temp_user_data']
+
+    eq_deck = {}
+    for i in range(5):
+        eq_deck[str(i)] = {str(i): None for i in range(5)}
+
+    q = {'reset': True,
+         "battle_deck": {'0': {}},
+         "equipment_decks": eq_deck,
+         'zerpmons': [],
+         'equipments': [],
+         'trainers': [],
+         'lives': 0
+         }
     res = await users_collection.update_one({'discord_id': str(user_id)},
-                                            {'$set': {'lives': 0}})
+                                            {'$set': q})
     return res.acknowledged
 
 
@@ -2477,11 +2498,17 @@ async def update_gym_tower(user_id, new_level):
     for i in range(5):
         eq_deck[str(i)] = {str(i): None for i in range(5)}
     if new_level > 20:
-        q = {'tower_level': 1, 'fee_paid': False}
+        q = {'tower_level': 1, 'fee_paid': False, 'zerpmons': [],
+                                                      'equipments': [],
+                                                      'trainers': [],}
     else:
         q = {'tower_level': new_level, 'reset': True,
              "battle_deck": {'0': {}},
-             "equipment_decks": eq_deck, }
+             "equipment_decks": eq_deck,
+             'zerpmons': [],
+             'equipments': [],
+             'trainers': [],
+             }
     res = await users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
     return res.acknowledged
 

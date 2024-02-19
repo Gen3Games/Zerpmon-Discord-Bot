@@ -464,7 +464,7 @@ async def get_show_zerp_embed(zerpmon, interaction, omni=False):
             value=f"> **{move['name']}** \n" + \
                   (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
-                  (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") + \
+                  (f"> Stars: {(len(move['stars']) if type(move['stars']) is str else move['stars']) * '★'}\n" if 'stars' in move else "") + \
                   (
                       f"> Type: {'🌟' if omni else config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
                   f"> Percentage: {move['percent']}%\n",

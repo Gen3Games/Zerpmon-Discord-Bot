@@ -12,7 +12,7 @@ from xrpl.wallet import Wallet
 from pymongo import MongoClient
 import config
 
-logging.basicConfig(filename='safariTxnQueue.log', level=logging.INFO,
+logging.basicConfig(filename='safariTxnQueue.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(module)s %(funcName)s %(message)s %(lineno)d')
 
 db_client = MongoClient(config.MONGO_URL)

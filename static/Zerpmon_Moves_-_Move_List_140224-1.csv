@@ -449,8 +449,8 @@
 #449,Counter Attack,Normal,***,Purple,Knock Out Opposing Zerpmon against White Attack,1,#449
 #450,Knacker,Normal,**,Purple,Reduces Opponents Purple stars to 0,1,#450
 #451,Blinding Light,Normal,**,Purple,Reduces Opponents Purple stars to 0,1,#451
-#452,Soothing Voice,Fairy,***,Purple,Makes Enemy Attack 100 less damage for the next round,1,#452
-#453,Deafening Scream,Dragon,***,Purple,Makes Enemy Attack 100 less damage for the next round,1,#453
+#452,Soothing Voice,Fairy,***,Purple,Makes Enemy Attack 100 less damage for the next attack,1,#452
+#453,Deafening Scream,Dragon,***,Purple,Makes Enemy Attack 100 less damage for the next attack,1,#453
 #454,Hellfire,Fire,*****,Purple,Knocks Out Opposing Zerpmon,1,#454
 #455,Oceanic Domain,Water,*****,Purple,Increase Own Highest Percentage Gold Attack by 20%,1,#455
 #456,Sacred Garden,Grass,*****,Purple,Decrease Own Red by 25%,2,#456
