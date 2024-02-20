@@ -59,12 +59,15 @@ def import_boxes():
 
 
 def extract_numbers(input_string):
-    pattern = r'\b\d+\b'
+    pattern = r'[-+]?\d*\.\d+|\d+'  # This pattern captures both integers and floating-point numbers
 
-    integers = re.findall(pattern, input_string)
+    numbers = re.findall(pattern, input_string)
 
-    integers = [float(num) for num in integers]
-    return integers
+    # Convert the strings to float
+    numbers = [float(num) for num in numbers]
+
+    return numbers
+
 
 def are_effects_equal(effect1, effect2):
     for k, v in effect1.items():
@@ -76,74 +79,83 @@ def are_effects_equal(effect1, effect2):
 
 def get_unique_id(entries: list[dict], new_entry: dict):
     for idx, entry in enumerate(entries):
-        if are_effects_equal(new_entry,entry):
+        if are_effects_equal(new_entry, entry):
             return idx + 1
     entries.append(new_entry)
     return len(entries)
 
 
+def get_effects(effects, entries, l_effect):
+    match = extract_numbers(l_effect)
+    try:
+        percent_c = match[0]
+        rounds = match[1] if len(match) > 1 else (1 if 'next' in l_effect else None)
+        inc = 'increase' in l_effect
+        effects['active_rounds'] = min(rounds, percent_c) if rounds else None
+        effects['value'] = (max(rounds, percent_c) if rounds else percent_c) * (1 if inc else -1)
+    except:
+        pass
+    if 'knock' in l_effect:
+        effects['ko_against'] = 'gold' if 'gold' in l_effect else ('white' if 'white' in l_effect else 'all')
+    effects['unit'] = 'percent' if ('percent' in l_effect or '%' in l_effect) else 'flat'
+    effects['target'] = 'opponent' if 'oppo' in l_effect or 'enemy' in l_effect else 'self'
+    effects['move_type'] = ['white', 'gold'] if 'white/gold' in l_effect else \
+        (['gold'] if 'gold' in l_effect else
+         (['blue'] if 'blue' in l_effect else
+          (['miss'] if 'miss' in l_effect or 'red ' in l_effect else (['purple'] if 'purple' in l_effect else ('white' if 'white' in l_effect else ['white', 'gold'])))))
+    if ('white' in effects['move_type'] or 'gold' in effects['move_type']) and effects['unit'] == 'percent':
+        effects['select'] = 'lowest' if 'low' in l_effect else ('highest' if 'high' in l_effect else 'all')
+        if effects['select'] != 'all':
+            match effects['move_type']:
+                case ['white'] | ['gold'] | ['purple']:
+                    if effects['select'] == 'lowest':
+                        effects['sorted_idx'] = 0
+                    else:
+                        effects['sorted_idx'] = 1
+                # case :
+                #     if effects['select'] == 'lowest':
+                #         effects['sorted_idx'] = 2
+                #     else:
+                #         effects['sorted_idx'] = 3
+                # case :
+                #     if effects['select'] == 'lowest':
+                #         effects['sorted_idx'] = 4
+                #     else:
+                #         effects['sorted_idx'] = 5
+                case ['white', 'gold']:
+                    if 'second' in l_effect:
+                        if effects['select'] == 'lowest':
+                            effects['sorted_idx'] = 1
+                        else:
+                            effects['sorted_idx'] = 2
+                    else:
+                        if effects['select'] == 'lowest':
+                            effects['sorted_idx'] = 0
+                        else:
+                            effects['sorted_idx'] = 3
+                case _:
+                    effects['sorted_idx'] = None
+    effects['type_id'] = str(get_unique_id(entries, effects))
+
+    # except:
+    #     print(f'{l_effect}\n{traceback.format_exc()}')
+
+
 def import_moves():
-    with open('Zerpmon_Moves_-_Move_List_140224-1.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_200224-1.csv', 'r') as csvfile:
         collection = db['MoveList']
         collection.drop()
         csvreader = csv.reader(csvfile)
         entries = []
         for row in csvreader:
-            if row[1] == "":
+            if row[1] == "" or row[0] == 'Move ID':
                 continue
             # Insert the row data to MongoDB
             effects = {}
 
             if row[5]:
                 l_effect = row[5].lower()
-                match = extract_numbers(l_effect)
-                try:
-                    percent_c = match[0]
-                    rounds = match[1] if len(match) > 1 else (1 if 'next' in l_effect else None)
-                    inc = 'increase' in l_effect
-                    effects['value'] = percent_c * (1 if inc else -1)
-                except:
-                    pass
-                if 'knock' in l_effect:
-                    effects['ko_against'] = 'gold' if 'gold' in l_effect else ('white' if 'white' in l_effect else 'all')
-                effects['unit'] = 'percent' if ('percent' in l_effect or '%' in l_effect) else 'flat'
-                effects['target'] = 'opponent' if 'oppo' in l_effect or 'enemy' in l_effect else 'self'
-                effects['move_idx_range'] = [0, 2] if 'white' in l_effect else \
-                    ([2, 4] if 'gold' in l_effect else
-                     ([6, 7] if 'blue' in l_effect else
-                      ([7, 8] if 'miss' in l_effect or 'red ' in l_effect else ([4, 6] if 'purple' in l_effect else [0, 4]))))
-                if effects['move_idx_range'][-1] <= 4 and effects['unit'] == 'percent':
-                    effects['select'] = 'lowest' if 'low' in l_effect else 'highest'
-                    match effects['move_idx_range']:
-                        case [0, 2]:
-                            if effects['select'] == 'lowest':
-                                effects['sorted_idx'] = 0
-                            else:
-                                effects['sorted_idx'] = 1
-                        case [2, 4]:
-                            if effects['select'] == 'lowest':
-                                effects['sorted_idx'] = 2
-                            else:
-                                effects['sorted_idx'] = 3
-                        case [0, 4]:
-                            if 'second' in l_effect:
-                                if effects['select'] == 'lowest':
-                                    effects['sorted_idx'] = 1
-                                else:
-                                    effects['sorted_idx'] = 2
-                            else:
-                                if effects['select'] == 'lowest':
-                                    effects['sorted_idx'] = 0
-                                else:
-                                    effects['sorted_idx'] = 3
-                        case _:
-                            effects['sorted_idx'] = None
-                effects['active_rounds'] = rounds
-                effects['type_id'] = str(get_unique_id(entries, effects))
-
-                effects['star_factor'] = None
-                # except:
-                #     print(f'{l_effect}\n{traceback.format_exc()}')
+                get_effects(effects, entries, l_effect)
             stars = None if row[3].isdigit() else len(row[3])
             collection.insert_one({
                 'move_id': row[0],
@@ -151,11 +163,45 @@ def import_moves():
                 'type': row[2],
                 'dmg': row[3],
                 'stars': stars,
-                'color': row[4],
+                'color': row[4].lower(),
                 'notes': row[5],
+                'purple_id': int(row[6]) if row[6] else None,
                 'effects': effects,
             })
         print(len(entries))
+
+
+def import_purple_star_ids():
+    with open('Zerpmon_Moves_-_Purple_Effect_List_200224-2.csv', 'r') as csvfile:
+        collection = db['PurpleEffectList']
+        collection.drop()
+        csvreader = csv.reader(csvfile)
+        entries = []
+        for row in csvreader:
+            if row[1] == "" or row[0] == 'Purple Move Effect ID':
+                continue
+            # Insert the row data to MongoDB
+            effects = {}
+            extra_effects = {}
+            stars = row.pop()
+            purple_id = row.pop(0)
+            filtered_rows = [i for i in row if i and i != '-']
+            l_effect = f'{filtered_rows[0]} by {filtered_rows[1]}'.lower()
+            get_effects(effects, entries, l_effect)
+            l_e_effect = None
+            if len(filtered_rows) > 2:
+                l_e_effect = f'{filtered_rows[2]} by {filtered_rows[3]}'.lower()
+                get_effects(extra_effects, entries, l_e_effect)
+            print(l_effect)
+            collection.insert_one({
+                'purple_id': int(purple_id),
+                'stars': int(stars),
+                'strings': [l_effect] + ([l_e_effect] if l_e_effect else []),
+                'effects': effects,
+                'extra_effects': extra_effects if extra_effects else None,
+            })
+        print(len(entries))
+
 
 def import_movesets():
     with open('Zerpmon_Moves_-_Zerpmon_Movesets_140224.csv', 'r') as csvfile:
@@ -606,6 +652,7 @@ def clear_slot_reward():
 # import_boxes()
 
 import_moves()
+import_purple_star_ids()
 # import_movesets()
 # import_level()
 # import_ascend_levels()

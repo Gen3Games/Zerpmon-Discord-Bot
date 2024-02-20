@@ -1,0 +1,191 @@
+Purple Move Effect ID,Move Effect 1,Move Effect 1 Strength,Move Effect 2,Move Effect 2 Strength,Move Effect 3,Move Effect 3 Strength,Move Effect 4,Move Effect 4 Strength,Stars
+0,Increase Own Lowest Percentage Attack Chance,0%,-,-,,,,,0
+1,Increase Own Lowest Percentage Attack Chance,8%,-,-,,,,,1
+2,Increase Own Lowest Percentage Attack Chance,16%,-,-,,,,,2
+3,Increase Own Lowest Percentage Attack Chance,24%,-,-,,,,,3
+4,Increase Own Lowest Percentage Attack Chance,32%,-,-,,,,,4
+5,Increase Own Lowest Percentage Attack Chance,40%,-,-,,,,,5
+6,Increase Own Lowest Percentage Attack Chance,40%,Increase Own Blue Chance,12.50%,,,,,6
+7,Increase Own Lowest Percentage Attack Chance,40%,Increase Own Blue Chance,25%,,,,,7
+8,Increase Own Lowest Percentage Attack Chance,40%,Increase Own Blue Chance,37.50%,,,,,8
+9,Increase Own Lowest Percentage Attack Chance,40%,Increase Own Blue Chance,50%,,,,,9
+10,Increase Own Lowest Percentage Gold Attack Chance,0%,-,-,,,,,0
+11,Increase Own Lowest Percentage Gold Attack Chance,5%,-,-,,,,,1
+12,Increase Own Lowest Percentage Gold Attack Chance,10%,-,-,,,,,2
+13,Increase Own Lowest Percentage Gold Attack Chance,15%,-,-,,,,,3
+14,Increase Own Lowest Percentage Gold Attack Chance,20%,-,-,,,,,4
+15,Increase Own Lowest Percentage Gold Attack Chance,25%,-,-,,,,,5
+16,Increase Own Lowest Percentage Gold Attack Chance,25%,Increase Own Blue Chance,12.50%,,,,,6
+17,Increase Own Lowest Percentage Gold Attack Chance,25%,Increase Own Blue Chance,25%,,,,,7
+18,Increase Own Lowest Percentage Gold Attack Chance,25%,Increase Own Blue Chance,37.50%,,,,,8
+19,Increase Own Lowest Percentage Gold Attack Chance,25%,Increase Own Blue Chance,50%,,,,,9
+20,Increase Own Highest Percentage Attack Chance,0%,-,-,,,,,0
+21,Increase Own Highest Percentage Attack Chance,10%,-,-,,,,,1
+22,Increase Own Highest Percentage Attack Chance,20%,-,-,,,,,2
+23,Increase Own Highest Percentage Attack Chance,30%,-,-,,,,,3
+24,Increase Own Highest Percentage Attack Chance,40%,-,-,,,,,4
+25,Increase Own Highest Percentage Attack Chance,50%,-,-,,,,,5
+26,Increase Own Highest Percentage Attack Chance,50%,Increase Own Blue Chance,12.50%,,,,,6
+27,Increase Own Highest Percentage Attack Chance,50%,Increase Own Blue Chance,25%,,,,,7
+28,Increase Own Highest Percentage Attack Chance,50%,Increase Own Blue Chance,37.50%,,,,,8
+29,Increase Own Highest Percentage Attack Chance,50%,Increase Own Blue Chance,50%,,,,,9
+30,Increase Own Highest Percentage Gold Attack Chance,0%,-,-,,,,,0
+31,Increase Own Highest Percentage Gold Attack Chance,5%,-,-,,,,,1
+32,Increase Own Highest Percentage Gold Attack Chance,10%,-,-,,,,,2
+33,Increase Own Highest Percentage Gold Attack Chance,15%,-,-,,,,,3
+34,Increase Own Highest Percentage Gold Attack Chance,20%,-,-,,,,,4
+35,Increase Own Highest Percentage Gold Attack Chance,25%,-,-,,,,,5
+36,Increase Own Highest Percentage Gold Attack Chance,25%,Increase Own Blue Chance,12.50%,,,,,6
+37,Increase Own Highest Percentage Gold Attack Chance,25%,Increase Own Blue Chance,25%,,,,,7
+38,Increase Own Highest Percentage Gold Attack Chance,25%,Increase Own Blue Chance,37.50%,,,,,8
+39,Increase Own Highest Percentage Gold Attack Chance,25%,Increase Own Blue Chance,50%,,,,,9
+40,Increase Opposing Zerpmon's Red Percentage Chance,0%,-,-,,,,,0
+41,Increase Opposing Zerpmon's Red Percentage Chance,5%,-,-,,,,,1
+42,Increase Opposing Zerpmon's Red Percentage Chance,10%,-,-,,,,,2
+43,Increase Opposing Zerpmon's Red Percentage Chance,15%,-,-,,,,,3
+44,Increase Opposing Zerpmon's Red Percentage Chance,20%,-,-,,,,,4
+45,Increase Opposing Zerpmon's Red Percentage Chance,25%,-,-,,,,,5
+46,Increase Opposing Zerpmon's Red Percentage Chance,25%,Increase Own Blue Chance,12.50%,,,,,6
+47,Increase Opposing Zerpmon's Red Percentage Chance,25%,Increase Own Blue Chance,25%,,,,,7
+48,Increase Opposing Zerpmon's Red Percentage Chance,25%,Increase Own Blue Chance,37.50%,,,,,8
+49,Increase Opposing Zerpmon's Red Percentage Chance,25%,Increase Own Blue Chance,50%,,,,,9
+50,Decrease Own Red Chance,0%,-,-,,,,,0
+51,Decrease Own Red Chance,8%,-,-,,,,,1
+52,Decrease Own Red Chance,16%,-,-,,,,,2
+53,Decrease Own Red Chance,24%,-,-,,,,,3
+54,Decrease Own Red Chance,32%,-,-,,,,,4
+55,Decrease Own Red Chance,40%,-,-,,,,,5
+56,Decrease Own Red Chance,40%,Increase Own Blue Chance,12.50%,,,,,6
+57,Decrease Own Red Chance,40%,Increase Own Blue Chance,25%,,,,,7
+58,Decrease Own Red Chance,40%,Increase Own Blue Chance,37.50%,,,,,8
+59,Decrease Own Red Chance,40%,Increase Own Blue Chance,50%,,,,,9
+60,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,0%,-,-,,,,,0
+61,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,10%,-,-,,,,,1
+62,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,20%,-,-,,,,,2
+63,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,30%,-,-,,,,,3
+64,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,40%,-,-,,,,,4
+65,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,50%,-,-,,,,,5
+66,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,50%,Increase Own Blue Chance,12.50%,,,,,6
+67,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,50%,Increase Own Blue Chance,25%,,,,,7
+68,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,50%,Increase Own Blue Chance,37.50%,,,,,8
+69,Decrease Opposing Zerpmon's Second Lowest Percentage Attack Chance,50%,Increase Own Blue Chance,50%,,,,,9
+70,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,0%,-,-,,,,,0
+71,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,8%,-,-,,,,,1
+72,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,16%,-,-,,,,,2
+73,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,24%,-,-,,,,,3
+74,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,32%,-,-,,,,,4
+75,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,40%,-,-,,,,,5
+76,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,40%,Increase Own Blue Chance,12.50%,,,,,6
+77,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,40%,Increase Own Blue Chance,25%,,,,,7
+78,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,40%,Increase Own Blue Chance,37.50%,,,,,8
+79,Decrease Opposing Zerpmon's Second Lowest Percentage Gold Attack Chance,40%,Increase Own Blue Chance,50%,,,,,9
+80,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,0%,-,-,,,,,0
+81,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,10%,-,-,,,,,1
+82,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,20%,-,-,,,,,2
+83,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,30%,-,-,,,,,3
+84,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,40%,-,-,,,,,4
+85,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,50%,-,-,,,,,5
+86,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,50%,Increase Own Blue Chance,12.50%,,,,,6
+87,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,50%,Increase Own Blue Chance,25%,,,,,7
+88,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,50%,Increase Own Blue Chance,37.50%,,,,,8
+89,Decrease Opposing Zerpmon's Highest Percentage Attack Chance,50%,Increase Own Blue Chance,50%,,,,,9
+90,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,0%,-,-,,,,,0
+91,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,8%,-,-,,,,,1
+92,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,16%,-,-,,,,,2
+93,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,24%,-,-,,,,,3
+94,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,32%,-,-,,,,,4
+95,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,40%,-,-,,,,,5
+96,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,40%,Increase Own Blue Chance,12.50%,,,,,6
+97,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,40%,Increase Own Blue Chance,25%,,,,,7
+98,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,40%,Increase Own Blue Chance,37.50%,,,,,8
+99,Decrease Opposing Zerpmon's Highest Percentage Gold Attack Chance,40%,Increase Own Blue Chance,50%,,,,,9
+100,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,0%,-,-,,,,,0
+101,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,10%,-,-,,,,,1
+102,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,20%,-,-,,,,,2
+103,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,30%,-,-,,,,,3
+104,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,40%,-,-,,,,,4
+105,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,50%,-,-,,,,,5
+106,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,50%,Increase Own Blue Chance,12.50%,,,,,6
+107,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,50%,Increase Own Blue Chance,25%,,,,,7
+108,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,50%,Increase Own Blue Chance,37.50%,,,,,8
+109,Decrease Opposing Zerpmon's Highest Purple Attack Percentage Chance,50%,Increase Own Blue Chance,50%,,,,,9
+110,-,-,-,-,Increase Own Next White/Gold Attack Damage,0,,,0
+111,-,-,-,-,Increase Own Next  Damage,50,,,1
+112,-,-,-,-,Increase Own Next White/Gold Attack Damage,100,,,2
+113,-,-,-,-,Increase Own Next White/Gold Attack Damage,150,,,3
+114,-,-,-,-,Increase Own Next White/Gold Attack Damage,200,,,4
+115,-,-,-,-,Increase Own Next White/Gold Attack Damage,250,,,5
+116,-,-,Increase Own Blue Chance,12.50%,Increase Own Next White/Gold Attack Damage,250,,,6
+117,-,-,Increase Own Blue Chance,25%,Increase Own Next White/Gold Attack Damage,250,,,7
+118,-,-,Increase Own Blue Chance,37.50%,Increase Own Next White/Gold Attack Damage,250,,,8
+119,-,-,Increase Own Blue Chance,50%,Increase Own Next White/Gold Attack Damage,250,,,9
+120,-,-,-,-,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,0,,,0
+121,-,-,-,-,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,50,,,1
+122,-,-,-,-,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,100,,,2
+123,-,-,-,-,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,150,,,3
+124,-,-,-,-,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,200,,,4
+125,-,-,-,-,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,250,,,5
+126,-,-,Increase Own Blue Chance,12.50%,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,250,,,6
+127,-,-,Increase Own Blue Chance,25%,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,250,,,7
+128,-,-,Increase Own Blue Chance,37.50%,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,250,,,8
+129,-,-,Increase Own Blue Chance,50%,Decrease Opposing Zerpmon's Next White/Gold Attack Damage,250,,,9
+130,-,-,-,-,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",0,,,0
+131,-,-,-,-,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",25,,,1
+132,-,-,-,-,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",50,,,2
+133,-,-,-,-,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",75,,,3
+134,-,-,-,-,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",100,,,4
+135,-,-,-,-,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,5
+136,-,-,Increase Own Blue Chance,12.50%,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,6
+137,-,-,Increase Own Blue Chance,25%,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,7
+138,-,-,Increase Own Blue Chance,37.50%,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,8
+139,-,-,Increase Own Blue Chance,50%,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,9
+140,-,-,-,-,"For the next turn, Decrease Opposing Zerpmon's White/Gold Attack Damage",0,,,0
+141,-,-,-,-,"For the next turn, Decrease Opposing Zerpmon's White/Gold Attack Damage",50,,,1
+142,-,-,-,-,"For the next turn, Decrease Opposing Zerpmon's White/Gold Attack Damage",100,,,2
+143,-,-,-,-,"For the next turn, Decrease Opposing Zerpmon's White/Gold Attack Damage",150,,,3
+144,-,-,-,-,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",100,,,4
+145,-,-,-,-,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,5
+146,-,-,Increase Own Blue Chance,12.50%,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,6
+147,-,-,Increase Own Blue Chance,25%,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,7
+148,-,-,Increase Own Blue Chance,37.50%,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,8
+149,-,-,Increase Own Blue Chance,50%,"For the next 2 turns, Decrease Opposing Zerpmon's White/Gold Attack Damage",125,,,9
+150,-,-,-,-,-,-,Knocks Out Opposing Zerpmon,FALSE,0
+151,-,-,-,-,-,-,Knocks Out Opposing Zerpmon,FALSE,1
+152,-,-,-,-,-,-,Knocks Out Opposing Zerpmon,FALSE,2
+153,-,-,-,-,-,-,Knocks Out Opposing Zerpmon,FALSE,3
+154,-,-,-,-,-,-,Knocks Out Opposing Zerpmon,FALSE,4
+155,-,-,-,-,-,-,Knocks Out Opposing Zerpmon,TRUE,5
+156,-,-,Increase Own Blue Chance,12.50%,-,-,Knocks Out Opposing Zerpmon,TRUE,6
+157,-,-,Increase Own Blue Chance,25%,-,-,Knocks Out Opposing Zerpmon,TRUE,7
+158,-,-,Increase Own Blue Chance,37.50%,-,-,Knocks Out Opposing Zerpmon,TRUE,8
+159,-,-,Increase Own Blue Chance,50%,-,-,Knocks Out Opposing Zerpmon,TRUE,9
+160,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's White Attack,FALSE,0
+161,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's White Attack,FALSE,1
+162,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's White Attack,FALSE,2
+163,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's White Attack,TRUE,3
+164,-,-,Increase Own Blue Chance,12.50%,-,-,Knock Out Against Opposing Zerpmon's White Attack,TRUE,4
+165,-,-,Increase Own Blue Chance,25%,-,-,Knock Out Against Opposing Zerpmon's White Attack,TRUE,5
+166,-,-,Increase Own Blue Chance,37.50%,-,-,Knock Out Against Opposing Zerpmon's White Attack,TRUE,6
+167,-,-,Increase Own Blue Chance,50%,-,-,Knock Out Against Opposing Zerpmon's White Attack,TRUE,7
+168,-,-,Increase Own Blue Chance,62.50%,-,-,Knock Out Against Opposing Zerpmon's White Attack,TRUE,8
+169,-,-,Increase Own Blue Chance,75%,-,-,Knock Out Against Opposing Zerpmon's White Attack,TRUE,9
+170,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,FALSE,0
+171,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,FALSE,1
+172,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,FALSE,2
+173,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,FALSE,3
+174,-,-,-,-,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,TRUE,4
+175,-,-,Increase Own Blue Chance,12.50%,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,TRUE,5
+176,-,-,Increase Own Blue Chance,25%,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,TRUE,6
+177,-,-,Increase Own Blue Chance,37.50%,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,TRUE,7
+178,-,-,Increase Own Blue Chance,50%,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,TRUE,8
+179,-,-,Increase Own Blue Chance,62.50%,-,-,Knock Out Against Opposing Zerpmon's Gold Attack,TRUE,9
+180,-,-,-,-,-,-,Reduces Opposing Zerpmon's Purple stars to 0,FALSE,0
+181,-,-,-,-,-,-,Reduces Opposing Zerpmon's Purple stars to 0,FALSE,1
+182,-,-,-,-,-,-,Reduces Opposing Zerpmon's Purple stars to 0,TRUE,2
+183,-,-,Increase Own Blue Chance,12.50%,-,-,Reduces Opposing Zerpmon's Purple stars to 0,TRUE,3
+184,-,-,Increase Own Blue Chance,25%,-,-,Reduces Opposing Zerpmon's Purple stars to 0,TRUE,4
+185,-,-,Increase Own Blue Chance,37.50%,-,-,Reduces Opposing Zerpmon's Purple stars to 0,TRUE,5
+186,-,-,Increase Own Blue Chance,50%,-,-,Reduces Opposing Zerpmon's Purple stars to 0,TRUE,6
+187,-,-,Increase Own Blue Chance,62.50%,-,-,Reduces Opposing Zerpmon's Purple stars to 0,TRUE,7
+188,-,-,Increase Own Blue Chance,75%,-,-,Reduces Opposing Zerpmon's Purple stars to 0,TRUE,8
+189,-,-,Increase Own Blue Chance,87.50%,-,-,Reduces Opposing Zerpmon's Purple stars to 0,TRUE,9
