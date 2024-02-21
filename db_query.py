@@ -2467,7 +2467,9 @@ async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
                                                       'zerpmons': [],
                                                       'equipments': [],
                                                       'trainers': [],
+
                                                       },
+                                             '$max': {'max_level': lvl},
                                              '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1}})
     return res.acknowledged
 
