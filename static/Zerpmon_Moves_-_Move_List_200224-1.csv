@@ -48,7 +48,7 @@ Move ID,Move Name,Type,Damage,Colour,Notes,Purple Move Effect ID,Move ID
 #47,Fire Cloak,Fire,*,Purple,Increase Own Highest Percentage Attack Chance by 10%,21,#47
 #48,Burn Up,Fire,**,Purple,Increase Own Highest Percentage Attack Chance by 20%,22,#48
 #49,Molten Maelstrom,Fire,***,Purple,Increase Own Highest Percentage Attack Chance by 30%,23,#49
-#50,Pheonix Fury,Fire,****,Purple,Increase Own Highest Percentage Attack Chance by 40%,24,#50
+#50,Phoenix Fury,Fire,****,Purple,Increase Own Highest Percentage Attack Chance by 40%,24,#50
 #51,Aqua Jet,Water,30,White,,,#51
 #52,Bubble Blast,Water,30,White,,,#52
 #53,Water Gun,Water,50,White,,,#53

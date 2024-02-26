@@ -11,6 +11,17 @@ import config
 from globals import CustomEmbed
 
 
+def get_type(attrs):
+    types = []
+    try:
+        for i in attrs:
+            if i['trait_type'] in ['Type', 'Affinity']:
+                types.append(i['value'].lower().title())
+    except:
+        print(traceback.format_exc())
+    return types
+
+
 async def post_signin_callback(interaction: nextcord.Interaction, address: str, z_role=None, t_role=None):
     if z_role is None:
         roles = interaction.guild.roles
@@ -45,7 +56,7 @@ async def post_signin_callback(interaction: nextcord.Interaction, address: str, 
 
         if nft["Issuer"] == config.ISSUER["Trainer"]:
 
-            metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+            metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
             serial = nft["nft_serial"]
             if metadata and "Zerpmon Trainers" in metadata['description']:
                 # Add to MongoDB here
@@ -53,10 +64,11 @@ async def post_signin_callback(interaction: nextcord.Interaction, address: str, 
                                                      "image": metadata['image'],
                                                      "attributes": metadata['attributes'],
                                                      "token_id": nft["NFTokenID"],
+                                                     "type": get_type(metadata['attributes'])
                                                      }
 
         if nft["Issuer"] == config.ISSUER["Zerpmon"]:
-            metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+            metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
             serial = nft["nft_serial"]
             if metadata and "Zerpmon " in metadata['description']:
                 # Add to MongoDB here
@@ -64,9 +76,10 @@ async def post_signin_callback(interaction: nextcord.Interaction, address: str, 
                                                 "image": metadata['image'],
                                                 "attributes": metadata['attributes'],
                                                 "token_id": nft["NFTokenID"],
+                                                "type": get_type(metadata['attributes'])
                                                 }
         if nft["Issuer"] == config.ISSUER["Equipment"]:
-            metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+            metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
             serial = nft["nft_serial"]
             if metadata and "Zerpmon Equipment" in metadata['description']:
                 # Add to MongoDB here
@@ -74,6 +87,7 @@ async def post_signin_callback(interaction: nextcord.Interaction, address: str, 
                                                   "image": metadata['image'],
                                                   "attributes": metadata['attributes'],
                                                   "token_id": nft["NFTokenID"],
+                                                  "type": get_type(metadata['attributes'])
                                                   }
     if len(user_obj['zerpmons']) > 0:
         await interaction.user.add_roles(z_role)
@@ -145,7 +159,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     t_serial.append(serial)
                     continue
                 print(serial, list(user_obj['trainer_cards'].keys()))
-                metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+                metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
                 if metadata is None:
                     continue
 
@@ -156,6 +170,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                              "image": metadata['image'],
                              "attributes": metadata['attributes'],
                              "token_id": nft["NFTokenID"],
+                             "type": get_type(metadata['attributes'])
                              }
                     await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, True)
                 await asyncio.sleep(2)
@@ -164,7 +179,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                 if serial in list(user_obj['zerpmons'].keys()):
                     serials.append(serial)
                     continue
-                metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+                metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
 
                 if "Zerpmon " in metadata['description']:
                     serials.append(serial)
@@ -177,7 +192,8 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                              "image": metadata['image'],
                              "attributes": metadata['attributes'],
                              "token_id": nft["NFTokenID"],
-                             'active_t': active_t
+                             'active_t': active_t,
+                             "type": get_type(metadata['attributes'])
                              }
                     await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
                 await asyncio.sleep(2)
@@ -187,7 +203,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     e_serial.append(serial)
                     continue
                 print(serial, list(user_obj['equipments'].keys()))
-                metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+                metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
 
                 if "Zerpmon Equipment" in metadata['description']:
                     e_serial.append(serial)
@@ -196,6 +212,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                              "image": metadata['image'],
                              "attributes": metadata['attributes'],
                              "token_id": nft["NFTokenID"],
+                             "type": get_type(metadata['attributes'])
                              }
                     await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
                 await asyncio.sleep(2)

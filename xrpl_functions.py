@@ -3,6 +3,7 @@ import time
 import traceback
 from statistics import mean
 
+import pymongo
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models import IssuedCurrency, AccountLines, Transaction
 from xrpl.models.requests.account_nfts import AccountNFTs
@@ -12,9 +13,27 @@ import config
 import json
 import requests
 from xrpl.utils import drops_to_xrp
+
 from db_query import get_safari_nfts
 
 last_checked_price = 0
+
+client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
+db = client['Zerpmon']
+
+
+def get_zerpmon_by_nftID(nftID):
+    zerpmon_collection = db['MoveSets']
+    result = zerpmon_collection.find_one({"nft_id": nftID})
+
+    return result
+
+
+def get_zerpmon_by_name(name):
+    zerpmon_collection = db['MoveSets']
+    result = zerpmon_collection.find_one({"name": name})
+
+    return result
 
 
 async def get_nfts(address):
@@ -138,7 +157,7 @@ async def get_zrp_price_api(total_tokens=50):
                         ratio = total_tokens / pay
                         drops += ratio * get
                         total_tokens = 0
-            config.zrp_price = round(drops / 10 ** 6, 2)/50
+            config.zrp_price = round(drops / 10 ** 6, 2) / 50
             last_checked_price = time.time()
             return config.zrp_price
     except Exception as e:
@@ -166,7 +185,7 @@ async def get_zrp_price_api(total_tokens=50):
 # print(res)
 
 
-def get_nft_metadata(uri, multi=False):
+def get_nft_metadata(uri, nft_id, multi=False):
     try:
         with open("./static/metadata.json", "r") as f:
             data = json.load(f)
@@ -180,9 +199,14 @@ def get_nft_metadata(uri, multi=False):
                     return data[uri]['metadata']
             if multi:
                 return obj
+        if not multi:
+            nft = get_zerpmon_by_nftID(nft_id)
+            return nft
         return None
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
+
+
 # print(get_nft_metadata('697066733A2F2F516D5569335961754250393173537159347576686234437335587768734C67456A3274625074523138696656654B2F3130332E6A736F6E'))
 
 def get_nft_metadata_by_id(nftid):
@@ -192,6 +216,11 @@ def get_nft_metadata_by_id(nftid):
             for k, item in data.items():
                 if item["nftid"] == nftid:
                     return item
+        nft = get_zerpmon_by_nftID(nftid)
+        if nft:
+            return {
+                'metadata': nft
+            }
         return None
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
@@ -204,6 +233,9 @@ def get_nft_id_by_name(name):
             for k, item in data.items():
                 if item["metadata"]['name'] == name:
                     return item["nftid"]
+        nft = get_zerpmon_by_name(name)
+        if nft:
+            return nft['nft_id']
         return None
     except Exception as e:
         print(f"ERROR in getting metadata: {e}")
@@ -308,7 +340,7 @@ async def all_tx(address, zrp=False, url=False):
                             count += 1
                             a = txn.get('tx', {}).get('Amount', 0)
                             total += int(a)
-                            print(f"Count {count}       Total sent: {total/(10**6)} XRP     Value {a}")
+                            print(f"Count {count}       Total sent: {total / (10 ** 6)} XRP     Value {a}")
                         else:
                             count += 1
                             a = txn.get('tx', {}).get('Amount', {}).get('value', 0)

@@ -9,11 +9,11 @@ from pymongo import ReturnDocument
 
 import config
 
-client = pymongo.MongoClient(config.MONGO_URL)
-# client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
+# client = pymongo.MongoClient(config.MONGO_URL)
+client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
 db = client['Zerpmon']
-
-
+print([i['name'] for i in db.list_collections()])
+# exit(1)
 # users_c = db['users']
 
 
@@ -102,7 +102,8 @@ def get_effects(effects, entries, l_effect):
     effects['move_type'] = ['white', 'gold'] if 'white/gold' in l_effect else \
         (['gold'] if 'gold' in l_effect else
          (['blue'] if 'blue' in l_effect else
-          (['miss'] if 'miss' in l_effect or 'red ' in l_effect else (['purple'] if 'purple' in l_effect else ('white' if 'white' in l_effect else ['white', 'gold'])))))
+          (['miss'] if 'miss' in l_effect or 'red ' in l_effect else (
+              ['purple'] if 'purple' in l_effect else ('white' if 'white' in l_effect else ['white', 'gold'])))))
     if ('white' in effects['move_type'] or 'gold' in effects['move_type']) and effects['unit'] == 'percent':
         effects['select'] = 'lowest' if 'low' in l_effect else ('highest' if 'high' in l_effect else 'all')
         if effects['select'] != 'all':
@@ -141,10 +142,9 @@ def get_effects(effects, entries, l_effect):
     #     print(f'{l_effect}\n{traceback.format_exc()}')
 
 
-def import_moves():
+def import_moves(col_name):
     with open('Zerpmon_Moves_-_Move_List_200224-1.csv', 'r') as csvfile:
-        collection = db['MoveList']
-        collection.drop()
+        collection = db[col_name]
         csvreader = csv.reader(csvfile)
         entries = []
         for row in csvreader:
@@ -157,7 +157,10 @@ def import_moves():
                 l_effect = row[5].lower()
                 get_effects(effects, entries, l_effect)
             stars = None if row[3].isdigit() else len(row[3])
-            collection.insert_one({
+            if col_name == 'MoveList':
+                if 'turn' in row[5]:
+                    continue
+            collection.update_one({'move_name': row[1]}, {'$set':{
                 'move_id': row[0],
                 'move_name': row[1],
                 'type': row[2],
@@ -167,7 +170,7 @@ def import_moves():
                 'notes': row[5],
                 'purple_id': int(row[6]) if row[6] else None,
                 'effects': effects,
-            })
+            }}, upsert=True)
         print(len(entries))
 
 
@@ -204,7 +207,7 @@ def import_purple_star_ids():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_140224.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_250224.csv', 'r') as csvfile:
         collection = db['MoveSets']
         # c2 = db['MoveSets2']
         # c2.drop()
@@ -219,14 +222,20 @@ def import_movesets():
             # Remove empty fields from the row
             row = [field for field in row if field != "0.003083061299"]
 
-            if row[38] == "":
-                continue
+            # if row[38] == "":
+            #     continue
 
             # Insert the row data to MongoDB
+            move_types = {row[6].lower().title(),
+                          row[11].lower().title(),
+                          row[16].lower().title(),
+                          row[21].lower().title()}
+
             try:
                 doc = {
                     'number': row[0],
                     'name': row[1],
+                    'zerpmonType': [row[2].lower()] + ([row[3].lower()] if row[3] else []),
                     # 'collection': row[2],
                     'moves': [
                         {'name': row[4], 'dmg': int(row[5]) if row[5] != "" else "", 'type': row[6], 'id': row[7],
@@ -246,7 +255,9 @@ def import_movesets():
                         {'name': 'Miss', 'id': row[36], 'percent': float(row[37].replace("%", "")),
                          'color': header[34]},
                     ],
-                    'nft_id': row[38]
+
+                    'move_types': list(move_types),
+                    'nft_id': row[38] if row[38] else None
                 }
 
                 # doc = {
@@ -272,7 +283,8 @@ def import_movesets():
                 #     'nft_id': row[39]
                 # }
                 collection.update_one({'name': row[1]}, {'$unset': {'moves': ''}})
-                collection.update_one({'name': row[1]}, {'$set': doc}, upsert=True)
+                collection.update_one({'name': row[1]}, {'$set': doc, '$setOnInsert': {'attributes': None,
+                    'image': None,}}, upsert=True)
                 # c2.insert_one(document=doc)
             except Exception as e:
                 print(e, '\n', row)
@@ -367,8 +379,10 @@ def import_attrs_img():
     data = get_all_z()
     # tba = get_cached()  # [{nftid, metadata, uri},...]
     for i in data:
+        if i['nft_id'] is None:
+            continue
         id = i['nft_id']
-        if 'image' in i and 'attributes' in i:
+        if i.get('image') and i.get('attributes'):
             continue
         path = f"./static/images/{i['name']}.png"
         rr2 = requests.get(
@@ -394,24 +408,19 @@ def clean_attrs():
     all_z = zerpmon_collection.find()
 
     for i in all_z:
-        for _i, j in enumerate(i['attributes']):
-            if j['trait_type'] == 'Type':
-                i['attributes'][_i]['value'] = str(j['value']).lower().title()
-                r = zerpmon_collection.find_one_and_update({'name': i['name']},
-                                                           {'$set': {'attributes': i['attributes']}})
-                print(r)
+        if i.get('attributes'):
+            for _i, j in enumerate(i.get('attributes')):
+                if j['trait_type'] == 'Type':
+                    i['attributes'][_i]['value'] = str(j['value']).lower().title()
+                    r = zerpmon_collection.find_one_and_update({'name': i['name']},
+                                                               {'$set': {'attributes': i['attributes']}})
+                    print(r)
     c2 = db['MoveSets2']
     c2.drop()
-    for doc in zerpmon_collection.find():
-        del doc['_id']
-        if 'z_flair' in doc:
-            del doc['z_flair']
-        if 'white_candy' in doc:
-            del doc['white_candy']
-        if 'gold_candy' in doc:
-            del doc['gold_candy']
-
-        c2.insert_one(doc)
+    for doc in zerpmon_collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
+                                            'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0}):
+        if doc['nft_id']:
+            c2.insert_one(doc)
 
 
 def save_new_zerpmon(zerpmon):
@@ -435,8 +444,10 @@ def save_new_zerpmon(zerpmon):
 
 
 def update_all_zerp_moves():
-    for document in db['MoveSets'].find():
+    for document in db['MoveSets'].find({'nft_id': {'$ne': None}}):
         del document['_id']
+        if document['image'] is None:
+            continue
         if 'level' in document and document['level'] / 10 >= 1:
             if document['level'] > 30:
                 if int(document.get('number', 0)) < 100000:
@@ -549,9 +560,22 @@ def cache_data():
             json.dump(tba, f)
         db['nft-uri-cache'].drop()
         db['nft-uri-cache'].insert_many([i for k, i in tba.items()])
+        collection = db['MoveSets']
+        for nft in collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
+                                            'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0}):
+            is_present = db['MoveSets2'].find_one({'name': nft['name']})
+            if is_present is None:
+                if nft.get('nft_id') is None:
+                    found = db['nft-uri-cache'].find_one({'metadata.name': nft['name']})
+                    if found:
+                        nft['nft_id'] = found['nftid']
+                    else:
+                        continue
+                    # collection.update_one({'name': nft['name']}, {'$set': {'nft_id': found['nftid']}})
 
+                db['MoveSets2'].update_one({'name': nft['name']}, {'$set': nft}, upsert=True)
     except Exception as e:
-        print(str(e), ' error')
+        print(traceback.format_exc(), ' error')
 
 
 def get_collab_nfts():
@@ -651,16 +675,17 @@ def clear_slot_reward():
 # switch_cached()
 # import_boxes()
 
-import_moves()
+import_moves('MoveList')
+import_moves('MoveList2')
 import_purple_star_ids()
-# import_movesets()
+import_movesets()
 # import_level()
 # import_ascend_levels()
 # gift_ascension_reward()
-# import_attrs_img()
-# clean_attrs()
-# update_all_zerp_moves()
-# cache_data()
+import_attrs_img()
+clean_attrs()
+update_all_zerp_moves()
+cache_data()
 # import_equipments()
 
 # reset_all_gyms()

@@ -30,6 +30,7 @@ ws_client = AsyncWebsocketClient(URL)
 async def get_ws_client():
     global ws_client
     if not ws_client.is_open():
+        ws_client = AsyncWebsocketClient(URL)
         await ws_client.open()
     return ws_client
 

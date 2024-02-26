@@ -52,7 +52,7 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
 
     view = nextcord.ui.View(timeout=600)
     b1 = nextcord.ui.Button(label=f"View {boss_zerp['name']}", style=nextcord.ButtonStyle.green, )
-    b1.callback = lambda i: battle_function.show_single_embed(i, boss_zerp['name'], omni=True)
+    b1.callback = lambda i: battle_function.show_single_embed(i, boss_zerp['name'], is_tower_rush=False, omni=True)
     view.add_item(b1)
     if boss_hp_cache is None or boss_info['boss_hp'] != boss_hp_cache:
         boss_hp_cache = boss_info['boss_hp']

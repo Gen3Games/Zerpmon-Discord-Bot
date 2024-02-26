@@ -994,7 +994,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                     content="**Error** in getting Store Equipment NFTs from XRPL server", embeds=[])
                 return
             holdings = []
-            nft_data = xrpl_functions.get_nft_metadata([nft['URI'] for nft in stored_eqs], multi=True)
+            nft_data = xrpl_functions.get_nft_metadata([nft['URI'] for nft in stored_eqs], '', multi=True)
             for nft in stored_eqs:
                 holdings.append(nft_data[nft['URI']]['name'])
             holdings = Counter(holdings)

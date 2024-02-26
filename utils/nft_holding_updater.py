@@ -3,7 +3,7 @@ import logging
 import traceback
 
 import nextcord
-
+from utils.refresh_fn import get_type
 import config
 import config_extra
 import xrpl_functions
@@ -47,7 +47,7 @@ async def update_nft_holdings(client: nextcord.Client):
                             t_serial.append(serial)
                             continue
                         print(serial, list(old_user['trainer_cards'].keys()))
-                        metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+                        metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
                         if metadata is None:
                             continue
 
@@ -58,16 +58,19 @@ async def update_nft_holdings(client: nextcord.Client):
                                      "image": metadata['image'],
                                      "attributes": metadata['attributes'],
                                      "token_id": nft["NFTokenID"],
+                                     "type": get_type(metadata['attributes'])
                                      }
                             await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, True)
                         await asyncio.sleep(2)
                     if nft["Issuer"] == config.ISSUER["Zerpmon"]:
+
                         serial = str(nft["nft_serial"])
                         if serial in list(old_user['zerpmons'].keys()):
                             serials.append(serial)
                             continue
-                        metadata = xrpl_functions.get_nft_metadata(nft['URI'])
-
+                        metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
+                        if nft['NFTokenID'] == '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7ECDE9D487048F1EEC':
+                            print(metadata, '\n', nft)
                         if "Zerpmon " in metadata['description']:
                             serials.append(serial)
                             try:
@@ -79,7 +82,8 @@ async def update_nft_holdings(client: nextcord.Client):
                                      "image": metadata['image'],
                                      "attributes": metadata['attributes'],
                                      "token_id": nft["NFTokenID"],
-                                     'active_t': active_t
+                                     'active_t': active_t,
+                                     "type": get_type(metadata['attributes'])
                                      }
                             await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
                         await asyncio.sleep(2)
@@ -89,7 +93,7 @@ async def update_nft_holdings(client: nextcord.Client):
                             e_serial.append(serial)
                             continue
                         print(serial, list(old_user['equipments'].keys()))
-                        metadata = xrpl_functions.get_nft_metadata(nft['URI'])
+                        metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
 
                         if "Zerpmon Equipment" in metadata['description']:
                             e_serial.append(serial)
@@ -98,6 +102,7 @@ async def update_nft_holdings(client: nextcord.Client):
                                      "image": metadata['image'],
                                      "attributes": metadata['attributes'],
                                      "token_id": nft["NFTokenID"],
+                                     "type": get_type(metadata['attributes'])
                                      }
                             await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
                         await asyncio.sleep(2)

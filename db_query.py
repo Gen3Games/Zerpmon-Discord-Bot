@@ -265,6 +265,14 @@ async def get_move(name):
     return result
 
 
+async def get_zerpmon_by_nftID(nftID):
+    zerpmon_collection = db['MoveSets']
+    result = await zerpmon_collection.find_one({"nft_id": nftID})
+
+    return result
+
+
+
 async def get_zerpmon(name, mission=False, user_id=None, pvp=False):
     candy = None
     if mission:
@@ -2518,7 +2526,7 @@ async def update_gym_tower(user_id, new_level):
 async def get_tower_rush_leaderboard(discord_id):
     users_collection = db['temp_user_data']
     filter_ = {'tp': {'$exists': True}}
-    projection = {"tp": 1, "address": 1, "discord_id": 1, "username": 1, "total_zrp_earned": 1, '_id': 0}
+    projection = {"tp": 1, "address": 1, "discord_id": 1, "username": 1, "total_zrp_earned": 1, 'max_level': 1, '_id': 0}
 
     cursor = users_collection.find(filter_, projection).sort('tp', DESCENDING)
     top_10 = list(enumerate(await cursor.to_list(length=None), start=1))

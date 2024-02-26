@@ -46,7 +46,7 @@ async def get_ws_client():
 
 async def get_nft_metadata_safe(uri, token_id):
     try:
-        data = xrpl_functions.get_nft_metadata(uri)
+        data = xrpl_functions.get_nft_metadata(uri, token_id)
         img = (
             data['image'] if "https:/" in data['image'] else 'https://ipfs.io/ipfs/' + data['image'].replace("ipfs://",
                                                                                                              "")) if 'image' in data else ''
