@@ -1310,7 +1310,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                     content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
                         f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + (f"{z1['name2']} **knocked out** 💀 {z2['name2']} 💀!" if '🎯' not in result['move1'][
-                        'mul'] else f"**{z2['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"),
+                        'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z2['name2'])}"),
                     ephemeral=True)
                 eliminate = (2, z2['name'])
                 status_stack[0] = [i for i in status_stack[0] if ('oppo' not in i) and ('enemy' not in i)]
@@ -1323,7 +1323,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                     content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
                         f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + (f"{z2['name2']} **knocked out** 💀 {z1['name2']} 💀!" if '🎯' not in result['move2'][
-                        'mul'] else f"**{z1['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"),
+                        'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z1['name2'])}"),
                     ephemeral=True)
                 eliminate = (1, z1['name'])
                 status_stack[1] = [i for i in status_stack[1] if ('oppo' not in i) and ('enemy' not in i)]
@@ -1889,7 +1889,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                                            + (f"{z1['name2']} **knocked out** 💀 {z2['name2']} 💀!" if '🎯' not in
                                                                                                        result['move1'][
-                                                                                                           'mul'] else f"**{z2['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}")
+                                                                                                           'mul'] else f"**{random.choice(config.CRIT_STATEMENTS).format(loser=z2['name2'])}")
                                    )
                 eliminate = (2, z2['name'])
                 status_stack[0] = [i for i in status_stack[0] if ('oppo' not in i) and ('enemy' not in i)]
@@ -1903,7 +1903,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                                            + (f"{z2['name2']} **knocked out** 💀 {z1['name2']} 💀!" if '🎯' not in
                                                                                                        result['move2'][
-                                                                                                           'mul'] else f"**{z1['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"))
+                                                                                                           'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z1['name2'])}"))
 
                 eliminate = (1, z1['name'])
                 status_stack[1] = [i for i in status_stack[1] if ('oppo' not in i) and ('enemy' not in i)]
@@ -1978,7 +1978,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         return 1
 
 
-async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zerpmon, old_num, xp_mode=None):
+async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zerpmon, old_num, is_reset, xp_mode=None):
     serial, z1 = active_zerpmon
     z1_obj = await db_query.get_zerpmon(z1['name'], user_id=user_id)
     z1['name2'] = z1_obj['name2']
@@ -2269,13 +2269,14 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             continue
 
         stats_arr = [False, False, False, 0]
+        t_matches = str(_data1.get('total_matches', 0))
         if (result['winner'] == '1' and lost == 0) or lost == 2:
             if lost == 0:
                 await interaction.send(
                     content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
                         f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + (f"{z1['name2']} **knocked out** {z2['name2']}!" if '🎯' not in result['move1'][
-                        'mul'] else f"**{z2['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"),
+                        'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z2['name2'])}"),
                     ephemeral=True)
             eliminate = (2, z2['name'])
             await asyncio.sleep(1)
@@ -2284,7 +2285,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                 ephemeral=True)
             if not lure_active:
                 await db_query.save_zerpmon_winrate(z1['name'], z2['name'])
-            await db_query.update_user_wr(user_id, 1)
+            await db_query.update_user_wr(user_id, 1, old_num, is_reset)
             battle_log['teamA']['zerpmons'].append(
                 {'name': z1['name'], 'rounds': [1]})
             battle_log['teamB']['zerpmons'].append(
@@ -2294,10 +2295,10 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
                                        battle_log['teamA'],
                                        battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
-            await db_query.update_battle_count(user_id, old_num)
+            # await db_query.update_battle_count(user_id, old_num)
             # Reward user on a Win
             double_xp = 'double_xp' in _data1 and _data1['double_xp'] > time.time()
-            responses = await xrpl_ws.reward_user(user_id, _data1['address'], z1['name'], double_xp=double_xp,
+            responses = await xrpl_ws.reward_user(t_matches, _data1['address'], z1['name'], double_xp=double_xp,
                                                   lvl=z1_level,
                                                   xp_mode=xp_mode, ascended=z1_obj.get('ascended', False))
             stats_arr = responses[0]
@@ -2331,7 +2332,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                         ephemeral=True)
                 else:
                     await interaction.send(
-                        f"**Successfully** sent `{responses[1][2]}` {responses[1][1]}",
+                        f"**Successfully** added {responses[1][1]} transaction to queue",
                         ephemeral=True)
             move_counter += 1
 
@@ -2339,7 +2340,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             if lost == 0:
                 await interaction.send(
                     content=f"{z2['name2']} **knocked out** {z1['name2']}!" if '🎯' not in result['move2'][
-                        'mul'] else f"**{z1['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}", ephemeral=True)
+                        'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z1['name2'])}", ephemeral=True)
             eliminate = (1, z1['name'])
             await interaction.send(
                 f"Sorry you **LOST** 💀",
@@ -2354,12 +2355,12 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                                        battle_log['teamA'],
                                        battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
             z1['active_t'] = await checks.get_next_ts()
-
+            await db_query.add_xrp_txn_log(t_matches, 'mission', _data1['address'], 0, 0,)
             await db_query.update_zerpmon_alive(z1, serial, user_id)
-            await db_query.update_user_wr(user_id, 0)
+            await db_query.update_user_wr(user_id, 0, old_num, is_reset)
             if not lure_active:
                 await db_query.save_zerpmon_winrate(z2['name'], z1['name'])
-            await db_query.update_battle_count(user_id, old_num)
+            # await db_query.update_battle_count(user_id, old_num)
             move_counter += 1
 
         await asyncio.sleep(1)
@@ -2749,7 +2750,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                     content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
                         f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + (f"{z2['name']} **knocked out** 💀 {z1['name2']} 💀!" if '🎯' not in result['move2'][
-                        'mul'] else f"**{z1['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"),
+                        'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z1['name2'])}"),
                     ephemeral=True)
                 eliminate = (1, z1['name'])
                 status_stack[1] = [i for i in status_stack[1] if ('oppo' not in i) and ('enemy' not in i)]
@@ -3272,7 +3273,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                     content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
                         f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + (f"{z1['name2']} **knocked out** 💀 {z2['name2']} 💀!" if '🎯' not in result['move1'][
-                        'mul'] else f"**{z2['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"),
+                        'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z2['name2'])}"),
                     ephemeral=True)
                 eliminate = (2, z2['name'])
                 status_stack[0] = [i for i in status_stack[0] if ('oppo' not in i) and ('enemy' not in i)]
@@ -3285,7 +3286,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                     content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
                         f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
                             + (f"{z2['name2']} **knocked out** 💀 {z1['name2']} 💀!" if '🎯' not in result['move2'][
-                        'mul'] else f"**{z1['name2']}**{random.sample(config.CRIT_STATEMENTS, 1)[0]}"),
+                        'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z1['name2'])}"),
                     ephemeral=True)
                 eliminate = (1, z1['name'])
                 status_stack[1] = [i for i in status_stack[1] if ('oppo' not in i) and ('enemy' not in i)]

@@ -272,7 +272,6 @@ async def get_zerpmon_by_nftID(nftID):
     return result
 
 
-
 async def get_zerpmon(name, mission=False, user_id=None, pvp=False):
     candy = None
     if mission:
@@ -418,23 +417,26 @@ async def update_battle_count(user_id, num):
     # print(r)
 
 
-async def update_user_wr(user_id, win):
+async def update_user_wr(user_id, win, battleCount, is_reset):
+    from utils.checks import get_next_ts
     users_collection = db['users']
+    new_ts = int(await get_next_ts())
+    update_operation = {
+        '$set': {
+            'battle.reset_t': new_ts,
+        },
+        '$inc': {
+            'battle.num': (1 if not is_reset else 1 - battleCount) if battleCount < 10 else -9,
+            'total_matches': 1,
+            'win': 1 if win else 0,
+            'loss': 0 if win else 1,
+        }
+    }
 
-    r = None
-    if win == 1:
-        r = await users_collection.update_one({'discord_id': str(user_id)},
-                                              {'$inc': {'win': 1, 'loss': 0, 'total_matches': 1}},
-                                              upsert=True)
-    elif win == 0:
-        r = await users_collection.update_one({'discord_id': str(user_id)},
-                                              {'$inc': {'loss': 1, 'win': 0, 'total_matches': 1}},
-                                              upsert=True)
-
-    if r.acknowledged:
-        return True
-    else:
-        return False
+    r = await users_collection.update_one({'discord_id': str(user_id)},
+                                          update_operation,
+                                          upsert=True)
+    return r.acknowledged
 
 
 async def update_pvp_user_wr(user_id, win, recent_deck=None, b_type=None):
@@ -1602,6 +1604,12 @@ async def get_zrp_stats():
     return obj
 
 
+async def get_mission_reward_rate():
+    stats_col = db['stats_log']
+    obj = await stats_col.find_one({'name': 'zrp_stats'})
+    return obj.get('mission_xrp_rate')
+
+
 async def inc_loan_burn(inc):
     stats_col = db['stats_log']
 
@@ -2308,6 +2316,32 @@ async def get_safari_nfts():
     return (await stats_col.find_one({'name': 'safari-nfts-bithomp'})).get('nfts', [])
 
 
+async def remove_nft_from_mission_stat(nft_id) -> None:
+    stats_col = db['stats_log']
+    await stats_col.update_one({'name': 'mission-nfts-bithomp'}, {'$pull': {'nfts': {'nftokenID': nft_id}}})
+
+
+async def get_mission_nfts():
+    stats_col = db['stats_log']
+    return (await stats_col.find_one({'name': 'mission-nfts-bithomp'})).get('nfts', [])
+
+
+async def add_xrp_txn_log(uid: str, from_addr: str, to_addr: str, amount: float, xp: int, candy=None):
+    txn_log_col = db['mission-txn-queue']
+    res = await txn_log_col.update_one({'uid': to_addr + uid},
+                                       {'$setOnInsert': {
+                                           'type': 'Payment',
+                                           'from': from_addr,
+                                           'destination': to_addr,
+                                           'amount': amount,
+                                           'currency': 'XRP',
+                                           'status': 'pending' if amount > 0 else 'fulfilled',
+                                           'xp': xp,
+                                           'candy': candy
+                                       }}, upsert=True)
+    return res.acknowledged
+
+
 async def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
     txn_log_col = db['safari-txn-queue']
     res = await txn_log_col.insert_one({
@@ -2321,9 +2355,10 @@ async def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
     return res.acknowledged
 
 
-async def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bool, issuer: str, uri: str, sr, ):
-    txn_log_col = db['safari-txn-queue']
-    res = await txn_log_col.insert_one({
+async def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bool, issuer: str, uri: str, sr,
+                          is_safari=True, uid=None):
+    txn_log_col = db['safari-txn-queue' if is_safari else 'mission-txn-queue']
+    doc = {
         'type': 'NFTokenCreateOffer',
         'destination': to_addr,
         'from': from_addr,
@@ -2334,7 +2369,15 @@ async def add_nft_txn_log(from_addr: str, to_addr: str, nft_id: float, is_eq: bo
         'uri': uri,
         'status': 'pending',
         'offerID': None,
-    })
+    }
+    if not is_safari and uid:
+        doc['uid'] = to_addr + uid
+        res = await txn_log_col.update_one({'uid': 'nft' + uid},
+                                           {
+                                               '$setOnInsert': doc
+                                           }, upsert=True)
+    else:
+        res = await txn_log_col.insert_one(doc)
     return res.acknowledged
 
 
@@ -2509,8 +2552,8 @@ async def update_gym_tower(user_id, new_level):
         eq_deck[str(i)] = {str(i): None for i in range(5)}
     if new_level > 20:
         q = {'tower_level': 1, 'fee_paid': False, 'zerpmons': [],
-                                                      'equipments': [],
-                                                      'trainers': [],}
+             'equipments': [],
+             'trainers': [], }
     else:
         q = {'tower_level': new_level, 'reset': True,
              "battle_deck": {'0': {}},
@@ -2526,7 +2569,8 @@ async def update_gym_tower(user_id, new_level):
 async def get_tower_rush_leaderboard(discord_id):
     users_collection = db['temp_user_data']
     filter_ = {'tp': {'$exists': True}}
-    projection = {"tp": 1, "address": 1, "discord_id": 1, "username": 1, "total_zrp_earned": 1, 'max_level': 1, '_id': 0}
+    projection = {"tp": 1, "address": 1, "discord_id": 1, "username": 1, "total_zrp_earned": 1, 'max_level': 1,
+                  '_id': 0}
 
     cursor = users_collection.find(filter_, projection).sort('tp', DESCENDING)
     top_10 = list(enumerate(await cursor.to_list(length=None), start=1))

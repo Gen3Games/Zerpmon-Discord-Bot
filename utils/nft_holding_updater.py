@@ -30,7 +30,7 @@ async def update_nft_holdings(client: nextcord.Client):
             user_obj = old_user
             try:
                 if 'address' not in user_obj or len(user_obj['address']) < 5 or user_obj[
-                    'address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':
+                    'address'] in ['rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM']:
                     continue
                 good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
                 if not good_status:

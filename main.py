@@ -508,7 +508,7 @@ async def mission(interaction: nextcord.Interaction):
     u_flair = f' | {user_owned_nfts["data"].get("flair", [])[0]}' if len(
         user_owned_nfts["data"].get("flair", [])) > 0 else ''
     user_owned_nfts['user'] += u_flair
-    user_mention = interaction.user.mention + u_flair
+    # user_mention = interaction.user.mention + u_flair
 
     # Sanity checks
 

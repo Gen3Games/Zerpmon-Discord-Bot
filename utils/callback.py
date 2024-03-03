@@ -244,12 +244,12 @@ async def switch_mission_mode(i: nextcord.Interaction, current_mode: bool):
 async def button_callback(user_id, interaction: nextcord.Interaction, loser: int = None,
                           mission_zerpmon_used: bool = False):
     _user_owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
-    old_lvl = _user_owned_nfts['data'].get('level', 1)
     u_flair = f' | {_user_owned_nfts["data"].get("flair", [])[0]}' if len(
         _user_owned_nfts["data"].get("flair", [])) > 0 else ''
     _user_owned_nfts['user'] += u_flair
-    user_mention = interaction.user.mention + u_flair
+    # user_mention = interaction.user.mention + u_flair
     _b_num = 0 if 'battle' not in _user_owned_nfts['data'] else _user_owned_nfts['data']['battle']['num']
+    old_num, is_reset = _b_num, False
     if _b_num > 0:
         if _user_owned_nfts['data']['battle']['reset_t'] > time.time() and _b_num >= 10:
 
@@ -279,8 +279,9 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
             button.callback = lambda i: use_missionP_callback(i, True)
             return
         elif _user_owned_nfts['data']['battle']['reset_t'] < time.time():
-            await db_query.update_battle_count(user_id, -1)
+            # await db_query.update_battle_count(user_id, -1)
             _b_num = 0
+            is_reset = True
 
     _active_zerpmons = [(k, i) for k, i in _user_owned_nfts['data']['zerpmons'].items()
                         if 'active_t' not in i or
@@ -342,7 +343,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     config.ongoing_missions.append(user_id)
     xp_mode = _user_owned_nfts['data'].get('xp_mode', None)
     try:
-        loser, stats = await battle_function.proceed_mission(interaction, user_id, _battle_z[0], _b_num,
+        loser, stats = await battle_function.proceed_mission(interaction, user_id, _battle_z[0], old_num, is_reset,
                                                              xp_mode=xp_mode)
     except Exception as e:
         logging.error(f"ERROR during mission: {e}\n{traceback.format_exc()}")

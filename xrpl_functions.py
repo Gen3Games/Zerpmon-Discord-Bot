@@ -14,7 +14,7 @@ import json
 import requests
 from xrpl.utils import drops_to_xrp
 
-from db_query import get_safari_nfts
+from db_query import get_safari_nfts, get_mission_nfts
 
 last_checked_price = 0
 
@@ -40,6 +40,8 @@ async def get_nfts(address):
     try:
         if address == config.SAFARI_ADDR:
             return True, await get_safari_nfts()
+        elif address == config.REWARDS_ADDR:
+            return True, await get_mission_nfts()
         async with AsyncWebsocketClient(config.NODE_URL) as client:
             all_nfts = []
 

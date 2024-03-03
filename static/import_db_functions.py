@@ -143,7 +143,7 @@ def get_effects(effects, entries, l_effect):
 
 
 def import_moves(col_name):
-    with open('Zerpmon_Moves_-_Move_List_200224-1.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_280224.csv', 'r') as csvfile:
         collection = db[col_name]
         csvreader = csv.reader(csvfile)
         entries = []
@@ -169,6 +169,7 @@ def import_moves(col_name):
                 'color': row[4].lower(),
                 'notes': row[5],
                 'purple_id': int(row[6]) if row[6] else None,
+                'melee': int(row[7]) if row[7] and row[7].isdigit() else None,
                 'effects': effects,
             }}, upsert=True)
         print(len(entries))
@@ -209,6 +210,7 @@ def import_purple_star_ids():
 def import_movesets():
     with open('Zerpmon_Moves_-_Zerpmon_Movesets_250224.csv', 'r') as csvfile:
         collection = db['MoveSets']
+        movelist_col = db['MoveList']
         # c2 = db['MoveSets2']
         # c2.drop()
         csvreader = csv.reader(csvfile)
@@ -239,21 +241,21 @@ def import_movesets():
                     # 'collection': row[2],
                     'moves': [
                         {'name': row[4], 'dmg': int(row[5]) if row[5] != "" else "", 'type': row[6], 'id': row[7],
-                         'percent': float(row[8].replace("%", "")), 'color': header[3]},
+                         'percent': float(row[8].replace("%", "")), 'color': header[3], 'melee': movelist_col.find_one({'move_name': row[4]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[9], 'dmg': int(row[10]) if row[10] != "" else "", 'type': row[11], 'id': row[12],
-                         'percent': float(row[13].replace("%", "")), 'color': header[8]},
+                         'percent': float(row[13].replace("%", "")), 'color': header[8], 'melee': movelist_col.find_one({'move_name': row[9]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[14], 'dmg': int(row[15]) if row[15] != "" else "", 'type': row[16], 'id': row[17],
-                         'percent': float(row[18].replace("%", "")), 'color': header[13]},
+                         'percent': float(row[18].replace("%", "")), 'color': header[13], 'melee': movelist_col.find_one({'move_name': row[14]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[19], 'dmg': int(row[20]) if row[20] != "" else "", 'type': row[21], 'id': row[22],
-                         'percent': float(row[23].replace("%", "")), 'color': header[18]},
+                         'percent': float(row[23].replace("%", "")), 'color': header[18], 'melee': movelist_col.find_one({'move_name': row[19]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[24], 'stars': row[25], 'id': row[26], 'percent': float(row[27].replace("%", "")),
-                         'color': header[23]},
+                         'color': header[23], 'melee': movelist_col.find_one({'move_name': row[24]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[28], 'stars': row[29], 'id': row[30], 'percent': float(row[31].replace("%", "")),
-                         'color': header[27]},
+                         'color': header[27], 'melee': movelist_col.find_one({'move_name': row[28]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[32], 'id': row[33], 'percent': float(row[34].replace("%", "")),
-                         'color': header[31]},
+                         'color': header[31], 'melee': movelist_col.find_one({'move_name': row[32]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': 'Miss', 'id': row[36], 'percent': float(row[37].replace("%", "")),
-                         'color': header[34]},
+                         'color': header[34], 'melee': movelist_col.find_one({'move_name': 'Miss'}, {'_id': 0, 'melee': 1}).get('melee')},
                     ],
 
                     'move_types': list(move_types),
@@ -569,6 +571,11 @@ def cache_data():
                     found = db['nft-uri-cache'].find_one({'metadata.name': nft['name']})
                     if found:
                         nft['nft_id'] = found['nftid']
+                        attrs = found['metadata']['attributes']
+                        image = found['metadata']['image']
+                        nft['attributes'] = attrs
+                        nft['image'] = image
+                        db['MoveSets'].update_one({'name': nft['name']}, {'$set': {'nft_id':found['nftid'], 'attributes': attrs, 'image': image}}, upsert=True)
                     else:
                         continue
                     # collection.update_one({'name': nft['name']}, {'$set': {'nft_id': found['nftid']}})

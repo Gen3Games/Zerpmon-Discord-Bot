@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import time
 import traceback
 from xrpl.models.requests import AccountInfo, tx
@@ -23,7 +24,7 @@ URL = config.NODE_URL
 hashes = []
 sent = []
 
-safari_seq = None
+mission_seq = None
 ws_client = AsyncWebsocketClient(URL)
 
 
@@ -36,52 +37,53 @@ async def get_ws_client():
 
 
 def get_txn_log():
-    txn_log_col = db['safari-txn-queue']
+    txn_log_col = db['mission-txn-queue']
     return [i for i in txn_log_col.find({'status': 'pending',
                                          '$or': [{'retry_cnt': {'$lt': 5}}, {'retry_cnt': {'$exists': False}}]
                                          })]
 
 
 def update_txn_log(_id, doc):
-    txn_log_col = db['safari-txn-queue']
+    txn_log_col = db['mission-txn-queue']
     res = txn_log_col.update_one({'_id': _id}, {'$set': doc})
     return res.acknowledged
 
 
 def inc_retry_cnt(_id):
-    txn_log_col = db['safari-txn-queue']
+    txn_log_col = db['mission-txn-queue']
     res = txn_log_col.update_one({'_id': _id}, {'$inc': {'retry_cnt': 1}})
     return res.acknowledged
 
 
 def del_txn_log(_id):
-    txn_log_col = db['safari-txn-queue']
+    txn_log_col = db['mission-txn-queue']
     res = txn_log_col.delete_one({'_id': _id})
     return res.acknowledged
 
 
-def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_amount=0):
+def update_mission_stats(reward_rate):
     stats_col = db['stats_log']
-    query = {'$inc': {'burnt': burn_amount, 'distributed': distributed_amount, 'jackpot_amount': jackpot_amount}}
-    if left_amount is not None:
-        query['$set'] = {'left_amount': left_amount}
-    else:
-        query['$inc']['left_amount'] = 0
-    print(query)
     stats_col.update_one({
         'name': 'zrp_stats'
     },
-        query, upsert=True
+        {'$set': {'mission_xrp_rate': reward_rate}}, upsert=True
     )
 
 
 async def send_nft(from_, to_address, token_id):
     client = await get_ws_client()
-    global safari_seq
+    global mission_seq
     try:
         for i in range(5):
             sequence, sending_address, sending_wallet = await get_seq(from_)
-
+            memo = 'Zerpmon Mission NFT Reward'
+            memos = []
+            if memo:
+                memos = [
+                    {'memo': {
+                        'memo_data': bytes(memo, 'utf-8').hex().upper(),
+                        'memo_format': bytes('loan-for', 'utf-8').hex().upper()
+                    }}]
             tx = NFTokenCreateOffer(
                 account=sending_address,
                 amount="0",
@@ -89,7 +91,8 @@ async def send_nft(from_, to_address, token_id):
                 nftoken_id=token_id,  # set to 0 for a new offer
                 flags=NFTokenCreateOfferFlag.TF_SELL_NFTOKEN,  # set to 0 for a new offer
                 destination=to_address,  # set to the address of the user you want to sell to
-                source_tag=13888813
+                source_tag=13888813,
+                memos=memos
             )
             signed = await safe_sign_and_autofill_transaction(tx, sending_wallet, client)
             response = await send_reliable_submission(signed, client)
@@ -99,8 +102,8 @@ async def send_nft(from_, to_address, token_id):
             meta = response.result['meta']
             try:
                 if meta['TransactionResult'] in ["tesSUCCESS", "terQUEUED"]:
-                    if from_ == 'safari':
-                        safari_seq = (await get_seq_num()) if safari_seq is None else safari_seq + 1
+                    if from_ == 'mission':
+                        mission_seq = response.result['account_sequence_next']
                     # msg = await get_tx(client, response.result['tx_json']['hash'])
                     # nodes = msg['meta']['AffectedNodes']
                     # node = [i for i in nodes if
@@ -112,8 +115,8 @@ async def send_nft(from_, to_address, token_id):
                     return True, offer, response.result['hash']
 
                 elif meta['TransactionResult'] in ["tefPAST_SEQ"]:
-                    if from_ == 'safari':
-                        safari_seq = await get_seq_num()
+                    if from_ == 'mission':
+                        mission_seq = response.result['account_sequence_next']
                     await asyncio.sleep(1)
                 else:
                     await asyncio.sleep(1)
@@ -125,30 +128,36 @@ async def send_nft(from_, to_address, token_id):
     return False, None, None
 
 
-async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
+async def send_txn(to: str, amount: float, sender):
     client = await get_ws_client()
-    global safari_seq
+    global mission_seq
+    memo = 'Zerpmon Mission Reward'
     for i in range(5):
         try:
-            sequence, sending_address, sending_wallet = await get_seq(sender, amount)
+            sequence, sending_address, sending_wallet = await get_seq(sender)
+
             # Set the receiving address
             receiving_address = to
 
             # Set the amount to be sent, in drops of XRP
-            send_amt = float(amount)
-            req_json = {
-                "account": sending_address,
-                "destination": receiving_address,
-                "amount": {
-                    "currency": issuer,
-                    "value": str(send_amt),
-                    "issuer": config.ISSUER[issuer]
-                },
-                "sequence": sequence,
-                "source_tag": 13888813
-            }
+            send_amt = int(amount * 1000000)
+
             # Construct the transaction dictionary
-            transaction = Payment.from_dict(req_json)
+            memos = []
+            if memo:
+                memos = [
+                    {'memo': {
+                        'memo_data': bytes(memo, 'utf-8').hex().upper(),
+                        'memo_format': bytes('loan-for', 'utf-8').hex().upper()
+                    }}]
+            transaction = Payment(
+                account=sending_address,
+                destination=receiving_address,
+                amount=str(send_amt),  # 10 XRP (in drops)
+                sequence=sequence,
+                source_tag=13888813,
+                memos=memos,
+            )
 
             # Sign and send the transaction
             response = await safe_sign_and_submit_transaction(transaction, sending_wallet, client)
@@ -156,75 +165,78 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
             # Print the response
             print(response.result)
             if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
-                if sender == 'safari':
-                    safari_seq = response.result['account_sequence_next']
-                logging.info(f'Sent {amount} ZRP successfully to {to}!')
+                if sender == 'mission':
+                    mission_seq = response.result['account_sequence_next']
                 return True, response.result['tx_json']['hash']
             elif response.result['engine_result'] in ["tefPAST_SEQ"]:
-                if sender == 'safari':
-                    safari_seq = response.result['account_sequence_next']
-                await asyncio.sleep(1)
+                if sender == 'mission':
+                    mission_seq = response.result['account_sequence_next']
+                await asyncio.sleep(random.randint(1, 4))
             else:
-                await asyncio.sleep(1)
+                await asyncio.sleep(random.randint(1, 4))
         except Exception as e:
-            logging.error(f"ZRP Txn Request timed out. {traceback.format_exc()}")
-            await asyncio.sleep(1)
+            logging.error(f"XRP Txn Request timed out. {traceback.format_exc()}")
+            await asyncio.sleep(random.randint(1, 4))
+    # await db_query.save_error_txn(to, amount, None)
     return False, ''
 
 
 async def get_seq_num():
     client = await get_ws_client()
     acc_info = AccountInfo(
-        account=config.SAFARI_ADDR
+        account=config.REWARDS_ADDR
     )
     account_info = await client.request(acc_info)
     sequence = account_info.result["account_data"]["Sequence"]
     return sequence
 
 
-async def get_seq(from_, amount=None):
+async def get_seq(from_):
     client = await get_ws_client()
-    global safari_seq
-    if from_ == "jackpot":
-        update_zrp_stats(burn_amount=0, distributed_amount=0, jackpot_amount=amount)
+    global mission_seq
+    if from_ == 'mission':
         acc_info = AccountInfo(
-            account=config.JACKPOT_ADDR
+            account=config.REWARDS_ADDR
         )
         account_info = await client.request(acc_info)
-        sequence = account_info.result["account_data"]["Sequence"]
-        sending_wallet = Wallet(seed=config.JACKPOT_SEED, sequence=sequence)
-        sending_address = config.JACKPOT_ADDR
-        return sequence, sending_address, sending_wallet
-    elif from_ == 'safari':
-        acc_info = AccountInfo(
-            account=config.SAFARI_ADDR
-        )
-        account_info = await client.request(acc_info)
-        sequence = account_info.result["account_data"]["Sequence"] if safari_seq is None else safari_seq
+        sequence = account_info.result["account_data"]["Sequence"] if mission_seq is None else mission_seq
         # Load the sending account's secret and address from a wallet
-        sending_wallet = Wallet(seed=config.SAFARI_SEED, sequence=sequence)
-        sending_address = config.SAFARI_ADDR
+        sending_wallet = Wallet(seed=config.REWARDS_SEED, sequence=sequence)
+        sending_address = config.REWARDS_ADDR
         return sequence, sending_address, sending_wallet
     else:
         return None, None, None
 
 
-async def get_tx(client, hash_):
-    for i in range(5):
+async def get_balance(address):
+    bal = 0
+    while bal == 0:
         try:
-            acct_info = tx.Tx(
-                transaction=hash_
+            client = await get_ws_client()
+            acc_info = AccountInfo(
+                account=address
             )
-            response = await client.request(acct_info)
-            result = response.result
-            print(result)
-            return result
+            account_info = await client.request(acc_info)
+            bal = round(float(account_info.result['account_data']['Balance']) / 10 ** 6, 2)
+            break
         except Exception as e:
-            logging.error(f'{traceback.format_exc()}')
-            await asyncio.sleep(1)
+            logging.error(f"Balance Request timed out. {traceback.format_exc()}")
+            await asyncio.sleep(random.randint(1, 4))
+
+    return bal
+
+
+async def add_potion(address, key):
+    users_collection = db['users']
+    res = users_collection.update_one({'address': str(address)},
+                                            {'$inc': {key: 1}})
+    return res.acknowledged
 
 
 async def main():
+    bal = await get_balance(config.REWARDS_ADDR)
+    amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
+    update_mission_stats(amount_to_send)
     while True:
         try:
             queued_txns = get_txn_log()
@@ -252,18 +264,24 @@ async def main():
                                 else:
                                     inc_retry_cnt(_id)
                             elif txn['type'] == 'Payment':
-                                success, hash_ = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
+                                amt = txn['amount']
+                                if amt == 0:
+                                    continue
+                                if txn.get('candy'):
+                                    await add_potion(txn['destination'], txn.get('candy'))
+                                bal -= amt
+                                success, hash_ = await send_txn(txn['destination'], amt, txn['from'], )
+                                # success, hash_ = True, 'x'
                                 if success:
                                     sent.append(_id)
-                                    if txn['destination'] == config.JACKPOT_ADDR:
-                                        del_txn_log(_id)
-                                    else:
-                                        txn['status'] = 'fulfilled'
-                                        txn['hash'] = hash_
-                                        update_txn_log(_id, txn)
+                                    txn['status'] = 'fulfilled'
+                                    txn['hash'] = hash_
+                                    update_txn_log(_id, txn)
                                     sent.pop()
                                 else:
                                     inc_retry_cnt(_id)
+                amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
+                update_mission_stats(amount_to_send)
         except Exception as e:
             logging.error(f'EXECPTION in WS: {traceback.format_exc()}')
 

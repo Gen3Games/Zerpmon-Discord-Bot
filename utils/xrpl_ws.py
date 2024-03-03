@@ -244,7 +244,8 @@ async def listener(client, db_sep, store_address, wager_address):
                                                    config.ISSUER['ZRP'], config.LOAN_ADDR, config.TOWER_ADDR] or message[
                             'Destination'] in [i['to'] for i in
                                                config.track_zrp_txn.values()]):
-
+                    if message.get('Memos'):
+                        continue
                     if len(hashes) > 1000:
                         hashes = hashes[900:]
                     if message['hash'] not in hashes:
@@ -447,7 +448,7 @@ async def get_balance(address):
     return bal
 
 
-async def reward_user(user_id, addr, zerpmon_name, double_xp=False, lvl=1, xp_mode=None, ascended=False):
+async def reward_user(total_matches, addr, zerpmon_name, double_xp=False, lvl=1, xp_mode=None, ascended=False):
     reward = random.choices(list(config.MISSION_REWARD_CHANCES.keys()), list(config.MISSION_REWARD_CHANCES.values()))[0]
     user_address = addr
     xp_gain = 10
@@ -459,38 +460,47 @@ async def reward_user(user_id, addr, zerpmon_name, double_xp=False, lvl=1, xp_mo
     success, lvl_up, reward_list, _ = await db_query.add_xp(zerpmon_name, user_address, xp_gain, ascended=ascended)
     responses.append([success, lvl_up, reward_list, xp_gain])
 
-    if (lvl < 10 and xp_mode is None) or xp_mode == False:
-        bal = await get_balance(Reward_address)
-        amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
-        print(bal, amount_to_send)
-        # add xrp and xp
-        res1 = (await send_txn(user_address, amount_to_send, 'reward')), "XRP", amount_to_send, 0
-        responses.append(res1)
-    # return None, "XRP", amount_to_send, 0
     res2 = "", None, 0, 0
+    candy = None
     if reward == "revive_potion":
         res2 = await db_query.add_revive_potion(user_address, 1), "Revive Potion", 1, 0
+        candy = 'revive_potion'
     elif reward == "mission_refill":
         res2 = await db_query.add_mission_potion(user_address, 1), "Mission Potion", 1, 0
+        candy = 'mission_potion'
     elif reward == "zerpmon":
         if (lvl > 10 and xp_mode is None) or xp_mode:
             try:
-                res, token_id, empty = await send_random_zerpmon(user_address)
+                res, token_id, empty = await send_random_zerpmon(user_address, uid=str(total_matches))
                 if empty:
                     config.MISSION_REWARD_CHANCES['zerpmon'] = 0
                 res2 = res, 'NFT', 1, token_id
             except Exception as e:
                 logging.error(f'Unable to send Zerpmon {traceback.format_exc()}')
+
+    if (lvl < 10 and xp_mode is None) or xp_mode == False:
+        amount_to_send = await db_query.get_mission_reward_rate()
+        if amount_to_send is None or amount_to_send == 0:
+            bal = await get_balance(Reward_address)
+            amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
+        amount_to_send = round(amount_to_send, 3)
+        print(amount_to_send)
+        # add xrp and xp
+        res1 = (await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_address, amount_to_send, xp_gain, candy=candy)),\
+               "XRP", amount_to_send, 0
+        responses.append(res1)
+    # return None, "XRP", amount_to_send, 0
     responses.append(res2)
     return responses
 
 
-async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=config.ISSUER["Zerpmon"]):
+async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=config.ISSUER["Zerpmon"], uid=None):
     issuer_k, uri_key, nft_key = 'Issuer', 'URI', 'NFTokenID'
     if not safari:
         if gift_box:
             status, stored_nfts = await xrpl_functions.get_nfts(config.GIFT_ADDR)
         else:
+            issuer_k, uri_key, nft_key = 'issuer', 'uri', 'nftokenID'
             status, stored_nfts = await xrpl_functions.get_nfts(Reward_address)
     else:
         issuer_k, uri_key, nft_key = 'issuer', 'uri', 'nftokenID'
@@ -515,8 +525,12 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
             if safari:
                 res = await db_query.add_nft_txn_log('safari', to_address, token_id, False, random_zerpmon['issuer'],
                                                random_zerpmon['uri'], random_zerpmon['nftSerial'])
+            elif gift_box:
+                res = await send_nft('gift', to_address, token_id)
             else:
-                res = await send_nft(('gift' if gift_box else 'reward'), to_address, token_id)
+                res = await db_query.add_nft_txn_log('mission', to_address, token_id, False, random_zerpmon['issuer'],
+                                                     random_zerpmon['uri'], random_zerpmon['nftSerial'],
+                                                     is_safari=False, uid=uid)
             tokens_sent.append(token_id)
             await db_query.save_token_sent(token_id, to_address)
             nft_data = await get_nft_metadata_safe(random_zerpmon.get(uri_key), token_id)
