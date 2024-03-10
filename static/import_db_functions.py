@@ -9,8 +9,8 @@ from pymongo import ReturnDocument
 
 import config
 
-# client = pymongo.MongoClient(config.MONGO_URL)
-client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
+client = pymongo.MongoClient(config.MONGO_URL)
+# client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
 db = client['Zerpmon']
 print([i['name'] for i in db.list_collections()])
 # exit(1)
@@ -143,7 +143,7 @@ def get_effects(effects, entries, l_effect):
 
 
 def import_moves(col_name):
-    with open('Zerpmon_Moves_-_Move_List_280224.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_090324.csv', 'r') as csvfile:
         collection = db[col_name]
         csvreader = csv.reader(csvfile)
         entries = []
@@ -152,7 +152,7 @@ def import_moves(col_name):
                 continue
             # Insert the row data to MongoDB
             effects = {}
-
+            row[5] = row[5].replace('White/Gold ', '')
             if row[5]:
                 l_effect = row[5].lower()
                 get_effects(effects, entries, l_effect)
@@ -208,7 +208,7 @@ def import_purple_star_ids():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_250224.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_for_Glad_080324-1.csv', 'r') as csvfile:
         collection = db['MoveSets']
         movelist_col = db['MoveList']
         # c2 = db['MoveSets2']
@@ -691,8 +691,8 @@ import_movesets()
 # gift_ascension_reward()
 import_attrs_img()
 clean_attrs()
-update_all_zerp_moves()
 cache_data()
+update_all_zerp_moves()
 # import_equipments()
 
 # reset_all_gyms()

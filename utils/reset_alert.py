@@ -83,7 +83,8 @@ async def send_reset_message(client: nextcord.Client):
             await asyncio.sleep(abs(reset_time))
             await db_query.choose_gym_zerp()
             gym_str = '\nLost Gyms and Gym Zerpmon refreshed for each Leader!\n'
-            if await db_query.get_gym_reset() - time.time() < 60:
+            is_gym_reset = await db_query.get_gym_reset() - time.time() < 60
+            if is_gym_reset:
                 gym_str += '**Cleared Gyms** have been refreshed and progressed to next Stage as well!'
                 await db_query.set_gym_reset()
             guilds = client.guilds
@@ -105,9 +106,9 @@ async def send_reset_message(client: nextcord.Client):
                         won_gyms = user['gym'].get('won', {})
                         for gym, obj in won_gyms.items():
                             if obj['next_battle_t'] < time.time() - 86300:
-                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True)
+                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True, reset=is_gym_reset)
                             else:
-                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False)
+                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, reset=is_gym_reset)
                     for r_key in ['rank', 'rank1', 'rank5']:
                         if r_key in user:
                             rnk = user[r_key]['tier']
@@ -327,11 +328,11 @@ async def send_reset_message(client: nextcord.Client):
                     logging.error(f'ERROR: {traceback.format_exc()}')
             try:
                 store_bal = await get_zrp_balance(config.STORE_ADDR, )
-                store_bal = round(float(store_bal), 2)
+                store_bal = int(float(store_bal))
                 if store_bal > 500:
                     await send_zrp(config.ISSUER['ZRP'], store_bal, 'store')
                 loan_bal = await db_query.get_loan_burn()
-                loan_bal = round(float(loan_bal), 2)
+                loan_bal = int(float(loan_bal))
                 if loan_bal > 20:
                     sent_z = await send_zrp(config.ISSUER['ZRP'], loan_bal, 'loan')
                     if sent_z:

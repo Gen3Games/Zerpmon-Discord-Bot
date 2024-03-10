@@ -5,6 +5,8 @@ import logging
 import random
 import sys
 import time
+import traceback
+
 from utils import battle_effect
 import pymongo
 import pytz
@@ -392,13 +394,12 @@ async def update_level(name, new_lvl):
 
 async def update_zerpmon_alive(zerpmon, serial, user_id):
     users_collection = db['users']
-    if 'buff_eq' in zerpmon:
-        del zerpmon['buff_eq']
-    if 'eq_applied' in zerpmon:
-        del zerpmon['eq_applied']
-    r = await users_collection.find_one_and_update({'discord_id': str(user_id)},
-                                                   {'$set': {f'zerpmons.{serial}': zerpmon}},
-                                                   return_document=ReturnDocument.AFTER)
+    # if 'buff_eq' in zerpmon:
+    #     del zerpmon['buff_eq']
+    # if 'eq_applied_miss' in zerpmon:
+    #     del zerpmon['eq_applied_miss']
+    r = await users_collection.update_one({'discord_id': str(user_id)},
+                                                   {'$set': {f'zerpmons.{serial}.active_t': zerpmon['active_t']}})
     # print(r)
 
 
@@ -879,9 +880,8 @@ async def get_deck_names(d_id: str):
     return doc
 
 
-async def revive_zerpmon(user_id):
+async def revive_zerpmon(user_id, old):
     users_collection = db['users']
-    old = await users_collection.find_one({'discord_id': str(user_id)})
     addr = old['address']
 
     for k, z in old['zerpmons'].items():
@@ -891,29 +891,24 @@ async def revive_zerpmon(user_id):
                                           {'$set': {'zerpmons': old['zerpmons']}}, )
     await add_revive_potion(addr, -1)
 
-    if r.acknowledged:
-        return True
-    else:
-        return False
+    return r.acknowledged
 
 
-async def mission_refill(user_id):
+async def mission_refill(user_id, addr):
     users_collection = db['users']
-    old = await users_collection.find_one({'discord_id': str(user_id)})
-    addr = old['address']
-    old['battle'] = {
-        'num': 0,
-        'reset_t': -1
+    # old = await users_collection.find_one({'discord_id': str(user_id)})
+    # addr = old['address']
+    q = {
+        'battle': {
+            'num': 0,
+            'reset_t': -1
+        }
     }
 
     r = await users_collection.update_one({'discord_id': str(user_id)},
-                                          {'$set': old}, )
+                                          {'$set': q}, )
     await add_mission_potion(addr, -1)
-
-    if r.acknowledged:
-        return True
-    else:
-        return False
+    return r.acknowledged
 
 
 async def gym_refill(user_id):
@@ -924,7 +919,7 @@ async def gym_refill(user_id):
         for i in old['gym']['won']:
             if old['gym']['won'][i]['lose_streak'] > 0:
                 old['gym']['won'][i]['next_battle_t'] = -1
-                old['gym']['won'][i]['lose_streak'] -= 1
+                # old['gym']['won'][i]['lose_streak'] -= 1
         r = await users_collection.update_one({'discord_id': str(user_id)},
                                               {'$set': {'gym': old['gym']}}, )
         await add_gym_refill_potion(addr, -1)
@@ -1152,7 +1147,7 @@ async def get_gym_leader(gym_type):
     return res
 
 
-async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
+async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, reset=False):
     users_collection = db['users']
     if gym_obj == {}:
         gym_obj = {
@@ -1173,12 +1168,13 @@ async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False):
         reset_limit = 4
         if skipped:
             reset_limit = 3
+        is_reset = l_streak >= reset_limit and reset
         gym_obj['won'][gym_type] = {
-            'stage': 1 if l_streak == reset_limit else (
+            'stage': 1 if is_reset else (
                 gym_obj['won'][gym_type]['stage'] if gym_type in gym_obj['won'] else 1),
             'next_battle_t': (await get_next_ts(1)) if lost else (
                 gym_obj['won'][gym_type]['next_battle_t'] if gym_type in gym_obj['won'] else 0),
-            'lose_streak': 0 if l_streak == reset_limit else (l_streak if skipped or lost else l_streak - 1)
+            'lose_streak': 0 if reset else (l_streak if skipped or lost else l_streak - 1)
         }
     await users_collection.update_one(
         {'discord_id': str(discord_id)},
@@ -2250,62 +2246,6 @@ async def get_higher_lvls(lvl=1):
     return [i for i in res]
 
 
-# c = db['users']
-# c.update_one({'address': 'rUpucKVa5Rvjmn8nL5aTKpEaBQUbXrZAcV'}, {'$set': {"gym": {
-#     "won": {
-#       "Cosmic": {
-#         "stage": 11,
-#         "next_battle_t": 17017340,
-#         "lose_streak": 1
-#       },
-#       "Bug": {
-#         "stage": 12,
-#         "next_battle_t": 170190700,
-#         "lose_streak": 0
-#       },
-#       "Fairy": {
-#         "stage": 13,
-#         "next_battle_t": 170134400,
-#         "lose_streak": 1
-#       },
-#       "Normal": {
-#         "stage": 14,
-#         "next_battle_t": 17019000,
-#         "lose_streak": 0
-#       },
-# "Fire": {
-#         "stage": 15,
-#         "next_battle_t": 17019000,
-#         "lose_streak": 0
-#       },
-# "Ice": {
-#         "stage": 16,
-#         "next_battle_t": 17019000,
-#         "lose_streak": 0
-#       },
-# "Ghost": {
-#         "stage": 17,
-#         "next_battle_t": 17019000,
-#         "lose_streak": 0
-#       },
-# "Dragon": {
-#         "stage": 18,
-#         "next_battle_t": 17019000,
-#         "lose_streak": 0
-#       },
-# "Water": {
-#         "stage": 19,
-#         "next_battle_t": 17019000,
-#         "lose_streak": 0
-#       },
-# "Grass": {
-#         "stage": 20,
-#         "next_battle_t": 17019000,
-#         "lose_streak": 0
-#       }
-#     }, 'active_t': 0, 'gp': 0}}})
-
-
 async def remove_nft_from_safari_stat(nft_id) -> None:
     stats_col = db['stats_log']
     await stats_col.update_one({'name': 'safari-nfts-bithomp'}, {'$pull': {'nfts': {'nftokenID': nft_id}}})
@@ -2335,7 +2275,7 @@ async def add_xrp_txn_log(uid: str, from_addr: str, to_addr: str, amount: float,
                                            'destination': to_addr,
                                            'amount': amount,
                                            'currency': 'XRP',
-                                           'status': 'pending' if amount > 0 else 'fulfilled',
+                                           'status': 'pending' if (amount > 0 or candy) else 'fulfilled',
                                            'xp': xp,
                                            'candy': candy
                                        }}, upsert=True)
@@ -2609,3 +2549,39 @@ async def del_sign_up_req(uuid: str) -> bool:
     req_collection = db['signin_requests']
     res = await req_collection.delete_one({'uuid': uuid})
     return res.acknowledged
+
+
+async def insert_free_mode_stats():
+    stats_col = db['stats_log']
+    doc = {
+        'name': 'free_mode',
+        'playerAAddress': 'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM',
+        'playerBAddress': 'r3rny1bdHoTaELWe3HCULQranbhvqfbjEy',
+        'playerAInQueue': False,
+        'playerBInQueue': False,
+        'playerAZerpmons': None,
+        'playerAEquipments': None,
+        'playerATrainer': None,
+        'playerBZerpmons': None,
+        'playerBEquipments': None,
+        'playerBTrainer': None,
+        'lastBattleId': None,
+    }
+    obj = await stats_col.update_one({'name': 'free_mode'}, {'$set': doc}, upsert=True)
+
+
+# async def test(is_gym_reset):
+#     all_users = await get_all_users()
+#     for user in all_users:
+#         try:
+#             if 'gym' in user:
+#                 won_gyms = user['gym'].get('won', {})
+#                 for gym, obj in won_gyms.items():
+#                     if obj['next_battle_t'] < time.time() - 86300:
+#                         await reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True,
+#                                                  reset=is_gym_reset)
+#                     else:
+#                         await reset_gym(user['discord_id'], user['gym'], gym, lost=False, reset=is_gym_reset)
+#         except:
+#             logging.error(f'USER OBJ ERROR: {traceback.format_exc()}')
+# asyncio.run(test(True))

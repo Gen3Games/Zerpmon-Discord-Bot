@@ -373,10 +373,11 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
             reset_str = f' reset time **{_hours}**h **{_minutes}**m'
 
     sr, nft = _battle_z[0]
-    (lvl, xp, xp_req, _r, _m), zerp_doc = await db_query.get_lvl_xp(nft['name'], in_mission=True if loser == 2 else False,
-                                                              double_xp=_user_owned_nfts['data'].get('double_xp',
-                                                                                                     0) > time.time(),
-                                                              ret_doc=True)
+    (lvl, xp, xp_req, _r, _m), zerp_doc = await db_query.get_lvl_xp(nft['name'],
+                                                                    in_mission=True if loser == 2 else False,
+                                                                    double_xp=_user_owned_nfts['data'].get('double_xp',
+                                                                                                           0) > time.time(),
+                                                                    ret_doc=True)
     lvl_obj = {'level': lvl, 'xp_required': xp_req, 'xp': xp}
     embed = checks.populate_lvl_up_embed(zerp_doc, lvl_obj, stats[1], stats[2])
 
@@ -392,7 +393,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
 async def use_missionP_callback(interaction: nextcord.Interaction, button=False):
     user = interaction.user
     user_id = user.id
-    user_owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
+    owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
 
     if button:
         i_id = interaction.id
@@ -406,35 +407,36 @@ async def use_missionP_callback(interaction: nextcord.Interaction, button=False)
                                ephemeral=True)
         return False
 
-    for owned_nfts in [user_owned_nfts]:
-        if owned_nfts['data'] is None:
-            await interaction.send(
-                f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
-            return False
-
-        if 'mission_potion' not in owned_nfts['data'] or int(owned_nfts['data']['mission_potion']) <= 0:
-            return (await store_callback(interaction))
-
-    saved = await db_query.mission_refill(user_id)
-    if not saved:
+    if owned_nfts['data'] is None:
         await interaction.send(
-            f"**Failed**",
-            ephemeral=True)
+            f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
         return False
-    else:
-        button = Button(label="Start Mission", style=ButtonStyle.green)
-        view = View()
-        view.add_item(button)
-        view.timeout = 60
-        button.callback = lambda i: button_callback(interaction.user.id, i, )
-        await interaction.send("**SUCCESS**", view=view, ephemeral=True)
-        return True
+    potions = int(owned_nfts['data']['mission_potion'])
+    addr = owned_nfts['data']['address']
+    if 'mission_potion' not in owned_nfts['data'] or potions <= 0:
+        return (await store_callback(interaction))
+
+    # saved = await db_query.mission_refill(user_id)
+    # if not saved:
+    #     await interaction.send(
+    #         f"**Failed**",
+    #         ephemeral=True)
+    #     return False
+    # else:
+    button = Button(label="Start Mission", style=ButtonStyle.green)
+    view = View()
+    view.add_item(button)
+    view.timeout = 60
+    button.callback = lambda i: button_callback(interaction.user.id, i, )
+    await interaction.send("**SUCCESS**", view=view, ephemeral=True)
+    saved = await db_query.mission_refill(user_id, addr)
+    return True
 
 
 async def use_reviveP_callback(interaction: nextcord.Interaction, button=False):
     user = interaction.user
 
-    user_owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
+    owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
 
     if button:
         i_id = interaction.id
@@ -447,42 +449,42 @@ async def use_reviveP_callback(interaction: nextcord.Interaction, button=False):
         await interaction.send(f"Please wait, potions can't be used during a Battle.",
                                ephemeral=True)
         return
+    potions = int(owned_nfts['data']['revive_potion'])
+    if owned_nfts['data'] is None:
+        await interaction.send(
+            f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
+        return
 
-    for owned_nfts in [user_owned_nfts]:
-        if owned_nfts['data'] is None:
-            await interaction.send(
-                f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
-            return
+    if len(owned_nfts['data']['zerpmons']) == 0:
+        await interaction.send(
+            f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to revive",
+            ephemeral=True)
+        return
 
-        if len(owned_nfts['data']['zerpmons']) == 0:
-            await interaction.send(
-                f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to revive",
-                ephemeral=True)
-            return
-
-        if 'revive_potion' not in owned_nfts['data'] or int(owned_nfts['data']['revive_potion']) <= 0:
-            # await interaction.send(
-            #     f"Sorry **0** Revive All Potions found for **{owned_nfts['user']}**, need **1** to revive Zerpmon",
-            #     ephemeral=True)
-            return (await store_callback(interaction))
+    if 'revive_potion' not in owned_nfts['data'] or potions <= 0:
+        # await interaction.send(
+        #     f"Sorry **0** Revive All Potions found for **{owned_nfts['user']}**, need **1** to revive Zerpmon",
+        #     ephemeral=True)
+        return (await store_callback(interaction))
 
     # await interaction.send(
     #     f"**Reviving all Zerpmon...**",
     #     ephemeral=True)
-    saved = await db_query.revive_zerpmon(user.id)
-    if not saved:
-        await interaction.send(
-            f"**Failed**",
-            ephemeral=True)
-        return False
-    else:
-        button = Button(label="Start Mission", style=ButtonStyle.green)
-        view = View()
-        view.add_item(button)
-        view.timeout = 60
-        button.callback = lambda i: button_callback(interaction.user.id, i, )
-        await interaction.send("**SUCCESS**", view=view, ephemeral=True)
-        return True
+    # saved = await db_query.revive_zerpmon(user.id)
+    # if not saved:
+    #     await interaction.send(
+    #         f"**Failed**",
+    #         ephemeral=True)
+    #     return False
+    # else:
+    button = Button(label="Start Mission", style=ButtonStyle.green)
+    view = View()
+    view.add_item(button)
+    view.timeout = 60
+    button.callback = lambda i: button_callback(interaction.user.id, i, )
+    await interaction.send("**SUCCESS**", view=view, ephemeral=True)
+    saved = await db_query.revive_zerpmon(user.id, owned_nfts['data'])
+    return True
 
 
 async def gym_callback(user_id, interaction: nextcord.Interaction, gym_leader):
@@ -827,14 +829,13 @@ async def use_gym_refill_callback(interaction: nextcord.Interaction):
                 owned_nfts['data']['gym']['refill_potion']) <= 0:
             return (await zrp_store_callback(interaction))
 
+    await interaction.send("**SUCCESS**", ephemeral=True)
     saved = await db_query.gym_refill(user_id)
-    if not saved:
-        await interaction.send(
-            f"**Failed**",
-            ephemeral=True)
-        return False
-    else:
-        await interaction.send("**SUCCESS**", ephemeral=True)
+    # if not saved:
+    #     await interaction.send(
+    #         f"**Failed**",
+    #         ephemeral=True)
+    #     return False=
 
 
 async def use_candy_callback(interaction: nextcord.Interaction, label, next_page=0, amt=1):
@@ -913,7 +914,7 @@ async def join_images(image_path_arr, output_path):
     for idx, (img, url, eq) in enumerate(image_path_arr['z']):
         for i in range(2):
             try:
-                if idx == ilen-1:
+                if idx == ilen - 1:
                     timg = Image.open(img)
                     timg.thumbnail((600, 600))
                     openedImagePtrs.append(timg)
@@ -964,6 +965,7 @@ async def join_images(image_path_arr, output_path):
 
     # Save the final image
     combined_img.save(output_path, quality=50)
+
 
 # join_images(['./static/images/Ampsy.png', './static/images/Amparc.png', './static/images/Accountant Nancy.png'], 'n1.png')
 async def send_general_message(guild, text, image, embed=None, file=None):
@@ -1566,8 +1568,9 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                     else:
                         break
                 print(gain_left)
-                res, lvl_up, rewards, _ = await db_query.add_xp(zerp_doc['name'], user_doc['address'], lvl['xp_required'],
-                                                          ascended=ascended or ascend)
+                res, lvl_up, rewards, _ = await db_query.add_xp(zerp_doc['name'], user_doc['address'],
+                                                                lvl['xp_required'],
+                                                                ascended=ascended or ascend)
                 l_up |= lvl_up
                 print(rewards)
                 for key, val in rewards.items():
@@ -1577,7 +1580,7 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                         reward_list[key] += val
                 gain_left -= lvl['xp_required']
             _, _, _, xp_rn = await db_query.add_xp(zerp_doc['name'], user_doc['address'], gain_left,
-                                             ascended=ascended or ascend)
+                                                   ascended=ascended or ascend)
             fn = getattr(db_query, f"add_{item}") if item != 'lure_cnt' else db_query.add_zerp_lure
             await fn(user_doc['address'], -cnt)
             if dec_idx:
@@ -1711,8 +1714,8 @@ async def loan_listing(interaction: nextcord.Interaction, zerpmon, price, in_xrp
                 view=View())
             return
         listed = await db_query.list_for_loan(zerp, zerpmon, user_d['offer'], str(user.id),
-                                        user.name, addr, price, active_for, max_days=max_days, min_days=min_days,
-                                        xrp=in_xrp)
+                                              user.name, addr, price, active_for, max_days=max_days, min_days=min_days,
+                                              xrp=in_xrp)
         if listed:
             await db_query.inc_loan_burn(zrp_value)
             if addr not in config.loaners:
@@ -1734,8 +1737,9 @@ async def loan_marketplace_callback(interaction: nextcord.Interaction, page=1, f
     user = interaction.user
     filters = {} if filters is None else filters
     count, listings = await db_query.get_loan_listings(page_no=page, search_type=filters.get('search_type', ''),
-                                                 xrp=filters.get('xrp', None), listed_by=filters.get('listed_by', ''),
-                                                 price=filters.get('price', None))
+                                                       xrp=filters.get('xrp', None),
+                                                       listed_by=filters.get('listed_by', ''),
+                                                       price=filters.get('price', None))
     embed = CustomEmbed(title='Loan Marketplace', description=f'Total listings **{count}**',
                         color=0xe0ffcd)
     view = View(timeout=180, auto_defer=True)
@@ -1865,8 +1869,9 @@ async def initiate_loan(interaction: nextcord.Interaction, listing):
                                         token=listing['token_id'])
             if accepted:
                 loaned = await db_query.update_loanee(listing['zerp_data'], listing['serial'],
-                                                {'id': user_obj['discord_id'], 'username': i.user.name,
-                                                 'address': addr}, days, amount_total=amount - listing['per_day_cost'])
+                                                      {'id': user_obj['discord_id'], 'username': i.user.name,
+                                                       'address': addr}, days,
+                                                      amount_total=amount - listing['per_day_cost'])
                 if loaned:
                     if listing['xrp']:
                         await send_txn(loaner_obj['address'], amount / days, 'loan',
@@ -1976,8 +1981,9 @@ async def cancel_loan(interaction: nextcord.Interaction, listing: dict, is_listi
             sent = await send_fn(addr, listing['amount_pending'], 'loan')
             if sent:
                 ack = await db_query.update_loanee(listing['zerp_data'], listing['serial'],
-                                             {'id': None, 'username': None, 'address': None}, days=0, amount_total=0,
-                                             loan_ended=True, discord_id=listing['accepted_by']['id'])
+                                                   {'id': None, 'username': None, 'address': None}, days=0,
+                                                   amount_total=0,
+                                                   loan_ended=True, discord_id=listing['accepted_by']['id'])
                 if ack:
                     await send_nft('loan', listing['listed_by']['address'], listing['token_id'])
                     await send_zrp(listing['listed_by']['address'], amount, 'loan')

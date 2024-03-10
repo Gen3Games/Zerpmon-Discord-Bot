@@ -153,8 +153,8 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
                  'new_b2': z2_blue_percent}
 
     for eq1_lower in eq1_lower_list:
-        if ('opponent miss chance' in eq1_lower and z1.get('eq_applied', '') != z2['name']) or (
-                'eq_applied' not in z1 and 'miss chance' in eq1_lower):
+        if ('opponent miss chance' in eq1_lower and z1.get('eq_applied_m', '') != z2['name']) or (
+                'eq_applied_m' not in z1 and 'miss chance' in eq1_lower):
             # if 'own miss chance' in eq1_lower:
             #     match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             #     buffer_m = (int(float(match.group())) if match is not None else 0)
@@ -163,10 +163,10 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
             # if z1['buffer_miss'] < 0:
             #     z1['buffer_miss'] = 0
             if not rage or 'oppo' not in eq1_lower:
-                z1['eq_applied'] = z2['name']
+                z1['eq_applied_m'] = z2['name']
                 status_affects[0].append(eq1_lower)
         elif ('opponent blue chance' in eq1_lower and z1.get('op_eq_applied', '') != z2['name']) or \
-                ('eq_applied' not in z1 and 'own blue chance' in eq1_lower):
+                (z2.get('eq_applied', '') != z1['name'] not in z1 and 'own blue chance' in eq1_lower):
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             percent_c = float(match.group()) if match is not None else 0
             if 'oppo' in eq1_lower:
@@ -175,7 +175,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
             else:
                 # z1['eq_applied'] = z2['name']
                 blue_dict['new_b1'] += percent_c
-                z1['eq_applied'] = ''
+                z1['eq_applied'] = z1['name']
         else:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq1_lower)
             eq_val = int(float(match.group())) if match is not None else 0
@@ -187,8 +187,8 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
                     val *= -1
                 dmg_f1 += val
     for eq2_lower in eq2_lower_list:
-        if ('opponent miss chance' in eq2_lower and z2.get('eq_applied', '') != z1['name']) or (
-                'eq_applied' not in z2 and 'miss chance' in eq2_lower):
+        if ('opponent miss chance' in eq2_lower and z2.get('eq_applied_m', '') != z1['name']) or (
+                'eq_applied_m' not in z2 and 'miss chance' in eq2_lower):
             # if 'own miss chance' in eq2_lower:
             #     match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             #     buffer_m = (int(float(match.group())) if match is not None else 0)
@@ -196,10 +196,10 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
             # z2['buffer_miss'] = (int(float(match.group())) if match is not None else 0) - float(z2_moves[-1]['percent'])
             # if z2['buffer_miss'] < 0:
             #     z2['buffer_miss'] = 0
-            z2['eq_applied'] = z1['name']
+            z2['eq_applied_m'] = z1['name']
             status_affects[1].append(eq2_lower)
         elif ('opponent blue chance' in eq2_lower and z2.get('op_eq_applied', '') != z1['name']) or \
-                ('eq_applied' not in z2 and 'own blue chance' in eq2_lower):
+                (z2.get('eq_applied', '') != z1['name'] and 'own blue chance' in eq2_lower):
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             percent_c = float(match.group()) if match is not None else 0
             if 'oppo' in eq2_lower:
@@ -208,7 +208,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
             else:
                 # z2['eq_applied'] = z1['name']
                 blue_dict['new_b2'] += percent_c
-                z2['eq_applied'] = ''
+                z2['eq_applied'] = z1['name']
         else:
             match = re.search(r'\b(\d+(\.\d+)?)\b', eq2_lower)
             eq_val = int(float(match.group())) if match is not None else 0

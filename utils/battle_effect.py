@@ -159,7 +159,7 @@ async def update_array(arr, index, value, own=False, is_boss=False, index2=None)
     remaining_value = -value
 
     if value < 0 and abs(value) > arr[index]:
-        if own and index == len(arr) - 1:
+        if own and index == 7:
             buffer_miss += remaining_value - arr[index]
         remaining_value = arr[index]
     print(f'here: {remaining_value, value, buffer_miss, arr}')
@@ -171,6 +171,8 @@ async def update_array(arr, index, value, own=False, is_boss=False, index2=None)
             remaining_value = 70 - arr[-1]
         arr[index] -= remaining_value
         arr[-1] += remaining_value
+        if buffer_miss > 0:
+            arr[-1] -= buffer_miss
         print('ARR RET: ', arr)
         return arr
 

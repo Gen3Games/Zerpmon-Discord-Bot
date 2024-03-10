@@ -463,10 +463,10 @@ async def reward_user(total_matches, addr, zerpmon_name, double_xp=False, lvl=1,
     res2 = "", None, 0, 0
     candy = None
     if reward == "revive_potion":
-        res2 = await db_query.add_revive_potion(user_address, 1), "Revive Potion", 1, 0
+        res2 = True, "Revive Potion", 1, 0
         candy = 'revive_potion'
     elif reward == "mission_refill":
-        res2 = await db_query.add_mission_potion(user_address, 1), "Mission Potion", 1, 0
+        res2 = True, "Mission Potion", 1, 0
         candy = 'mission_potion'
     elif reward == "zerpmon":
         if (lvl > 10 and xp_mode is None) or xp_mode:
@@ -489,6 +489,9 @@ async def reward_user(total_matches, addr, zerpmon_name, double_xp=False, lvl=1,
         res1 = (await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_address, amount_to_send, xp_gain, candy=candy)),\
                "XRP", amount_to_send, 0
         responses.append(res1)
+    elif candy is not None:
+        await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_address, 0, xp_gain,
+                                       candy=candy)
     # return None, "XRP", amount_to_send, 0
     responses.append(res2)
     return responses
@@ -1078,7 +1081,7 @@ async def get_latest_nft_offers(address):
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
 # asyncio.run(send_zrp('rGnBUCwMJSX57QDecdyT5drdG3gvsmVqxD', 2.5, 'loan'))
 # asyncio.run(send_zrp('rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', 5.56, 'tower'))
-# asyncio.run(send_zrp('r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', 48.78, 'safari'))
+# asyncio.run(send_zrp('r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM', 10, 'safari'))
 # asyncio.run(send_txn(config.JACKPOT_ADDR, 1, 'store'))
 # asyncio.run(send_txn('rsTwpXdRU4JitSUkYcVhnmXsoG5PVjJvYz', 1, 'loan'))
 

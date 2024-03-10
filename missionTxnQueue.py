@@ -13,7 +13,7 @@ from xrpl.wallet import Wallet
 from pymongo import MongoClient
 import config
 
-logging.basicConfig(filename='safariTxnQueue.log', level=logging.DEBUG,
+logging.basicConfig(filename='missionTxnQueue.log', level=logging.ERROR,
                     format='%(asctime)s %(levelname)s %(module)s %(funcName)s %(message)s %(lineno)d')
 
 db_client = MongoClient(config.MONGO_URL)
@@ -46,6 +46,16 @@ def get_txn_log():
 def update_txn_log(_id, doc):
     txn_log_col = db['mission-txn-queue']
     res = txn_log_col.update_one({'_id': _id}, {'$set': doc})
+    return res.acknowledged
+
+
+def mark_txn_candy(_id, set_fulfilled):
+    txn_log_col = db['mission-txn-queue']
+    q = {'candy': None}
+    if set_fulfilled:
+        q['status'] = 'fulfilled'
+        q['hash'] = ''
+    res = txn_log_col.update_one({'_id': _id}, {'$set': q})
     return res.acknowledged
 
 
@@ -109,9 +119,9 @@ async def send_nft(from_, to_address, token_id):
                     # node = [i for i in nodes if
                     #         'CreatedNode' in i and i['CreatedNode']['LedgerEntryType'] == 'NFTokenOffer']
                     # offer = node[0]['CreatedNode']['LedgerIndex']
-                    logging.info(response.result)
+                    logging.error(response.result)
                     offer = meta['offer_id']
-                    logging.info(f'Created NFT offer with offerID: {offer}')
+                    logging.error(f'Created NFT offer with offerID: {offer}')
                     return True, offer, response.result['hash']
 
                 elif meta['TransactionResult'] in ["tefPAST_SEQ"]:
@@ -222,31 +232,36 @@ async def get_balance(address):
         except Exception as e:
             logging.error(f"Balance Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
-
+        logging.error(f"Retrying bal request")
     return bal
 
 
 async def add_potion(address, key):
     users_collection = db['users']
-    res = users_collection.update_one({'address': str(address)},
+    res = users_collection.update_one({'address': address},
                                             {'$inc': {key: 1}})
     return res.acknowledged
 
 
 async def main():
-    bal = await get_balance(config.REWARDS_ADDR)
-    amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
-    update_mission_stats(amount_to_send)
+    global ws_client
+    last_check = -1
     while True:
         try:
             queued_txns = get_txn_log()
+            if time.time() - last_check > 120:
+                async with AsyncWebsocketClient(URL) as client:
+                    ws_client = client
+                    bal = await get_balance(config.REWARDS_ADDR)
+                    amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
+                    update_mission_stats(amount_to_send)
+                    last_check = time.time()
             if len(queued_txns) == 0:
                 if int(time.time()) % 10 == 0:
-                    logging.info(f'No Txn found')
+                    logging.error(f'No Txn found')
                 time.sleep(2)
             else:
                 async with AsyncWebsocketClient(URL) as client:
-                    global ws_client
                     ws_client = client
                     for txn in queued_txns:
                         _id = txn['_id']
@@ -265,10 +280,13 @@ async def main():
                                     inc_retry_cnt(_id)
                             elif txn['type'] == 'Payment':
                                 amt = txn['amount']
-                                if amt == 0:
-                                    continue
                                 if txn.get('candy'):
                                     await add_potion(txn['destination'], txn.get('candy'))
+                                    print('added')
+                                    # mark_txn_candy(_id, amt == 0)
+                                if amt == 0:
+                                    mark_txn_candy(_id, True)
+                                    continue
                                 bal -= amt
                                 success, hash_ = await send_txn(txn['destination'], amt, txn['from'], )
                                 # success, hash_ = True, 'x'
