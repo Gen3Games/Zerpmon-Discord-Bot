@@ -7,14 +7,12 @@ import config
 
 async def remove_effects(p, _p, eq_list, z1=None, z2=None):
     z = z1 if z1 else z2
+    print(z['name'], eq_list)
     for eq1_lower in eq_list:
         if 'opponent miss chance' in eq1_lower:
             b = eq1_lower.replace('opponent', 'own').replace('increase', 'decrease')
             buffs = [[], []]
-            if z2:
-                buffs[1].append(b)
-            else:
-                buffs[0].append(b)
+            buffs[0].append(b)
             p, _p, _, __ = await apply_status_effects(p, _p, buffs)
         # elif 'opponent blue chance' in eq1_lower:
         #     try:

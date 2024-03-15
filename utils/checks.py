@@ -339,7 +339,7 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
                 f"**{owned_nfts['user']}** you haven't set your Trainer in default gym deck, "
                 f"please set it and try again", ephemeral=True)
             return False
-        elif len([i for i, j in def_deck.items() if j]) == 0:
+        elif len([i for i, j in def_deck.items() if j]) - 1 == 0:
             await interaction.send(
                 f"**{owned_nfts['user']}** your default gym deck contains 0 Zerpmon, "
                 f"need 1 to do Gym battles.", ephemeral=True)

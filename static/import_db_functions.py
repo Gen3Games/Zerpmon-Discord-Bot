@@ -9,10 +9,12 @@ from pymongo import ReturnDocument
 
 import config
 
-client = pymongo.MongoClient(config.MONGO_URL)
-# client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
+# client = pymongo.MongoClient(config.MONGO_URL)
+client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
 db = client['Zerpmon']
 print([i['name'] for i in db.list_collections()])
+
+
 # exit(1)
 # users_c = db['users']
 
@@ -160,7 +162,7 @@ def import_moves(col_name):
             if col_name == 'MoveList':
                 if 'turn' in row[5]:
                     continue
-            collection.update_one({'move_name': row[1]}, {'$set':{
+            collection.update_one({'move_name': row[1]}, {'$set': {
                 'move_id': row[0],
                 'move_name': row[1],
                 'type': row[2],
@@ -241,21 +243,29 @@ def import_movesets():
                     # 'collection': row[2],
                     'moves': [
                         {'name': row[4], 'dmg': int(row[5]) if row[5] != "" else "", 'type': row[6], 'id': row[7],
-                         'percent': float(row[8].replace("%", "")), 'color': header[3], 'melee': movelist_col.find_one({'move_name': row[4]}, {'_id': 0, 'melee': 1}).get('melee')},
+                         'percent': float(row[8].replace("%", "")), 'color': header[3],
+                         'melee': movelist_col.find_one({'move_name': row[4]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[9], 'dmg': int(row[10]) if row[10] != "" else "", 'type': row[11], 'id': row[12],
-                         'percent': float(row[13].replace("%", "")), 'color': header[8], 'melee': movelist_col.find_one({'move_name': row[9]}, {'_id': 0, 'melee': 1}).get('melee')},
+                         'percent': float(row[13].replace("%", "")), 'color': header[8],
+                         'melee': movelist_col.find_one({'move_name': row[9]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[14], 'dmg': int(row[15]) if row[15] != "" else "", 'type': row[16], 'id': row[17],
-                         'percent': float(row[18].replace("%", "")), 'color': header[13], 'melee': movelist_col.find_one({'move_name': row[14]}, {'_id': 0, 'melee': 1}).get('melee')},
+                         'percent': float(row[18].replace("%", "")), 'color': header[13],
+                         'melee': movelist_col.find_one({'move_name': row[14]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[19], 'dmg': int(row[20]) if row[20] != "" else "", 'type': row[21], 'id': row[22],
-                         'percent': float(row[23].replace("%", "")), 'color': header[18], 'melee': movelist_col.find_one({'move_name': row[19]}, {'_id': 0, 'melee': 1}).get('melee')},
+                         'percent': float(row[23].replace("%", "")), 'color': header[18],
+                         'melee': movelist_col.find_one({'move_name': row[19]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[24], 'stars': row[25], 'id': row[26], 'percent': float(row[27].replace("%", "")),
-                         'color': header[23], 'melee': movelist_col.find_one({'move_name': row[24]}, {'_id': 0, 'melee': 1}).get('melee')},
+                         'color': header[23],
+                         'melee': movelist_col.find_one({'move_name': row[24]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[28], 'stars': row[29], 'id': row[30], 'percent': float(row[31].replace("%", "")),
-                         'color': header[27], 'melee': movelist_col.find_one({'move_name': row[28]}, {'_id': 0, 'melee': 1}).get('melee')},
+                         'color': header[27],
+                         'melee': movelist_col.find_one({'move_name': row[28]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': row[32], 'id': row[33], 'percent': float(row[34].replace("%", "")),
-                         'color': header[31], 'melee': movelist_col.find_one({'move_name': row[32]}, {'_id': 0, 'melee': 1}).get('melee')},
+                         'color': header[31],
+                         'melee': movelist_col.find_one({'move_name': row[32]}, {'_id': 0, 'melee': 1}).get('melee')},
                         {'name': 'Miss', 'id': row[36], 'percent': float(row[37].replace("%", "")),
-                         'color': header[34], 'melee': movelist_col.find_one({'move_name': 'Miss'}, {'_id': 0, 'melee': 1}).get('melee')},
+                         'color': header[34],
+                         'melee': movelist_col.find_one({'move_name': 'Miss'}, {'_id': 0, 'melee': 1}).get('melee')},
                     ],
 
                     'move_types': list(move_types),
@@ -286,7 +296,7 @@ def import_movesets():
                 # }
                 collection.update_one({'name': row[1]}, {'$unset': {'moves': ''}})
                 collection.update_one({'name': row[1]}, {'$set': doc, '$setOnInsert': {'attributes': None,
-                    'image': None,}}, upsert=True)
+                                                                                       'image': None, }}, upsert=True)
                 # c2.insert_one(document=doc)
             except Exception as e:
                 print(e, '\n', row)
@@ -420,7 +430,8 @@ def clean_attrs():
     c2 = db['MoveSets2']
     c2.drop()
     for doc in zerpmon_collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
-                                            'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0}):
+                                            'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0,
+                                            'winrate': 0}):
         if doc['nft_id']:
             c2.insert_one(doc)
 
@@ -564,7 +575,7 @@ def cache_data():
         db['nft-uri-cache'].insert_many([i for k, i in tba.items()])
         collection = db['MoveSets']
         for nft in collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
-                                            'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0}):
+                                        'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0}):
             is_present = db['MoveSets2'].find_one({'name': nft['name']})
             if is_present is None:
                 if nft.get('nft_id') is None:
@@ -575,7 +586,8 @@ def cache_data():
                         image = found['metadata']['image']
                         nft['attributes'] = attrs
                         nft['image'] = image
-                        db['MoveSets'].update_one({'name': nft['name']}, {'$set': {'nft_id':found['nftid'], 'attributes': attrs, 'image': image}}, upsert=True)
+                        db['MoveSets'].update_one({'name': nft['name']}, {
+                            '$set': {'nft_id': found['nftid'], 'attributes': attrs, 'image': image}}, upsert=True)
                     else:
                         continue
                     # collection.update_one({'name': nft['name']}, {'$set': {'nft_id': found['nftid']}})
@@ -678,6 +690,45 @@ def clear_slot_reward():
                                    {'$inc': {'white_candy': candy_white, 'gold_candy': candy_gold}})
 
 
+def add_gym_level_buffs():
+    gym_level_c = db['gym_buffs']
+    gym_dmg_buff = {1: 0, 2: 0, 3: 0, 4: 10, 5: 20, 6: 30, 7: 30, 8: 40, 9: 50, 10: 60,
+                    11: 60, 12: 70, 13: 70, 14: 80, 15: 90, 16: 100, 17: 100, 18: 100, 19: 100, 20: 125}
+    for i in range(20):
+        stage = i + 1
+        buff_obj = {
+            'stage': stage,
+            'zerpmonLevel': 1 if stage == 1 else (15 if stage == 2 else 30),
+            'dmgBuffPercent': gym_dmg_buff[stage],
+            'trainerBuff': True if stage > 12 else False,
+            'critBuffPercent': 25 if stage == 17 else (50 if stage == 18 else (70 if stage in [19, 20] else 0)),
+            'equipment1': 'gymType' if stage > 6 else None,
+            'equipment2': 'Tattered Cloak' if stage > 10 else None
+        }
+        gym_level_c.update_one({
+            'stage': stage
+        }, {'$set': buff_obj}, upsert=True
+        )
+
+
+def add_gym_trainers():
+    gym_c = db['gym_zerp']
+    for type_, leader in config.LEADER_NAMES.items():
+        gym_c.update_one({
+            'name': type_ + ' Gym Leader'
+        }, {'$set': {
+            'trainer': {
+                "nft_id": '',
+                "image": '',
+                "name": leader,
+                "type": type_
+            }
+        }}, upsert=True
+        )
+
+
+add_gym_level_buffs()
+add_gym_trainers()
 # gift_ascension_reward()
 # switch_cached()
 # import_boxes()

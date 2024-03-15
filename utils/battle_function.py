@@ -1377,7 +1377,9 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name, battle_log['teamA'],
                                    battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
         # Save user's match
-        await db_query.reset_gym(_data1['discord_id'], _data1['gym'] if 'gym' in _data1 else {}, gym_type, lost=True)
+        await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 1) if 'gym' in _data1 else 1,
+                                    0)
+        await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=True)
         await asyncio.sleep(1)
         return 2
     elif len(user2_zerpmons) == 0:
@@ -1387,7 +1389,8 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name, battle_log['teamA'],
                                    battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
 
-        await db_query.add_gp(_data1['discord_id'], _data1['gym'] if 'gym' in _data1 else {}, gym_type, stage)
+        zrp_reward = await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 1) if 'gym' in _data1 else 1, stage)
+        await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=False)
         embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
                             description=f"{user_mention} vs {leader_name} {config.TYPE_MAPPING[gym_type]}")
 
@@ -1401,21 +1404,21 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
             inline=False)
         embed.add_field(name=f'Total', value=total_gp,
                         inline=False)
-        response, qty, reward = await xrpl_ws.reward_gym(_data1['discord_id'], stage)
-        if reward == "ZRP":
-            embed.add_field(name=f"{reward}" + ' Won', value=qty, inline=True)
+        # response, qty, reward = await xrpl_ws.reward_gym(_data1['discord_id'], stage)
+        # if reward == "ZRP":
+        embed.add_field(name='ZRP Won', value=zrp_reward, inline=True)
         await msg_hook.send(
             f"**WINNER**   👑**{user_mention}**👑", embed=embed, ephemeral=True)
         await asyncio.sleep(1)
-        if not response:
-
-            await interaction.send(
-                f"**Failed**, something went wrong.",
-                ephemeral=True)
-        else:
-            await interaction.send(
-                f"**Successfully** sent `{qty}` {reward}",
-                ephemeral=True)
+        # if not response:
+        #
+        #     await interaction.send(
+        #         f"**Failed**, something went wrong.",
+        #         ephemeral=True)
+        # else:
+        await interaction.send(
+            f"**Successfully** added transaction to queue (`{zrp_reward}` ZRP)",
+            ephemeral=True)
         return 1
 
 
