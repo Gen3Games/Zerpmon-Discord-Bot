@@ -1161,6 +1161,10 @@ async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, res
             'active_t': 0,
             'gp': 0
         }
+        await users_collection.update_one(
+            {'discord_id': str(discord_id)},
+            {'$set': {'gym': gym_obj}}
+        )
     else:
         if 'won' not in gym_obj:
             gym_obj['won'] = {}
@@ -1176,43 +1180,73 @@ async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, res
                 gym_obj['won'][gym_type]['next_battle_t'] if gym_type in gym_obj['won'] else 0),
             'lose_streak': 0 if reset else (l_streak if skipped or lost else l_streak - 1)
         }
-    await users_collection.update_one(
-        {'discord_id': str(discord_id)},
-        {'$set': {'gym': gym_obj}}
+        await users_collection.update_one(
+            {'discord_id': str(discord_id)},
+            {'$set': {'gym.won': gym_obj['won']}}
+        )
+
+
+async def add_gp_queue(address, match_cnt, gp):
+    uid = f'gym-{address}-{match_cnt}'
+    amt = round(gp/2, 2)
+    queue_query = {
+        'uniqueId': uid,
+        'type': 'Payment',
+        'destination': address,
+        'from': 'gym',
+        'status': 'pending',
+        'amount': amt,
+        'currency': 'ZRP',
+        'gp': gp
+    }
+    await db['general-txn-queue'].update_one(
+        {'uniqueId': uid},
+        {'$setOnInsert': queue_query},
+        upsert=True
     )
+    return amt
 
 
-async def add_gp(discord_id, gym_obj, gym_type, stage):
+async def update_gym_won(discord_id, gym_obj, gym_type, stage, lost=False):
     users_collection = db['users']
+    if lost:
+        n_stage = stage
+        reset_t = await get_next_ts(1)
+    else:
+        n_stage = stage + 1
+        reset_t = min(config.gym_main_reset, (await get_next_ts(3)))
     if gym_obj == {}:
         gym_obj = {
             'won': {
                 gym_type: {
-                    'stage': 2,
-                    'next_battle_t': config.gym_main_reset,
-                    'lose_streak': 0
+                    'stage': n_stage,
+                    'next_battle_t': reset_t,
+                    'lose_streak': 1 if lost else 0
                 }
             },
             'active_t': 0,
-            'gp': 1
+            'match_cnt': 2
         }
+        await users_collection.update_one(
+            {'discord_id': str(discord_id)},
+            {'$set': {'gym': gym_obj}, '$inc': {'gym.match_cnt': 1}}
+        )
     else:
         if 'won' not in gym_obj:
             gym_obj['won'] = {}
-        if 'gp' not in gym_obj:
-            gym_obj['gp'] = 0
         if stage + 1 >= 11:
             await log_user_gym(discord_id, gym_type, stage)
         gym_obj['won'][gym_type] = {
-            'stage': stage + 1 if stage < 20 else 1,
-            'next_battle_t': config.gym_main_reset,
-            'lose_streak': 0
+            'stage': n_stage if n_stage <= 20 else 1,
+            'next_battle_t': reset_t,
+            'lose_streak': gym_obj['won'].get(gym_type, {}).get('lose_streak', 0) + 1 if lost else 0
         }
         gym_obj['gp'] += stage
-    await users_collection.update_one(
-        {'discord_id': str(discord_id)},
-        {'$set': {'gym': gym_obj}}
-    )
+        await users_collection.update_one(
+            {'discord_id': str(discord_id)},
+            {'$set': {f'gym.won.{gym_type}': gym_obj['won'][gym_type]},
+             '$inc': {'gym.match_cnt': 1}}
+        )
 
 
 async def get_gym_leaderboard(user_id):
