@@ -22,7 +22,7 @@ async def check_and_reset_store():
 async def update_nft_holdings(client: nextcord.Client):
     while True:
         await asyncio.sleep(10)
-        await check_and_reset_store()
+        # await check_and_reset_store()
         all_users = await db_query.get_all_users()
         guilds = client.guilds
 
