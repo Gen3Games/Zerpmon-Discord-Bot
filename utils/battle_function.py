@@ -228,11 +228,13 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
     path1 = f"./static/images/{z1_obj['name']}.png"
     path2 = f"./static/images/vs.png"
     path3 = f"./static/images/{z2_obj['name']}.png"
+    z1_asc = z1_obj.get("ascended", False)
+    z2_asc = z2_obj.get("ascended", False)
 
     url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
     main_embed.add_field(
         name=f"{z1_obj['name2']} ({', '.join(z1_type)})\t`{w_candy1}x🍬\t{g_candy1}x🍭`\t" + (
-            f' (**Ascended** ☄️)' if z1_obj.get("ascended", False) else ''),
+            f' (**Ascended** ☄️)' if z1_asc else ''),
         value=f"{config.TYPE_MAPPING[buffed_zerp1]} **Trainer buff**" if buffed_zerp1 != '' else "\u200B",
         inline=False)
     if eq1_note != {}:
@@ -267,7 +269,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
     url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
     main_embed.add_field(
         name=f"{z2['name2']} ({', '.join(z2_type)})\t`{w_candy2}x🍬\t{g_candy2}x🍭`\t" + (
-            f' (**Ascended** ☄️)' if z2_obj.get("ascended", False) else ''),
+            f' (**Ascended** ☄️)' if z2_asc else ''),
         value=f"{config.TYPE_MAPPING[buffed_zerp2]} **Trainer buff**" if buffed_zerp2 != '' else "\u200B",
         inline=False)
     if eq2_note != {}:
@@ -306,7 +308,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
             inline=True)
 
     await gen_image(message.id, url1, url2, path1, path2, path3, gym_bg=gym_bg, eq1=z1.get('buff_eq', None),
-              eq2=z2.get('buff_eq', None))
+              eq2=z2.get('buff_eq', None), zerp_ascension=[z1_asc, z2_asc] if z1_asc or z2_asc else None)
 
     file = nextcord.File(f"{message.id}.png", filename="image.png")
     main_embed.set_image(url=f'attachment://image.png')
@@ -316,7 +318,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
     return main_embed, file, p1, p2, eq1_lower_list, eq2_lower_list, blue_dict
 
 
-async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None, ascend=False):
+async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None, ascend=False, zerp_ascension=None):
     if gym_bg and gym_bg is not None:
         bg_img = Image.open(gym_bg)
     elif ascend:
@@ -348,6 +350,12 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
         extra_img2 = Image.open(f"./static/images/_eq/{eq2}.png")
         extra_img2 = extra_img2.resize((400, 400))
         img3.paste(extra_img2, (1200 - 580, 1250 - 580), mask=extra_img2)
+    if zerp_ascension:
+        extra_img1 = Image.open(f"./static/images/_ascension.png")
+        if zerp_ascension[0]:
+            img1.paste(extra_img1, (1200 - 420, 0), mask=extra_img1)
+        if zerp_ascension[1]:
+            img3.paste(extra_img1, (1200 - 420, 0), mask=extra_img1)
     # Create new images with 1/10th of the original size
 
     # Create a new RGBA image with the size of the background image
@@ -1377,7 +1385,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name, battle_log['teamA'],
                                    battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
         # Save user's match
-        await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 1) if 'gym' in _data1 else 1,
+        await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1,
                                     0)
         await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=True)
         await asyncio.sleep(1)
@@ -1389,7 +1397,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name, battle_log['teamA'],
                                    battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
 
-        zrp_reward = await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 1) if 'gym' in _data1 else 1, stage)
+        zrp_reward = await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1, stage)
         await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=False)
         embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
                             description=f"{user_mention} vs {leader_name} {config.TYPE_MAPPING[gym_type]}")
