@@ -1,8 +1,13 @@
+import asyncio
+import os
+import random
 import time
 import csv
 import nextcord
 import datetime
 import pytz
+import requests
+
 import config
 import db_query
 from db_query import get_owned
@@ -10,6 +15,7 @@ from utils import battle_function, callback
 from globals import CustomEmbed
 from nextcord import ButtonStyle
 from nextcord.ui import Button, View
+from PIL import Image
 
 
 def convert_timestamp_to_hours_minutes(timestamp):
@@ -556,3 +562,87 @@ async def verify_gym_tower(i: nextcord.Interaction, temp_user_d):
                     f" ❗ **Upcoming Battle** ❗ {gym_t} Leader **{config.LEADER_NAMES[gym_t]}**", embeds=[embed, embed2],)
         return False
     return True
+
+
+async def get_battle_results(global_dict):
+    while True:
+        if len(global_dict) > 0:
+            results = await db_query.retrieve_battle_results()
+            for result in results:
+                global_dict[result['uid']] = result
+                config.stale_results.append(result['uid'])
+        await asyncio.sleep(0.2)
+        await db_query.delete_battle_results(config.stale_results)
+        config.stale_results = []
+
+
+async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None, ascend=False, zerp_ascension=None):
+    if gym_bg and gym_bg is not None:
+        bg_img = Image.open(gym_bg)
+    elif ascend:
+        bg_img = Image.open(f'./static/bgs/ascend.png')
+    else:
+        randomImage = f'BattleBackground{random.randint(1, 68)}.png'
+        # Load the background image and resize it
+        bg_img = Image.open(f'./static/bgs/{randomImage}')
+    bg_img = bg_img.resize((2560, 1600))  # desired size
+
+    # Load the three images
+    await download_image(url1, path1)
+    await download_image(url2, path3)
+
+    img1 = Image.open(path1)
+    if not ascend:
+        img2 = Image.open(path2)
+    img3 = Image.open(path3)
+
+    img1 = img1.resize((1200, 1200))
+    img3 = img3.resize((1200, 1200))
+
+    if eq1:
+        extra_img1 = Image.open(f"./static/images/_eq/{eq1}.png")
+        extra_img1 = extra_img1.resize((400, 400))
+        # Paste the extra images at the top right corner of img1 and img2
+        img1.paste(extra_img1, (1200 - 580, 1250 - 580), mask=extra_img1)
+    if eq2:
+        extra_img2 = Image.open(f"./static/images/_eq/{eq2}.png")
+        extra_img2 = extra_img2.resize((400, 400))
+        img3.paste(extra_img2, (1200 - 580, 1250 - 580), mask=extra_img2)
+    if zerp_ascension:
+        extra_img1 = Image.open(f"./static/images/_ascension.png")
+        if zerp_ascension[0]:
+            img1.paste(extra_img1, (1200 - 420, 0), mask=extra_img1)
+        if zerp_ascension[1]:
+            img3.paste(extra_img1, (1200 - 420, 0), mask=extra_img1)
+    # Create new images with 1/10th of the original size
+
+    # Create a new RGBA image with the size of the background image
+    combined_img = Image.new('RGBA', bg_img.size, (0, 0, 0, 0))
+
+    # Paste the background image onto the new image
+    combined_img.paste(bg_img, (0, 0))
+
+    # Paste the three images onto the new image
+    combined_img.paste(img1, (50, 100), mask=img1)  # adjust the coordinates as needed
+    if not ascend:
+        combined_img.paste(img2, (1150, 200), mask=img2)
+    combined_img.paste(img3, (1350, 100), mask=img3)
+
+    # Resize the combined image to be 50% of its original size
+    new_width = int(combined_img.width * 0.5)
+    new_height = int(combined_img.height * 0.5)
+    smaller_img = combined_img.resize((new_width, new_height))
+
+    # Save the final image
+    smaller_img.save(f'{_id}.png', quality=50)
+
+
+async def download_image(url, path_to_file):
+    if os.path.isfile(path_to_file):
+        # print(f"{path_to_file} already exists, skipping download.")
+        pass
+    else:
+        response = requests.get(url)
+        with open(path_to_file, 'wb') as f:
+            f.write(response.content)
+        print(f"Downloaded {path_to_file}.")

@@ -489,7 +489,7 @@ async def reward_user(total_matches, addr, zerpmon_name, double_xp=False, lvl=1,
         res1 = (await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_address, amount_to_send, xp_gain, candy=candy)),\
                "XRP", amount_to_send, 0
         responses.append(res1)
-    elif candy is not None:
+    else:
         await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_address, 0, xp_gain,
                                        candy=candy)
     # return None, "XRP", amount_to_send, 0
