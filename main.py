@@ -117,7 +117,8 @@ new_loop = asyncio.new_event_loop()
 # start a new thread to run the event loop
 t = threading.Thread(target=start_loop, args=(new_loop,))
 t.start()
-task1, task2 = None, None
+task1, task2, task3 = None, None, None
+
 
 new_loop.call_soon_threadsafe(new_loop.create_task, xrpl_ws.main())
 
@@ -132,9 +133,10 @@ def check_and_restart(task_handle: asyncio.Task, fn, arg):
 
 
 async def setup_tasks():
-    global task1, task2
+    global task1, task2, task3
     task1 = check_and_restart(task1, nft_holding_updater.update_nft_holdings, client)
     task2 = check_and_restart(task2, reset_alert.send_reset_message, client)
+    task2 = check_and_restart(task3, checks.get_battle_results, config.battle_results)
 
 
 class CustomEmbed(nextcord.Embed):
