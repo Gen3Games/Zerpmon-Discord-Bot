@@ -6,6 +6,7 @@ import random
 import sys
 import time
 import traceback
+import uuid
 
 from utils import battle_effect
 import pymongo
@@ -257,10 +258,16 @@ async def get_user(address, db_sep=None):
     return result
 
 
-async def get_move(name):
+async def get_move(name, stars=0):
     # print(name)
 
     result = await move_collection.find_one({"move_name": name})
+    if stars > 0 and result and stars > result['stars']:
+        new_move = await db['PurpleEffectList'].find_one(
+            {'purple_id': result['purple_id'] + stars - result['stars']},
+            {'_id': 0, 'notes': 1}
+        )
+        result['notes'] = '\n'.join(new_move.get('notes'))
 
     # print(f"Found move {result}")
 
@@ -1225,11 +1232,11 @@ async def update_gym_won(discord_id, gym_obj, gym_type, stage, lost=False):
                 }
             },
             'active_t': 0,
-            'match_cnt': 2
+            'match_cnt': 1
         }
         await users_collection.update_one(
             {'discord_id': str(discord_id)},
-            {'$set': {'gym': gym_obj}, '$inc': {'gym.match_cnt': 1}}
+            {'$set': {'gym': gym_obj}}
         )
     else:
         if 'won' not in gym_obj:
@@ -1241,7 +1248,7 @@ async def update_gym_won(discord_id, gym_obj, gym_type, stage, lost=False):
             'next_battle_t': reset_t,
             'lose_streak': gym_obj['won'].get(gym_type, {}).get('lose_streak', 0) + 1 if lost else 0
         }
-        gym_obj['gp'] += stage
+        # gym_obj['gp'] += stage
         await users_collection.update_one(
             {'discord_id': str(discord_id)},
             {'$set': {f'gym.won.{gym_type}': gym_obj['won'][gym_type]},
@@ -2619,3 +2626,40 @@ async def insert_free_mode_stats():
 #         except:
 #             logging.error(f'USER OBJ ERROR: {traceback.format_exc()}')
 # asyncio.run(test(True))
+
+async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission', extraB=None):
+    input_col = db['discord_battle_requests']
+    obj = {
+        'uid': str(uuid.uuid4()),
+        'playerAZerpmons': [],
+        'playerBZerpmons': [],
+        'playerAEquipments': [],
+        'playerBEquipments': [],
+        'playerATrainer': tc1,
+        'playerBTrainer': tc2,
+        'battleType': battle_type,
+        'status': 'pending',
+        'extrabuff': extraB,
+    }
+    for i in zerp_arr1:
+        obj['playerAZerpmons'].append(i['name'])
+        obj['playerAEquipments'].append(i.get('buff_eq'))
+    for i in zerp_arr2:
+        obj['playerBZerpmons'].append(i['name'])
+        obj['playerBEquipments'].append(i.get('buff_eq'))
+
+    input_col.insert_one(obj)
+    config.battle_results[obj['uid']] = None
+    return obj['uid']
+
+
+async def retrieve_battle_results():
+    output_col = db['discord_battle_results']
+    res = await output_col.find({}).to_list(None)
+    return res if res else []
+
+
+async def delete_battle_results(batch_uids):
+    output_col = db['discord_battle_results']
+    res = await output_col.delete_many({'uid': {'$in': batch_uids}})
+    return res.acknowledged
