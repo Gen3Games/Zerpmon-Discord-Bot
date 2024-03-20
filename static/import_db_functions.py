@@ -9,8 +9,8 @@ from pymongo import ReturnDocument
 
 import config
 
-# client = pymongo.MongoClient(config.MONGO_URL)
-client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
+client = pymongo.MongoClient(config.MONGO_URL)
+# client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
 db = client['Zerpmon']
 print([i['name'] for i in db.list_collections()])
 
@@ -145,7 +145,7 @@ def get_effects(effects, entries, l_effect):
 
 
 def import_moves(col_name):
-    with open('Zerpmon_Moves_-_Move_List_090324.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_170324.csv', 'r') as csvfile:
         collection = db[col_name]
         csvreader = csv.reader(csvfile)
         entries = []
@@ -210,7 +210,7 @@ def import_purple_star_ids():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_for_Glad_080324-1.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_170324_for_glad.csv', 'r') as csvfile:
         collection = db['MoveSets']
         movelist_col = db['MoveList']
         # c2 = db['MoveSets2']
@@ -436,6 +436,32 @@ def clean_attrs():
             c2.insert_one(doc)
 
 
+def save_30_level_zerp():
+    zerpmon_collection = db['MoveSets2']
+    c2 = db['MoveSets3']
+    c2.drop()
+    for document in zerpmon_collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
+                                            'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0,
+                                            'winrate': 0}):
+        if document['nft_id']:
+            document['level'] = 30
+            print(document['name'])
+            miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
+            percent_change = 10
+            percent_change = percent_change if percent_change < miss_percent else miss_percent
+            count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
+            print(document)
+            for i, move in enumerate(document['moves']):
+                if move['color'] == 'miss':
+                    move['percent'] = round(float(move['percent']) - percent_change, 2)
+                    document['moves'][i] = move
+                elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
+                    move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
+                    document['moves'][i] = move
+
+            c2.insert_one(document)
+
+
 def save_new_zerpmon(zerpmon):
     zerpmon_collection = db['MoveSets']
     print(zerpmon)
@@ -553,6 +579,16 @@ def cache_data():
     try:
         z_nfts = get_issuer_nfts_data('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME')
         nfts = get_issuer_nfts_data('rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy')
+        # Update trainers col
+        for nft in nfts:
+            obj = {'nft_id': nft['nftokenID'], 'image': nft['metadata']['image'], 'name': nft['metadata']['name']}
+
+            for key in nft['metadata']['attributes']:
+                key, val = key['trait_type'], key['value']
+                obj[key.lower()] = val
+            db['trainers'].update_one({'nft_id': obj['nft_id']}, {'$setOnInsert': obj}, upsert=True)
+            print(obj)
+        # exit(0)
         e_nfts = get_issuer_nfts_data('rEQQ8tTnJm4ECbPv71K9syrHrTJTv6DX3T')
         c_nfts = get_collab_nfts()
         z_nfts.extend(nfts)
@@ -727,23 +763,26 @@ def add_gym_trainers():
         )
 
 
-add_gym_level_buffs()
-add_gym_trainers()
+
 # gift_ascension_reward()
 # switch_cached()
 # import_boxes()
 
-import_moves('MoveList')
-import_moves('MoveList2')
-import_purple_star_ids()
-import_movesets()
+
 # import_level()
 # import_ascend_levels()
 # gift_ascension_reward()
-import_attrs_img()
-clean_attrs()
-cache_data()
-update_all_zerp_moves()
+
 # import_equipments()
 
-# reset_all_gyms()
+# add_gym_level_buffs()
+# add_gym_trainers()
+# import_moves('MoveList')
+# import_moves('MoveList2')
+# import_purple_star_ids()
+# import_movesets()
+# import_attrs_img()
+# clean_attrs()
+cache_data()
+# update_all_zerp_moves()
+# save_30_level_zerp()
