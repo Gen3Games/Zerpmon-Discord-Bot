@@ -1721,32 +1721,28 @@ async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_te
     battle_log = db['battle_logs']
     bulk_operations = []
     if user1_id is not None:
+        match = {'ts': int(time.time()), 'won': winner == 1, 'opponent': user2_name,
+                                   'battle_type': battle_type,
+                                   'data': {'teamA': user1_team, 'teamB': user2_team}}
         user1_update = UpdateOne(
             {'discord_id': str(user1_id)},
-            {'$push': {'matches': {'ts': int(time.time()), 'won': winner == 1, 'opponent': user2_name,
-                                   'battle_type': battle_type,
-                                   'data': {'teamA': user1_team, 'teamB': user2_team}}}},
+            {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': -10}}},
             upsert=True
         )
         bulk_operations.append(user1_update)
 
     if user2_id is not None:
+        match = {'ts': int(time.time()), 'won': winner == 2, 'opponent': user1_name,
+                                   'battle_type': battle_type,
+                                   'data': {'teamA': user2_team, 'teamB': user1_team}}
         user2_update = UpdateOne(
             {'discord_id': str(user2_id)},
-            {'$push': {'matches': {'ts': int(time.time()), 'won': winner == 2, 'opponent': user1_name,
-                                   'battle_type': battle_type,
-                                   'data': {'teamA': user2_team, 'teamB': user1_team}}}},
+            {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': -10}}},
             upsert=True
         )
         bulk_operations.append(user2_update)
 
     await battle_log.bulk_write(bulk_operations)
-
-    if user1_id is not None:
-        await battle_log.update_one({'discord_id': str(user1_id)}, {'$push': {'matches': {'$each': [], '$slice': -10}}})
-
-    if user2_id is not None:
-        await battle_log.update_one({'discord_id': str(user2_id)}, {'$push': {'matches': {'$each': [], '$slice': -10}}})
 
 
 async def get_battle_log(user1_id):
