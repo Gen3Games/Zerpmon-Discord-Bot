@@ -136,7 +136,7 @@ async def setup_tasks():
     global task1, task2, task3
     task1 = check_and_restart(task1, nft_holding_updater.update_nft_holdings, client)
     task2 = check_and_restart(task2, reset_alert.send_reset_message, client)
-    task2 = check_and_restart(task3, checks.get_battle_results, config.battle_results)
+    task3 = check_and_restart(task3, checks.get_battle_results, config.battle_results)
 
 
 class CustomEmbed(nextcord.Embed):
