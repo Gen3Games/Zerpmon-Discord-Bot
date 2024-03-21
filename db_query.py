@@ -265,9 +265,9 @@ async def get_move(name, stars=0):
     if stars > 0 and result and stars > result['stars']:
         new_move = await db['PurpleEffectList'].find_one(
             {'purple_id': result['purple_id'] + stars - result['stars']},
-            {'_id': 0, 'notes': 1}
+            {'_id': 0, 'strings': 1}
         )
-        result['notes'] = '\n'.join(new_move.get('notes'))
+        result['notes'] = '\n'.join(new_move.get('strings'))
 
     # print(f"Found move {result}")
 
