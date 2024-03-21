@@ -1720,13 +1720,14 @@ async def set_burnt(burn_amount):
 async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, user2_team, winner, battle_type):
     battle_log = db['battle_logs']
     bulk_operations = []
+    print(f'Updating battle log : {user1_name, user2_name}')
     if user1_id is not None:
         match = {'ts': int(time.time()), 'won': winner == 1, 'opponent': user2_name,
                                    'battle_type': battle_type,
                                    'data': {'teamA': user1_team, 'teamB': user2_team}}
         user1_update = UpdateOne(
             {'discord_id': str(user1_id)},
-            {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': -10}}},
+            {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': 10}}},
             upsert=True
         )
         bulk_operations.append(user1_update)
@@ -1737,12 +1738,12 @@ async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_te
                                    'data': {'teamA': user2_team, 'teamB': user1_team}}
         user2_update = UpdateOne(
             {'discord_id': str(user2_id)},
-            {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': -10}}},
+            {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': 10}}},
             upsert=True
         )
         bulk_operations.append(user2_update)
 
-    await battle_log.bulk_write(bulk_operations)
+    print(await battle_log.bulk_write(bulk_operations))
 
 
 async def get_battle_log(user1_id):

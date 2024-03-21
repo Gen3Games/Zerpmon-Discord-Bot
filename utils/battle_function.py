@@ -1269,7 +1269,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                     break
         battle_log = {'teamA': {'trainer': tc1, 'zerpmons': result['roundStatsA']},
                       'teamB': {'trainer': tc2, 'zerpmons': result['roundStatsB']},
-                      'battle_type': 'Gym Battle'}
+                      'battle_type': battle_name}
         loser = 2 if result['winner'] == 'A' else 1
         file.close()
         for i in range(3):
@@ -1296,7 +1296,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                              _data2['username'],
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=2,
-                                             battle_type=battle_log['battle_type'] + f'{b_type}v{b_type}')
+                                             battle_type=battle_log['battle_type'] + f'({b_type}v{b_type})')
             await db_query.update_pvp_user_wr(_data1['discord_id'], 0,
                                               recent_deck=None if 'Ranked' not in battle_name else p1_deck,
                                               b_type=b_type)
@@ -1311,7 +1311,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                              _data2['username'],
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=1,
-                                             battle_type=battle_log['battle_type'] + f'{b_type}v{b_type}')
+                                             battle_type=battle_log['battle_type'] + f'({b_type}v{b_type})')
             await db_query.update_pvp_user_wr(_data1['discord_id'], 1,
                                               recent_deck=None if 'Ranked' not in battle_name else p1_deck,
                                               b_type=b_type)
