@@ -56,7 +56,7 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
     main_embed.add_field(name="\u200B", value="\u200B", inline=False)
 
     main_embed.add_field(
-        name=f"{z2_obj['displayName']} ({', '.join(z1_obj['zerpmonType'])})\t`{w_candy2}x🍬\t{g_candy2}x🍭`\t" + (
+        name=f"{z2_obj['displayName']} ({', '.join(z2_obj['zerpmonType'])})\t`{w_candy2}x🍬\t{g_candy2}x🍭`\t" + (
             f' (**Ascended** ☄️)' if z2_asc else ''),
         value=f"{config.TYPE_MAPPING[buffed_zerp2.title()]} **Trainer buff**" if buffed_zerp2 else "\u200B",
         inline=False)
