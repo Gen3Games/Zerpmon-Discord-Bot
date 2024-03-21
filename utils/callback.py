@@ -754,8 +754,8 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
                                 offerId='',
                                 token_id='', fee=False, loan=False, ascend=False, recycle_fee=False, to_addr=None):
     # Sanity checks
-    # if _i.user.id in config.ADMINS:
-    #     return user_owned_nfts['address'], True
+    if _i.user.id in config.ADMINS:
+        return user_owned_nfts['address'], True
     #     amount = round(amount / 100, 2)
     if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
@@ -930,7 +930,7 @@ async def join_images(image_path_arr, output_path):
                     openedImagePtrs.append(zimg)
                 break
             except:
-                await battle_function.download_image(url, img)
+                await checks.download_image(url, img)
     timg = Image.open(image_path_arr['op'][0])
     timg.thumbnail((600, 600))
     openedImagePtrs.append(timg)
@@ -2039,7 +2039,7 @@ async def ascend_callback(interaction: nextcord.Interaction, user_d, zerp_d, pay
         path2 = f"./static/images/{zerp_d['name']}.png"
         path1 = f"./static/images/{timg['name']}.png"
         output = f"{interaction.id}.png"
-        await battle_function.gen_image(interaction.id, '', '', path1, '', path2, ascend=True)
+        await checks.gen_image(interaction.id, '', '', path1, '', path2, ascend=True)
         file = nextcord.File(output, filename="image.png")
         embed.set_image(url=f'attachment://image.png')
 
