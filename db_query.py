@@ -306,26 +306,26 @@ async def get_zerpmon(name, mission=False, user_id=None, pvp=False):
     return result
 
 
-async def save_zerpmon_winrate(winner_name, loser_name):
+async def save_zerpmon_winrate(all_rounds: list):
     zerpmon_collection = db['MoveSets']
     # print(winner_name, loser_name)
+    batch_operations = []
+    for round_stat in all_rounds:
+        total = round_stat['total'] + len(round_stat['rounds'])
+        new_wr = ((round_stat['winrate'] * round_stat['total']) + (100 * round_stat['rounds'].count(1))) / total
+        batch_operations.append(
+            UpdateOne(
+                {'name': round_stat['name']},
+                {'$set':
+                     {'total': total,
+                      'winrate': new_wr,
+                      }
+                 }
+            )
+        )
 
-    winner = await zerpmon_collection.find_one({"name": winner_name})
-
-    total = 0 if 'total' not in winner else winner['total']
-    new_wr = 100 if 'winrate' not in winner else ((winner['winrate'] * total) + 100) / (total + 1)
-    u1 = await zerpmon_collection.find_one_and_update({"name": winner_name},
-                                                      {'$set': {'total': total + 1,
-                                                                'winrate': new_wr}})
-
-    loser = await zerpmon_collection.find_one({"name": loser_name})
-    total = 0 if 'total' not in loser else loser['total']
-    new_wr = 0 if 'winrate' not in loser else (loser['winrate'] * total) / (total + 1)
-    u2 = await zerpmon_collection.find_one_and_update({"name": loser_name},
-                                                      {'$set': {'total': total + 1,
-                                                                'winrate': new_wr}})
-
-    return True
+    result = await zerpmon_collection.bulk_write(batch_operations)
+    return result.acknowledged
 
 
 async def temp_move_update(document):
