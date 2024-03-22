@@ -2624,7 +2624,7 @@ async def insert_free_mode_stats():
 #             logging.error(f'USER OBJ ERROR: {traceback.format_exc()}')
 # asyncio.run(test(True))
 
-async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission', extraB=None):
+async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission', extraB=None, startHp=None):
     input_col = db['discord_battle_requests']
     obj = {
         'uid': str(uuid.uuid4()),
@@ -2637,6 +2637,7 @@ async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission',
         'battleType': battle_type,
         'status': 'pending',
         'extrabuff': extraB,
+        'startHp': startHp,
     }
     for i in zerp_arr1:
         obj['playerAZerpmons'].append(i['name'])
