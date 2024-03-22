@@ -37,6 +37,23 @@ def get_val(effect):
     return val
 
 
+async def del_images(msg_hook, file, file2):
+    file.close()
+    for i in range(3):
+        try:
+            os.remove(f"{msg_hook.id}.png")
+            break
+        except Exception as e:
+            print(f"Delete failed retrying {e}")
+    file2.close()
+    for i in range(3):
+        try:
+            os.remove(f"{msg_hook.id}0.png")
+            break
+        except Exception as e:
+            print(f"Delete failed retrying {e}")
+
+
 with open("./TypingMultipliers.json", 'r') as file:
     file = json.load(file)
     type_mapping = dict(file)
@@ -1002,20 +1019,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                       'battle_type': 'Gym Battle'}
         loser = 2 if result['winner'] == 'A' else 1
 
-        file2.close()
-        for i in range(3):
-            try:
-                os.remove(f"{msg_hook.id}0.png")
-                break
-            except Exception as e:
-                print(f"Delete failed retrying {e}")
-        file.close()
-        for i in range(3):
-            try:
-                os.remove(f"{msg_hook.id}.png")
-                break
-            except Exception as e:
-                print(f"Delete failed retrying {e}")
+        await del_images(msg_hook, file, file2)
         total_gp = 0 if "gym" not in _data1 else _data1["gym"].get("gp", 0) + stage
         if loser == 1:
             await interaction.send(
@@ -1564,443 +1568,152 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
         user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[-low_z:]
     user2_zerpmons[0]['buff_eq'] = boss_info.get('boss_eq', None)
     msg_hook = None
-    status_stack = [[], []]
-    p1 = None
-    p2 = None
-    p1_temp = None
-    p2_temp = None
-    rage_cnt = 0
-    battle_log = {'teamA': {'trainer': tc1, 'zerpmons': []},
-                  'teamB': {'trainer': {'name': tc2['name']}, 'zerpmons': []}, 'battle_type': 'World Boss Battle'}
-    set_zerp_extra_meta(user1_zerpmons)
-    set_zerp_extra_meta(user2_zerpmons)
-    while len(user1_zerpmons) != 0 and len(user2_zerpmons) != 0:
-        z1 = user1_zerpmons[-1]
-        z1_obj = await db_query.get_zerpmon(z1['name'], user_id=interaction.user.id)
-        z1['name2'] = z1_obj['name2']
-        z1_moves = z1_obj['moves']
-
-        z1_type = [i['value'] for i in z1['attributes'] if i['trait_type'] == 'Type']
-        buffed_zerp = ''
-        for idx, i in enumerate(z1_type):
-            if 'Dragon' in i:
-                z1_type[idx] = 'Dragon'
-                i = 'Dragon'
-            if i in buffed_type1:
-                buffed_zerp = i
-            elif tc1 and tc1.get('nft_id', '') in OMNI_TRAINERS:
-                buffed_zerp = i
-                break
-
-        z2 = user2_zerpmons[-1]
-        z2['name2'] = z2['name']
-        z2_moves = z2['moves']
-        z2_type = [i['value'] for i in z2['attributes'] if i['trait_type'] == 'Type']
-        if 'buff_eq' in z1:
-            eq1 = _data1['equipments'][z1['eq']]
-            types1 = {}
-            for m_i in range(4):
-                types1[z1_obj['moves'][m_i]['type']] = 1
-            eq_type = [_i['value'] for _i in eq1['attributes'] if _i['trait_type'] == 'Type'][-1]
-            if eq_type not in list(types1.keys()) and eq_type != 'Omni':
-                del z1['buff_eq']
-
-        if p2 is None:
-            p2 = [(float(p['percent']) if (p['percent'] not in ["0.00", "0", ""] and p['color'] != 'blue') else None)
-                  for p in
-                  z2['moves']]
-        buffed_type2 = ['Omni']
-        main_embed, file, p1, p2, eq1_list, eq2_list, updated_blue_dict = await get_zerp_battle_embed(interaction, z1,
-                                                                                                      z2,
-                                                                                                      z1_obj,
-                                                                                                      z2, z1_type,
-                                                                                                      z2_type,
-                                                                                                      [buffed_type1,
-                                                                                                       buffed_type2],
-                                                                                                      buffed_zerp,
-                                                                                                      '',
-                                                                                                      _data1.get('bg',
-                                                                                                                 [
-                                                                                                                     None])[
-                                                                                                          0],
-                                                                                                      p1.copy() if p1 is not None else p1,
-                                                                                                      p2.copy() if p2 is not None else p2,
-                                                                                                      hp=boss_hp - dmg_done,
-                                                                                                      rage=rage_cnt >= 20)
-        await asyncio.sleep(1)
-        if msg_hook is None:
-            msg_hook = interaction
-            await interaction.send(content="\u200B", embeds=[trainer_embed, main_embed], files=[file2, file],
-                                   ephemeral=True)
-        else:
-            await msg_hook.send(content="\u200B", embed=main_embed, file=file, ephemeral=True)
-
-        eliminate = ""
-        is_reroll = None
-        move1_cached, move2_cached = {}, {}
-        while eliminate == "":
-            await asyncio.sleep(1)
-            # If battle lasts long then end it
-            if rage_cnt == 20:
-                await msg_hook.send(content=f"**{z2['name']}** is now **enraged** 😡 !", ephemeral=True)
-                p1, p2, _, __ = await apply_status_effects(p1, p2, [[], [f'Decrease Own Red by {p2[7]}%']])
-            result, p1, p2, status_stack, p1_temp, p2_temp = await battle_zerpmons((interaction.user.id, z1_obj), z2,
-                                                                                   [z1_type, z2_type],
-                                                                                   status_stack,
-                                                                                   [eq1_list, eq2_list],
-                                                                                   [z1.get('buff_eq', None),
-                                                                                    z2.get('buff_eq', None)], p1, p2,
-                                                                                   p1_temp, p2_temp,
-                                                                                   blue_dict=updated_blue_dict,
-                                                                                   idx1=None if is_reroll != 2 else move1_cached,
-                                                                                   idx2=None if is_reroll != 1 else move2_cached,
-                                                                                   is_boss=True, rage=rage_cnt >= 20)
-
-            rage_cnt += 1
-            if rage_cnt > 20 and '💢' not in z2['name2']:
-                z2['name2'] = '💢 ' + z2['name']
-            t_info1 = config.TYPE_MAPPING[result['move1']['type'].replace(" ", '')] + ' ' + result['move1']['mul']
-            t_info2 = config.TYPE_MAPPING['Omni'] + ' ' + result['move2']['mul']
-            t_info1 = f'({t_info1})' if t_info1 not in ["", " "] else t_info1
-            t_info2 = f'({t_info2})' if t_info2 not in ["", " "] else t_info2
-
-            dmg1_str = f"{result['move1']['name']} {result['move1']['stars'] * '★'} (__{result['move1']['percent']}%__)" if \
-                result['move1']['stars'] != '' \
-                else f"{result['move1']['name']}{'ed' if result['move1']['color'] == 'miss' else f' {t_info1} ' + str(result['move1']['dmg']) if 'dmg_str1' not in result else result['dmg_str1']} (__{result['move1']['percent']}%__)"
-
-            dmg2_str = f"{result['move2']['name']} {result['move2']['stars'] * '★'} (__{result['move2']['percent']}%__)" if \
-                result['move2']['stars'] != '' \
-                else f"{result['move2']['name']}{'ed' if result['move2']['color'] == 'miss' else f' {t_info2} ' + str(result['move2']['dmg']) if 'dmg_str2' not in result else result['dmg_str2']} (__{result['move2']['percent']}%__)"
-            s1 = f"**{z1['name2']}**\t({', '.join([config.TYPE_MAPPING[i] for i in z1_type])})\t{' used' if result['move1']['color'] != 'miss' else ''} " \
-                 f"{config.COLOR_MAPPING[result['move1']['color']]}  {dmg1_str}\n"
-            s2 = f"**{z2['name2']}**\t({', '.join([config.TYPE_MAPPING[i] for i in z2_type])})\t{' used' if result['move2']['color'] != 'miss' else ''} " \
-                 f"{config.COLOR_MAPPING[result['move2']['color']]}  {dmg2_str}\n"
-
-            atk_msg = apply_reroll_to_msg(is_reroll, result, s1, s2, move1_cached, move2_cached)
-
-            await msg_hook.send(content=atk_msg, ephemeral=True)
-            await asyncio.sleep(1)
-            pre_text = (f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
-                f"{result['eq2_msg']}\n" if 'eq2_name' in result else '')
-
-            skip, old_status, is_reroll = await set_reroll(interaction, pre_text, result, is_reroll, move1_cached,
-                                                           move2_cached)
-            if skip:
-                continue
-            is_reroll = None
-
-            for i, effect in enumerate(status_stack[0].copy()):
-                if '0 damage' in effect:
-                    status_stack[0].remove(effect)
-                    break
-            for i, effect in enumerate(status_stack[1].copy()):
-                if '0 damage' in effect:
-                    status_stack[1].remove(effect)
-                    break
-
-            print(result)
-
-            # purple attacks
-            if 'status_effect' in result:
-                effect = result['status_effect']
-                if result['winner'] == '1':
-                    if 'next' in effect:
-                        if 'next attack' in effect:
-                            status_stack[0].append(effect)
-                            p_x = get_val(effect)
-                            count_x = status_stack[0].count(effect)
-                            if 'decrease' in effect:
-                                new_m = f"**{z2['name2']}**'s damage is reduced by (**{p_x}**%) for the next {'' if count_x <= 1 else ('**' + str(count_x) + '** ')}{'attack' if count_x <= 1 else 'attacks'}!"
-                            else:
-                                new_m = f"**{z1['name2']}**'s damage is increased by (**{p_x * count_x}**%) for the next attack!"
-
-                            await msg_hook.send(
-                                content=pre_text + new_m, ephemeral=True)
-                            continue
-                        elif '0 damage' in effect:
-                            if '2' in effect:
-                                status_stack[0].append(effect)
-                                status_stack[0].append(effect)
-                                count_x = status_stack[0].count(effect)
-                                new_m = f"**{z2['name2']}**'s damage reduced to 0 for **{count_x}** {'turns' if count_x > 1 else 'turn'}!"
-                                await msg_hook.send(
-                                    content=pre_text + new_m, ephemeral=True)
-                            else:
-                                status_stack[0].append(effect)
-                                count_x = status_stack[0].count(effect)
-                                new_m = f"**{z2['name2']}**'s damage reduced to 0 for **{count_x}** {'turns' if count_x > 1 else 'turn'}!"
-                                await msg_hook.send(
-                                    content=pre_text + new_m, ephemeral=True)
-                        continue
-                    elif 'knock' in effect:
-                        if 'against' not in effect:
-                            result['winner'] = '1'
-                        else:
-                            if result['move2']['color'] in effect:
-                                result['winner'] = '1'
-                            else:
-                                new_m = f"{result['move1']['name']} was ineffective! Draw!"
-                                await msg_hook.send(
-                                    content=pre_text + new_m, ephemeral=True)
-                                continue
-                    elif 'reduce' in effect and 'star' in effect:
-                        status_stack[0].append(effect)
-                        new_m = f"reduced {z2['name2']}'s Purple stars to 0 for the rest of the combat!"
-                        await msg_hook.send(
-                            content=pre_text + new_m, ephemeral=True)
-                        continue
-                    else:
-                        if effect == '@sc':
-                            new_m = result['move1']['msg']
-                        else:
-                            new_m = result['move1']['msg'][:-1]
-                            i = int(result['move1']['msg'][-1])
-
-                            new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
-                                config.COLOR_MAPPING[z2_moves[i]['color']], '')
-                            new_m = new_m.replace("@me",
-                                                  ' ' + z1['name2'] + '\'s ' + z1_moves[i]['name'] + '  ').replace(
-                                "@op", ' ' + z2['name2'] + '\'s ' + z2_moves[i]['name'] + '  ')
-                            new_m += f" ({str(z1_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z1_moves[i] and z1_moves[i]['dmg'] != '' else ''}{(str(round(float(p2[i]))) if p2[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(round(float(p1[i]))) if p1[i] is not None else 0)}%)"
-                        await msg_hook.send(
-                            content=pre_text + new_m, ephemeral=True)
-                        if effect != '@sc':
-                            continue
-                elif result['winner'] == '2':
-                    if 'next' in effect:
-                        if 'next attack' in effect:
-                            status_stack[1].append(effect)
-                            p_x = get_val(effect)
-                            count_x = status_stack[1].count(effect)
-                            if 'decrease' in effect:
-                                new_m = f"**{z1['name2']}**'s damage is reduced by (**{p_x}**%) for the next {'' if count_x <= 1 else ('**' + str(count_x) + '** ')}{'attack' if count_x <= 1 else 'attacks'}!"
-                            else:
-                                new_m = f"**{z2['name2']}**'s damage is increased by (**{p_x * count_x}**%) for the next attack!"
-                            await msg_hook.send(
-                                content=pre_text + new_m, ephemeral=True)
-                            continue
-                        elif '0 damage' in effect:
-                            if '2' in effect:
-                                status_stack[1].append(effect)
-                                status_stack[1].append(effect)
-                                count_x = status_stack[1].count(effect)
-                                new_m = f"**{z1['name2']}**'s damage reduced to 0 for **{count_x}** {'turns' if count_x > 1 else 'turn'}!"
-                                await msg_hook.send(
-                                    content=pre_text + new_m, ephemeral=True)
-                            else:
-                                status_stack[1].append(effect)
-                                count_x = status_stack[1].count(effect)
-                                new_m = f"**{z1['name2']}**'s damage reduced to 0 for **{count_x}** {'turns' if count_x > 1 else 'turn'}!"
-                                await msg_hook.send(
-                                    content=pre_text + new_m, ephemeral=True)
-                        continue
-                    elif 'knock' in effect:
-                        if 'against' not in effect:
-                            result['winner'] = '2'
-                        else:
-                            if result['move1']['color'] in effect:
-                                result['winner'] = '2'
-                            else:
-                                new_m = f"{result['move2']['name']} was ineffective! Draw!"
-                                await msg_hook.send(
-                                    content=pre_text + new_m, ephemeral=True)
-                                continue
-                    elif 'reduce' in effect and 'star' in effect:
-                        status_stack[1].append(effect)
-                        new_m = f"reduced {z1['name2']}'s Purple stars to 0 for the rest of the combat!"
-                        await msg_hook.send(
-                            content=pre_text + new_m, ephemeral=True)
-                        continue
-                    else:
-                        if effect == '@sc':
-                            new_m = result['move2']['msg']
-                        else:
-                            new_m = result['move2']['msg'][:-1]
-                            i = int(result['move2']['msg'][-1])
-
-                            new_m = new_m.replace(config.COLOR_MAPPING[z1_moves[i]['color']], '').replace(
-                                config.COLOR_MAPPING[z2_moves[i]['color']], '')
-                            new_m = new_m.replace("@me",
-                                                  ' ' + z2['name2'] + '\'s ' + z2_moves[i]['name'] + '  ').replace(
-                                "@op", ' ' + z1['name2'] + '\'s ' + z1_moves[i]['name'] + '  ')
-                            new_m += f" ({str(z2_moves[i]['dmg']) + 'dmg, ' if 'dmg' in z2_moves[i] and z2_moves[i]['dmg'] != '' else ''}{(str(round(float(p1[i]))) if p1[i] is not None else 0) if 'opposing' in result['status_effect'] else (str(round(float(p2[i]))) if p2[i] is not None else 0)}%)"
-
-                        await msg_hook.send(
-                            content=pre_text + new_m, ephemeral=True)
-                        if effect != '@sc':
-                            continue
-
-            # DRAW
-            if result['winner'] == "":
-                await msg_hook.send(
-                    content=(f"{result['eq1_msg']}\n" if 'eq1_name' in result else '') + (
-                        f"{result['eq2_msg']}\n" if 'eq2_name' in result else '') + f"**DRAW**",
-                    ephemeral=True)
-                continue
-            # {}'s "Crystal Ball" activated and nullified {} attack!
-            if result['winner'] == '1':
-                b_dmg = 100 if type(result['move1'].get('dmg', '')) is str else result['move1'].get('dmg')
-                dmg_done += b_dmg
-                await msg_hook.send(
-                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
-                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
-                            + f"{z1['name2']} 🏹  **Damage dealt** to 💀 {z2['name2']} 💀  **{b_dmg}**!\nWorld Boss HP left **`{max(0, boss_hp - dmg_done)}`**",
-                    ephemeral=True)
-                if boss_hp - dmg_done <= 0:
-                    eliminate = (2, z2['name'])
-                    status_stack[0] = [i for i in status_stack[0] if ('oppo' not in i) and ('enemy' not in i)]
-                    status_stack[1] = [i for i in status_stack[1] if ('oppo' in i) or ('enemy' in i)]
-                await db_query.save_zerpmon_winrate(z1['name'], z2['name'])
-
-            elif result['winner'] == '2':
-                await msg_hook.send(
-                    content=(f"{result['eq1_msg']}\n" if "eq1_name" in result else '') + (
-                        f"{result['eq2_msg']}\n" if "eq2_name" in result else '')
-                            + (f"{z2['name']} **knocked out** 💀 {z1['name2']} 💀!" if '🎯' not in result['move2'][
-                        'mul'] else f"{random.choice(config.CRIT_STATEMENTS).format(loser=z1['name2'])}"),
-                    ephemeral=True)
-                eliminate = (1, z1['name'])
-                status_stack[1] = [i for i in status_stack[1] if ('oppo' not in i) and ('enemy' not in i)]
-                status_stack[0] = [i for i in status_stack[0] if ('oppo' in i) or ('enemy' in i)]
-                await db_query.save_zerpmon_winrate(z2['name'], z1['name'])
-
-        if eliminate[0] == 1:
-            z1['rounds'].append(0)
-            z2['rounds'].append(1)
-            battle_log['teamA']['zerpmons'].append({'name': z1['name'],
-                                                    'ko_move': result['move2']['name'] + ' ' + config.TYPE_MAPPING[
-                                                        result['move2']['type']], 'rounds': z1['rounds'].copy()})
-            user1_zerpmons = [i for i in user1_zerpmons if i['name'] != eliminate[1]]
-            p2 = await remove_effects(p2, p1, eq1_list, z2=z2)
-
-            p1 = None
-            p1_temp = None
-        elif eliminate[0] == 2:
-            z1['rounds'].append(1)
-            z2['rounds'].append(0)
-            battle_log['teamB']['zerpmons'].append({'name': z2['name'],
-                                                    'ko_move': result['move1']['name'] + ' ' + config.TYPE_MAPPING[
-                                                        result['move1']['type']], 'rounds': z2['rounds'].copy()})
-            user2_zerpmons = [i for i in user2_zerpmons if i['name'] != eliminate[1]]
-            p1 = await remove_effects(p1, p2, eq2_list, z1=z1_obj)
-            p2 = None
-            p2_temp = None
-        file.close()
-        for i in range(3):
-            try:
-                os.remove(f"{msg_hook.id}.png")
-                break
-            except Exception as e:
-                print(f"Delete failed retrying {e}")
-
-    file2.close()
-    for i in range(3):
-        try:
-            os.remove(f"{msg_hook.id}0.png")
+    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['name'], tc2['name'], 'boss', startHp=boss_hp)
+    result = {}
+    for cnt in range(120):
+        if config.battle_results[uid]:
+            result = config.battle_results[uid]
             break
-        except Exception as e:
-            print(f"Delete failed retrying {e}")
+        await asyncio.sleep(0.2)
+    del config.battle_results[uid]
+    if result:
+        idx1, idx2, log_idx = 0, 0, 0
+        while idx1 < len(result['playerAZerpmons']) and idx2 < len(result['playerBZerpmons']):
+            z1_obj, z2_obj = result['playerAZerpmons'][idx1], result['playerBZerpmons'][idx2]
 
-    embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
-                        description=f"{user_mention} vs **{z2['name']}** **(World Boss)**")
-    embed.add_field(name='\u200B', value='\u200B')
-    if len(user1_zerpmons) == 0:
-        embed.add_field(name='💀 LOST 💀',
-                        value=user_mention,
-                        inline=False)
-        embed.add_field(
-            name="Damage dealt 🏹",
-            value=f"{dmg_done}",
-            inline=False)
-        t_dmg_user = _data1.get('boss_battle_stats', {}).get('weekly_dmg', 0) + dmg_done
-        embed.add_field(name=f'Total damage dealt this week',
-                        value=t_dmg_user,
-                        inline=False)
-        embed.add_field(name=f"Percentage of Boss's total health",
-                        value=f"{int(t_dmg_user * 100 / boss_info['start_hp'])}%",
-                        inline=False)
-        embed.add_field(name=f'World Boss HP left',
-                        value=boss_hp - dmg_done,
-                        inline=False)
-        await interaction.send(
-            embeds=[embed],
-            ephemeral=True)
-        battle_log['teamB']['zerpmons'].append({'name': z2['name'], 'rounds': z2['rounds']})
-        await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, tc2['name'],
-                                         battle_log['teamA'],
-                                         battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
-        await db_query.set_boss_hp(_data1['discord_id'], dmg_done, boss_hp)
-        # Save user's match
-        await asyncio.sleep(1)
-        return 2
-    elif len(user2_zerpmons) == 0:
-        # Add GP to user
-        battle_log['teamA']['zerpmons'].append(
-            {'name': z1['name'], 'rounds': z1['rounds']})
-        await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, tc2['name'],
-                                         battle_log['teamA'],
-                                         battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
+            await battle_funtion_ex.generate_image_ex(interaction.id, z1_obj, z2_obj,
+                                                      bg_img)
+            main_embed, file = await battle_funtion_ex.get_zerp_battle_embed_ex(interaction,
+                                                                                z1_obj,
+                                                                                z2_obj,
+                                                                                result['moveVariation'][idx1 + idx2],
+                                                                                z1_obj['zerpmon']['trainer_buff'],
+                                                                                '',
+                                                                                {},
+                                                                                None, )
+            if msg_hook is None:
+                msg_hook = interaction
+                await interaction.send(content="\u200B", embeds=[trainer_embed, main_embed], files=[file2, file],
+                                       ephemeral=True)
+            else:
+                await msg_hook.send(content="\u200B", embed=main_embed, file=file, ephemeral=True)
+            while log_idx < len(result['roundLogs']):
+                round_messages = result['roundLogs'][log_idx]
+                msgs = translate.translate_message(interaction.locale.split('-')[0], round_messages['messages'])
+                msg = ''
+                for i in msgs:
+                    msg += i + '\n'
+                await interaction.send(content=msg, ephemeral=True)
+                log_idx += 1
+                if round_messages['KOd']:
+                    if round_messages['roundResult'] == 'zerpmonAWin':
+                        idx2 += 1
+                    else:
+                        idx1 += 1
+                    break
+        battle_log = {'teamA': {'trainer': {'name': tc1['name']}, 'zerpmons': result['roundStatsA']},
+                      'teamB': {'trainer': {'name': tc2['name']}, 'zerpmons': result['roundStatsB']},
+                      'battle_type': 'World Boss Battle'}
+        dmg_done = result['dmgDealt']
+        loser = 2 if result['winner'] == 'A' else 1
+        await del_images(msg_hook, file, file2)
+        z2 = user2_zerpmons[0]
+        embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
+                            description=f"{user_mention} vs **{z2['name']}** **(World Boss)**")
+        embed.add_field(name='\u200B', value='\u200B')
+        if loser == 1:
+            embed.add_field(name='💀 LOST 💀',
+                            value=user_mention,
+                            inline=False)
+            embed.add_field(
+                name="Damage dealt 🏹",
+                value=f"{dmg_done}",
+                inline=False)
+            t_dmg_user = _data1.get('boss_battle_stats', {}).get('weekly_dmg', 0) + dmg_done
+            embed.add_field(name=f'Total damage dealt this week',
+                            value=t_dmg_user,
+                            inline=False)
+            embed.add_field(name=f"Percentage of Boss's total health",
+                            value=f"{int(t_dmg_user * 100 / boss_info['start_hp'])}%",
+                            inline=False)
+            embed.add_field(name=f'World Boss HP left',
+                            value=boss_hp - dmg_done,
+                            inline=False)
+            await interaction.send(
+                embeds=[embed],
+                ephemeral=True)
+            await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, tc2['name'],
+                                             battle_log['teamA'],
+                                             battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
+            await db_query.set_boss_hp(_data1['discord_id'], dmg_done, boss_hp)
+            # Save user's match
+            await asyncio.sleep(1)
+            return 2
+        elif loser == 2:
+            await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, tc2['name'],
+                                             battle_log['teamA'],
+                                             battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
 
-        # await db_query.add_gp(_data1['discord_id'], _data1['gym'] if 'gym' in _data1 else {}, gym_type, stage)
-        embed.add_field(name='🏆 WINNER 🏆',
-                        value=user_mention,
-                        inline=False)
-        embed.add_field(
-            name="Damage dealt 🏹",
-            value=f"{boss_hp}",
-            inline=False)
-        await interaction.send(
-            embeds=[embed],
-            ephemeral=True)
-        reward_dict = {}
-        await db_query.set_boss_hp(_data1['discord_id'], boss_hp, boss_hp)
-        total_dmg = boss_info['total_weekly_dmg'] + boss_hp
-        winners = await db_query.boss_reward_winners()
-        for i in range(10):
+            # await db_query.add_gp(_data1['discord_id'], _data1['gym'] if 'gym' in _data1 else {}, gym_type, stage)
+            embed.add_field(name='🏆 WINNER 🏆',
+                            value=user_mention,
+                            inline=False)
+            embed.add_field(
+                name="Damage dealt 🏹",
+                value=f"{boss_hp}",
+                inline=False)
+            await interaction.send(
+                embeds=[embed],
+                ephemeral=True)
+            reward_dict = {}
+            await db_query.set_boss_hp(_data1['discord_id'], boss_hp, boss_hp)
+            total_dmg = boss_info['total_weekly_dmg'] + boss_hp
+            winners = await db_query.boss_reward_winners()
+            for i in range(10):
+                try:
+                    embed = CustomEmbed(title=f"🏆 World Boss Defeated! 🏆",
+                                        color=0x680747)
+
+                    embed.set_image(z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
+                        'image'].replace("ipfs://", ""))
+                    content = f'🔥 🔥 Congratulations {user_mention} has defeated **{z2["name"]}**!! 🔥 🔥\n@everyone'
+                    t_reward = boss_info['reward']
+                    description = f"Starting to distribute **`{t_reward} ZRP` Boss reward!\n\n"
+                    for player in winners:
+                        p_dmg = player['boss_battle_stats']['weekly_dmg']
+                        if p_dmg > 0:
+                            amt = round(p_dmg * t_reward / total_dmg, 2)
+                            reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
+                            description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
+                    embed.description = description
+                    await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
+                                              channel_id=config.BOSS_CHANNEL)
+                    break
+                except:
+                    logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
+                    await asyncio.sleep(10)
+            logging.error(f'BossRewards: {reward_dict}')
+            total_txn = len(reward_dict)
+            success_txn = 0
+            failed_str = ''
+            for addr, obj in reward_dict.items():
+                saved = await xrpl_ws.send_zrp(addr, obj['amt'], 'wager')
+                if saved:
+                    success_txn += 1
+                else:
+                    failed_str += f"\n{obj['name']}\t`{obj['amt']} ZRP` ❌"
             try:
-                embed = CustomEmbed(title=f"🏆 World Boss Defeated! 🏆",
-                                    color=0x680747)
-
-                embed.set_image(z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
-                    'image'].replace("ipfs://", ""))
-                content = f'🔥 🔥 Congratulations {user_mention} has defeated **{z2["name"]}**!! 🔥 🔥\n@everyone'
-                t_reward = boss_info['reward']
-                description = f"Starting to distribute **`{t_reward} ZRP` Boss reward!\n\n"
-                for player in winners:
-                    p_dmg = player['boss_battle_stats']['weekly_dmg']
-                    if p_dmg > 0:
-                        amt = round(p_dmg * t_reward / total_dmg, 2)
-                        reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
-                        description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
-                embed.description = description
-                await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
-                                          channel_id=config.BOSS_CHANNEL)
-                break
+                if success_txn == 0:
+                    await interaction.send(
+                        f"**Failed**, something went wrong." + failed_str)
+                else:
+                    await interaction.send(
+                        f"**Successfully** sent ZRP. \n`({success_txn}/{total_txn} transactions confirmed)`" + failed_str)
             except:
-                logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
-                await asyncio.sleep(10)
-        logging.error(f'BossRewards: {reward_dict}')
-        total_txn = len(reward_dict)
-        success_txn = 0
-        failed_str = ''
-        for addr, obj in reward_dict.items():
-            saved = await xrpl_ws.send_zrp(addr, obj['amt'], 'wager')
-            if saved:
-                success_txn += 1
-            else:
-                failed_str += f"\n{obj['name']}\t`{obj['amt']} ZRP` ❌"
-        try:
-            if success_txn == 0:
-                await interaction.send(
-                    f"**Failed**, something went wrong." + failed_str)
-            else:
-                await interaction.send(
-                    f"**Successfully** sent ZRP. \n`({success_txn}/{total_txn} transactions confirmed)`" + failed_str)
-        except:
-            pass
-        await db_query.reset_weekly_dmg()
-        config.boss_active = False
-        return 1
+                pass
+            await db_query.reset_weekly_dmg()
+            config.boss_active = False
+            return 1
 
 
 async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
@@ -2129,20 +1842,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                     break
 
         loser = 2 if result['winner'] == 'A' else 1
-        file.close()
-        file2.close()
-        for i in range(3):
-            try:
-                os.remove(f"{msg_hook.id}0.png")
-                break
-            except Exception as e:
-                print(f"Delete failed retrying {e}")
-        for i in range(3):
-            try:
-                os.remove(f"{msg_hook.id}.png")
-                break
-            except Exception as e:
-                print(f"Delete failed retrying {e}")
+        await del_images(msg_hook, file, file2)
 
         if loser == 1:
 
