@@ -1270,6 +1270,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         battle_log = {'teamA': {'trainer': tc1, 'zerpmons': result['roundStatsA']},
                       'teamB': {'trainer': tc2, 'zerpmons': result['roundStatsB']},
                       'battle_type': battle_name}
+        await db_query.save_zerpmon_winrate([*result['roundStatsA'], *result['roundStatsB']])
         loser = 2 if result['winner'] == 'A' else 1
         file.close()
         for i in range(3):
@@ -1405,13 +1406,13 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
 
         stats_arr = [False, False, False, 0]
         t_matches = str(_data1.get('total_matches', 0))
+        if not lure_active:
+            await db_query.save_zerpmon_winrate([*result['roundStatsA'], *result['roundStatsB']])
         if loser == 2:
             await asyncio.sleep(1)
             await interaction.send(
                 f"**WINNER**   👑**{user_mention}**👑",
                 ephemeral=True)
-            if not lure_active:
-                await db_query.save_zerpmon_winrate(z1['name'], z2['name'])
             await db_query.update_user_wr(user_id, 1, old_num, is_reset)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
                                              battle_log['teamA'],
@@ -1467,8 +1468,6 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             await db_query.add_xrp_txn_log(t_matches, 'mission', _data1['address'], 0, 0, )
             await db_query.update_zerpmon_alive(z1, serial, user_id)
             await db_query.update_user_wr(user_id, 0, old_num, is_reset)
-            if not lure_active:
-                await db_query.save_zerpmon_winrate(z2['name'], z1['name'])
 
         await asyncio.sleep(1)
         file.close()
@@ -1501,7 +1500,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             '0' in _data1['battle_deck'] and (not _data1['battle_deck']['0'].get('trainer', None))) else \
         _data1['trainer_cards'][_data1['battle_deck']['0']['trainer']]
     tc1i = tc1['image']
-    buffed_type1 = [i['value'] for i in tc1['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
+    buffed_type1 = get_type(tc1)
 
     user2_zerpmons = [boss_info['boss_zerpmon']]
     tc2i = tc2['image']
@@ -1563,7 +1562,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 pass
         user1_z.reverse()
         user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[-low_z:]
-
+    user2_zerpmons[0]['buff_eq'] = boss_info.get('boss_eq', None)
     msg_hook = None
     status_stack = [[], []]
     p1 = None
@@ -1611,7 +1610,6 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                   for p in
                   z2['moves']]
         buffed_type2 = ['Omni']
-        z2['buff_eq'] = boss_info.get('boss_eq', None)
         main_embed, file, p1, p2, eq1_list, eq2_list, updated_blue_dict = await get_zerp_battle_embed(interaction, z1,
                                                                                                       z2,
                                                                                                       z1_obj,
