@@ -989,7 +989,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
             main_embed, file = await battle_funtion_ex.get_zerp_battle_embed_ex(interaction,
                                                                                 z1_obj,
                                                                                 z2_obj,
-                                                                                result['moveVariation'][idx1 + idx2],
+                                                                                result['moveVariations'][idx1 + idx2],
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 gym_buff_obj,
@@ -1235,7 +1235,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             main_embed, file = await battle_funtion_ex.get_zerp_battle_embed_ex(message,
                                                                                 z1_obj,
                                                                                 z2_obj,
-                                                                                result['moveVariation'][idx1 + idx2],
+                                                                                result['moveVariations'][idx1 + idx2],
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 {},
@@ -1392,7 +1392,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
         main_embed, file = await battle_funtion_ex.get_zerp_battle_embed_ex(interaction,
                                                                             z1_obj,
                                                                             z2_obj,
-                                                                            result['moveVariation'][0],
+                                                                            result['moveVariations'][0],
                                                                             has_buff,
                                                                             '',
                                                                             {},
@@ -1578,6 +1578,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
     del config.battle_results[uid]
     if result:
         idx1, idx2, log_idx = 0, 0, 0
+        cur_hp = boss_hp
         while idx1 < len(result['playerAZerpmons']) and idx2 < len(result['playerBZerpmons']):
             z1_obj, z2_obj = result['playerAZerpmons'][idx1], result['playerBZerpmons'][idx2]
 
@@ -1586,11 +1587,12 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             main_embed, file = await battle_funtion_ex.get_zerp_battle_embed_ex(interaction,
                                                                                 z1_obj,
                                                                                 z2_obj,
-                                                                                result['moveVariation'][idx1 + idx2],
+                                                                                result['moveVariations'][idx1 + idx2],
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 '',
                                                                                 {},
-                                                                                None, )
+                                                                                cur_hp, )
+            cur_hp = boss_hp - result['dmgVariations'][idx1 + idx2]
             if msg_hook is None:
                 msg_hook = interaction
                 await interaction.send(content="\u200B", embeds=[trainer_embed, main_embed], files=[file2, file],
@@ -1815,7 +1817,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
             main_embed, file = await battle_funtion_ex.get_zerp_battle_embed_ex(interaction,
                                                                                 z1_obj,
                                                                                 z2_obj,
-                                                                                result['moveVariation'][idx1 + idx2],
+                                                                                result['moveVariations'][idx1 + idx2],
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 gym_buff_obj,
