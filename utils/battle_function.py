@@ -1008,6 +1008,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                     msg += i + '\n'
                 await interaction.send(content=msg, ephemeral=True)
                 log_idx += 1
+                await asyncio.sleep(0.5)
                 if round_messages['KOd']:
                     if round_messages['roundResult'] == 'zerpmonAWin':
                         idx2 += 1
@@ -1265,6 +1266,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                     msg += i + '\n'
                 await send_message(msg_hook, hidden, content=msg, embeds=[], files=[], )
                 log_idx += 1
+                await asyncio.sleep(0.5)
                 if round_messages['KOd']:
                     if round_messages['roundResult'] == 'zerpmonAWin':
                         idx2 += 1
@@ -1404,6 +1406,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             for i in msgs:
                 msg += i + '\n'
             await interaction.send(content=msg, ephemeral=True)
+            await asyncio.sleep(0.5)
         battle_log = {'teamA': {'trainer': None, 'zerpmons': result['roundStatsA']},
                       'teamB': {'trainer': None, 'zerpmons': result['roundStatsB']}, 'battle_type': 'Mission Battle'}
         loser = 2 if result['winner'] == 'A' else 1
@@ -1607,6 +1610,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                     msg += i + '\n'
                 await interaction.send(content=msg, ephemeral=True)
                 log_idx += 1
+                await asyncio.sleep(0.5)
                 if round_messages['KOd']:
                     if round_messages['roundResult'] == 'zerpmonAWin':
                         idx2 += 1
@@ -1836,6 +1840,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                     msg += i + '\n'
                 await interaction.send(content=msg, ephemeral=True)
                 log_idx += 1
+                await asyncio.sleep(0.5)
                 if round_messages['KOd']:
                     if round_messages['roundResult'] == 'zerpmonAWin':
                         idx2 += 1
