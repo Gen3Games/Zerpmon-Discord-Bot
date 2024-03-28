@@ -1429,7 +1429,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             double_xp = 'double_xp' in _data1 and _data1['double_xp'] > time.time()
             responses = await xrpl_ws.reward_user(t_matches, _data1['address'], z1['name'], double_xp=double_xp,
                                                   lvl=z1_obj['zerpmon']['level'] if z1_obj['zerpmon']['level'] else 1,
-                                                  xp_mode=xp_mode, ascended=z1_obj.get('ascended', False))
+                                                  xp_mode=xp_mode, ascended=z1_obj['zerpmon'].get('ascended', False))
             stats_arr = responses[0]
             embed = CustomEmbed(title=f"🏆 Mission Victory 🏆",
                                 color=0x8ef6e4)
@@ -1567,7 +1567,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 user1_z.append(temp_zerp)
             except:
                 pass
-        user1_z.reverse()
+        # user1_z.reverse()
         user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[-low_z:]
     user2_zerpmons[0]['buff_eq'] = boss_info.get('boss_eq', None)
     msg_hook = None

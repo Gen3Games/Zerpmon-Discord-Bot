@@ -216,7 +216,7 @@ async def get_owned(user_id, autoc=False, db_sep=None):
                     }
                     ]
         res = list(await users_collection.aggregate(pipeline).to_list(None))[0]
-        print(res['trainer_cards'])
+        print(len(res['zerpmons']), res['trainer_cards'])
         for key in ['zerpmons', 'trainer_cards', 'equipments']:
             for idx in range(len(res[key])):
                 i = res[key][idx]

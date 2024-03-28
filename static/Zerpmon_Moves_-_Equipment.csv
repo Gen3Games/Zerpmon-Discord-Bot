@@ -1,28 +1,52 @@
-NORMAL,Increases own crit chance by 30%,,Crit Lenses
-FIRE,23% chance to survive from being knocked out by opponent,,Flaming Orb
-WATER,Increase own purple moves by 2 stars,,Water Pendant
-GRASS,Decrease own miss chance by 25%,,Golden Leaf
-ELECTRIC,35% chance for enemy Gold Attack to do 0 damage,,Lightning Ring
-ICE,Increase opponent miss chance by 12.5%,,Tundra Ice
-FIGHTING,23% chance to survive from being knocked out by opponent,,Winner's Belt
-POISON,Reduce opponent damage by 35%,,Toxic Vile
-GROUND,Increase own purple moves by 2 stars,,Desert Pouch
-FLYING,Decrease own miss chance by 25%,,Rainbow Feather
-PSYCHIC,35% chance for enemy Gold Attack to do 0 damage,,Crystal Ball
-BUG,Increases own crit chance by 30%,,Dragonfly Gem
-ROCK,Increases own crit chance by 30%,,Rock Tablet
-GHOST,Increase own purple moves by 2 stars,,Old Key
-DRAGON,Decrease own miss chance by 25%,,Dragon Amulet
-DARK,Increases own crit chance by 30%,,Shadow Bangle
-STEEL,Increases own crit chance by 30%,,Power Core
-FAIRY,50% chance to pierce opponent's defenses white vs purple or white/gold vs blue,,Fairy Dust
-COSMIC,50% chance to pierce opponent's defenses white vs purple or white/gold vs blue,,Meteorite
-UNDEAD,Increase opponent miss chance by 12.5%,,Odd Skull
-OMNI,17.5% chance for enemy Gold Attack to do 0 damage,25% chance to pierce opponent's defenses white vs purple or white/gold vs blue,Short Sword
-OMNI,Reduce opponent damage by 17.5%,Increase own purple moves by 1 star,Iron Shield
-OMNI,11.5% chance to survive from being knocked out by opponent,Increase opponent miss chance by 6.25%,Magic Wand
-OMNI,Increases own crit chance by 15%,Decrease own miss chance by 12.5%,Longbow
-OMNI,Decrease own miss chance by 50%,Reduce own damage by 35%,Life Core
-OMNI,Upon missing - 70% chance to roll again,,Magic Blindfold
-OMNI,Increase own miss chance by 12.5%,Increase own damage by 70%,Power Glove
-OMNI,Increase own blue chance by 12.5%,Decrease opponent blue chance by 12.5%,Tattered Cloak
+NORMAL,Increase own crit chance,40%,,,Crit Lenses
+FIRE,Chance to survive from being knocked out by opponent,30%,,,Flaming Orb
+WATER,Increase own purple stars,2,,,Water Pendant
+GRASS,Decrease own miss chance,26%,,,Golden Leaf
+ELECTRIC,Chance for enemy gold attack to do 200 less damage,36%,,,Lightning Ring
+ICE,Increase opponent miss chance,16%,,,Tundra Ice
+FIGHTING,Chance to survive from being knocked out by opponent,30%,,,Winner's Belt
+POISON,Decrease opponent damage,36%,,,Toxic Vile
+GROUND,Increase own purple stars,2,,,Desert Pouch
+FLYING,Decrease own miss chance,26%,,,Rainbow Feather
+PSYCHIC,Chance for enemy gold attack to do 200 less damage,36%,,,Crystal Ball
+BUG,Increase own crit chance,40%,,,Dragonfly Gem
+ROCK,Increase own crit chance,40%,,,Rock Tablet
+GHOST,Increase own purple stars,2,,,Old Key
+DRAGON,Decrease own miss chance,26%,,,Dragon Amulet
+DARK,Increase own crit chance,40%,,,Shadow Bangle
+STEEL,Increase own crit chance,40%,,,Power Core
+FAIRY,Increase own chance to pierce opponent's defenses during white vs purple or white/gold vs blue,40%,,,Pixie Dust
+COSMIC,Increase own chance to pierce opponent's defenses during white vs purple or white/gold vs blue,40%,,,Meteorite
+UNDEAD,Increase opponent miss chance,16%,,,Odd Skull
+OMNI,Chance for enemy gold attack to do 200 less damage,18%,Increase own chance to pierce opponent's defenses during white vs purple or white/gold vs blue,20%,Short Sword
+OMNI,Decrease opponent damage,18%,Increase own purple stars,1,Iron Shield
+OMNI,Chance to survive from being knocked out by opponent,15%,Increase opponent miss chance,8%,Magic Wand
+OMNI,Increase own crit chance,20%,Decrease own miss chance,13%,Longbow
+OMNI,Increase own blue chance,15%,Decrease opponent blue chance,15%,Tattered Cloak
+OMNI,Increase own damage,75%,Increase own miss chance,8%,Power Glove
+OMNI,Chance to roll again upon own miss,70%,,,Magic Blindfold
+OMNI,Decrease own miss chance,52%,Decrease own damage,18%,Life Core
+NORMAL,Chance for enemy white attack to do 200 less damage,36%,,,Big Cigar
+FIRE,Flat increase to own white damage by 30 and chance to strike,10%,,,Hell Horn
+WATER,Flat increase to own gold damage by 24 and chance to strike,10%,,,Aqua Trident
+GRASS,Chance to survive from being knocked out by opponent,30%,,,Life Lotus
+ELECTRIC,Flat increase to own gold damage by 24 and chance to strike,10%,,,Lightning Stone
+ICE,Flat increase own purple stars by 1 and chance to strike,5%,,,Everglass
+FIGHTING,Chance for enemy white attack to do 200 less damage,36%,,,Winner's Gloves
+POISON,Flat increase own purple stars by 1 and chance to strike,5%,,,Compound X
+GROUND,Chance for enemy purple attack to be 3 stars weaker,50%,,,Battle Helmet
+FLYING,Increase opponent miss chance,16%,,,White Feather
+PSYCHIC,Increase own chance to pierce opponent's defenses during white vs purple or white/gold vs blue,40%,,,Hypno Ring
+BUG,Increase own chance to pierce opponent's defenses during white vs purple or white/gold vs blue,40%,,,Spider Fang
+ROCK,Flat increase to own white damage by 30 and chance to strike,10%,,,Jade Braclets
+GHOST,Increase own chance to pierce opponent's defenses during white vs purple or white/gold vs blue,40%,,,Cursed Urn
+DRAGON,Chance for enemy purple attack to be 3 stars weaker,50%,,,Dragon Ring
+DARK,Increase opponent miss chance,16%,,,Shadow Choker
+STEEL,Flat increase to own gold damage by 24 and chance to strike,10%,,,Steel Pike
+FAIRY,Flat increase own purple stars by 1 and chance to strike,5%,,,Sacred Halo
+COSMIC,Flat increase to own white damage by 30 and chance to strike,10%,,,Cosmic Dagger
+UNDEAD,Chance to survive from being knocked out by opponent,30%,,,Bone Chalice
+OMNI,Gain random type immunities,6,,,Spirit Cloth
+OMNI,"Chance to use two moves, prioritising favourable outcomes",40%,,,Third Eye
+OMNI,Decrease opponent crit chance,100%,,,Cracked Mirror
+OMNI,Chance for opponent damage to be halved,40%,,,Soul Crystal

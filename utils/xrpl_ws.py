@@ -1074,7 +1074,7 @@ async def get_latest_nft_offers(address):
 # asyncio.run(accept_nft('auction', offer='9DE087BFBBD4F35BBBCC6BCE49FC13F537AFF401437AB178685C0252409A5308', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
 #                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E808CEC1F048F1E84'))
 # asyncio.run(send_nft('auction', to_address='r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7ED29FD31400000079'))
-# asyncio.run(send_nft('safari', to_address='r4zLg6wZyXfn1hs92pYxiD4xWaPZADrgMr', token_id='000800009DFF301D909E72368E61B385BDE81008B1875053B76D5E4D000002B2'))
+# asyncio.run(send_nft('loan', to_address='rUseRiLXCCn9q32CMZXDTA6AgvuxZFXYjx', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E50E6FD60048F1EC5'))
 # asyncio.run(send_nft('wager', to_address='rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7EC92FB492000003F7'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))

@@ -22,8 +22,8 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
     eq2_note2 = None
     if 'equipment2' in extra_buffs:
         eq2_note2 = await db_query.get_eq_by_name(extra_buffs['equipment2'])
-        for i in eq2_note2['notes']:
-            eq2_effect_list.append(i.lower())
+        # for i in eq2_note2['notes']:
+        #     eq2_effect_list.append(i.lower())
 
     main_embed = CustomEmbed(title="Zerpmon rolling attacks...", color=0x35bcbf)
     z1_asc = z1_obj.get("ascended", False)
@@ -46,7 +46,7 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
             value=f"> **{move['name']}** \n" + \
                   (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
-                  (f"> DMG: {move['dmg']}\n" if move['dmg'] else "") + \
+                  (f"> DMG: {round(move['dmg'], 1)}\n" if move['dmg'] is not None else "") + \
                   (f"> Stars: {move['stars'] * '★'}\n" if move.get('stars') else "") + \
                   (f"> Type: {config.TYPE_MAPPING[move['type']]}\n" if move.get('type') else "") + \
                   f"> Percentage: {round(move['percent'], 1)}%\n",
@@ -76,7 +76,7 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
             value=f"> **{move['name']}** \n" + \
                   (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
-                  (f"> DMG: {move['dmg']}\n" if move['dmg'] else "") + \
+                  (f"> DMG: {round(move['dmg'], 1)}\n" if move['dmg'] is not None else "") + \
                   (f"> Stars: {move['stars'] * '★'}\n" if move.get('stars') else "") + \
                   (f"> Type: {config.TYPE_MAPPING[move['type']]}\n" if move.get('type') else "") + \
                   f"> Percentage: {round(move['percent'], 1)}%\n",

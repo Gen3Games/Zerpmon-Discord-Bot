@@ -3938,7 +3938,7 @@ async def boss_stats(interaction: nextcord.Interaction):
             'image'].replace("ipfs://", ""))
     embed.add_field(name="Boss Trainer 👿:", value=f"> **{boss_trainer['name']}**", inline=False)
     embed.add_field(name="Total HP 💚:", value=f"> **{boss_info['start_hp']}**", inline=False)
-    embed.add_field(name="HP Left 💚:", value=f"> **{boss_info['boss_hp']}**", inline=False)
+    embed.add_field(name="HP Left 💚:", value=f"> **{round(boss_info['boss_hp'])}**", inline=False)
     embed.add_field(name="Reward Pool 💰:", value=f"> **{boss_info['reward']} ZRP**", inline=False)
     embed.add_field(name="Reset time 🕟:", value=f"> <t:{boss_info['boss_reset_t']}:R>", inline=False)
     embed.add_field(name='\u200B', value=f"\u200B", inline=False)
@@ -3947,9 +3947,9 @@ async def boss_stats(interaction: nextcord.Interaction):
     stats = user_d.get('boss_battle_stats', {})
     dmg = stats.get('weekly_dmg', 0)
     total_dmg = boss_info['total_weekly_dmg'] + boss_info['boss_hp']
-    embed.add_field(name="Total Damage dealt 🏹:", value=f"> **{stats.get('total_dmg', 0)}**", inline=False)
-    embed.add_field(name="Current Boss Damage 🏹:", value=f"> **{dmg}**", inline=False)
-    embed.add_field(name="Max Damage 🎯:", value=f"> **{stats.get('max_dmg', 0)}**", inline=False)
+    embed.add_field(name="Total Damage dealt 🏹:", value=f"> **{round(stats.get('total_dmg', 0))}**", inline=False)
+    embed.add_field(name="Current Boss Damage 🏹:", value=f"> **{round(dmg)}**", inline=False)
+    embed.add_field(name="Max Damage 🎯:", value=f"> **{round(stats.get('max_dmg', 0))}**", inline=False)
     embed.add_field(name="ZRP share 💵:", value=f"> **{max(0, round(dmg * boss_info['reward'] / total_dmg, 1))}**",
                     inline=False)
     embed.add_field(name="battle again ⏰:", value=f"> <t:{int(stats.get('next_battle_t', time.time()))}:R>",

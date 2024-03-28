@@ -35,7 +35,7 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
         boss_zerp['image'] if "https:/" in boss_zerp['image'] else 'https://cloudflare-ipfs.com/ipfs/' + boss_zerp[
             'image'].replace("ipfs://", ""))
     embed.add_field(name="Total HP 💚:", value=f"> **{boss_info['start_hp']}**", inline=False)
-    embed.add_field(name="HP Left 💚:", value=f"> **{boss_info['boss_hp']}**", inline=False)
+    embed.add_field(name="HP Left 💚:", value=f"> **{round(boss_info['boss_hp'])}**", inline=False)
     embed.add_field(name="Reward Pool 💰:", value=f"> **{boss_info['reward']} ZRP**", inline=False)
     embed.add_field(name="Reset time 🕟:", value=f"> <t:{boss_info['boss_reset_t']}:R>", inline=False)
     embed.add_field(name='\u200B', value=f"\u200B", inline=False)
@@ -45,8 +45,8 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
     for idx, user in enumerate(top_10):
         dmg = user['boss_battle_stats'].get('weekly_dmg', 0)
         embed.add_field(name=f"#{idx + 1} {user['username']}",
-                        value=f"> Damage dealt **{dmg}**\n"
-                              f"> Max damage **{user['boss_battle_stats'].get('max_dmg', 0)}**\n"
+                        value=f"> Damage dealt **{round(dmg)}**\n"
+                              f"> Max damage **{round(user['boss_battle_stats'].get('max_dmg', 0))}**\n"
                               f"> **ZRP share  `{max(0, round(dmg * boss_info['reward'] / total_dmg, 1)) if total_dmg > 0 else 0}`**",
                         inline=False)
 
