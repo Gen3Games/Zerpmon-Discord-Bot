@@ -159,9 +159,9 @@ def import_moves(col_name):
                 l_effect = row[5].lower()
                 get_effects(effects, entries, l_effect)
             stars = None if row[3].isdigit() else len(row[3])
-            if col_name == 'MoveList':
-                if 'turn' in row[5]:
-                    continue
+            # if col_name == 'MoveList':
+            #     if 'turn' in row[5]:
+            #         continue
             collection.update_one({'move_name': row[1]}, {'$set': {
                 'move_id': row[0],
                 'move_name': row[1],
@@ -210,7 +210,7 @@ def import_purple_star_ids():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_170324_for_glad.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_240324.csv', 'r') as csvfile:
         collection = db['MoveSets']
         movelist_col = db['MoveList']
         # c2 = db['MoveSets2']
@@ -441,8 +441,8 @@ def save_30_level_zerp():
     c2 = db['MoveSets3']
     c2.drop()
     for document in zerpmon_collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
-                                            'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0,
-                                            'winrate': 0}):
+                                                 'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0,
+                                                 'winrate': 0, 'ascended': 0}):
         if document['nft_id']:
             document['level'] = 30
             print(document['name'])
@@ -611,9 +611,10 @@ def cache_data():
         db['nft-uri-cache'].insert_many([i for k, i in tba.items()])
         collection = db['MoveSets']
         for nft in collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
-                                        'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0}):
-            is_present = db['MoveSets2'].find_one({'name': nft['name']})
-            if is_present is None:
+                                        'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0,
+                                        'ascended': 0}):
+            is_present = db['MoveSets2'].delete_one({'name': nft['name']})
+            if True:
                 if nft.get('nft_id') is None:
                     found = db['nft-uri-cache'].find_one({'metadata.name': nft['name']})
                     if found:
@@ -658,18 +659,91 @@ def reset_all_gyms():
 
 def import_equipments():
     with open('Zerpmon_Moves_-_Equipment.csv', 'r') as csvfile:
-        collection = db['Equipment']
+        collection = db['Equipment2']
         # collection.drop()
         csvreader = csv.reader(csvfile)
         for row in csvreader:
             if row[1] == "":
                 continue
+            notes = [f"{row[1]} by {row[2]}", (f"{row[3]} by {row[4]}" if row[3] else None)]
+            effect_list = []
+            for note in notes:
+                if note:
+                    note = note.lower()
+                    note = note.replace(" and ", "@")
+                    separated_note = note.split("@")
+                    for s in separated_note:
+                        print(s)
+
+                        change = 'decrease' if ('decrease' in s) else 'increase'
+                        change_val_type = 'percent' if 'halved' in s else 'flat'
+                        s = s.replace('halved', '50%')
+                        nums = extract_numbers(s)
+                        p_val = abs(nums[-1])
+                        change_val = None if len(nums) < 2 else (-1 if 'less' in s or 'weaker' in s else 1) * abs(
+                            nums[0])
+
+                        unit = ('percent-chance' if 'chance' in s else 'percent') if '%' in s else 'flat'
+                        target = 'opponent' if ('oppo' in s and 'by oppo' not in s) or 'enemy' in s else 'self'
+                        e_type = ''
+                        if True:
+                            if 'survive' in s:
+                                e_type = 'survive-chance'
+                            elif 'pierce' in s:
+                                e_type = 'pierce'
+                            elif 'crit' in s:
+                                e_type = 'crit-chance'
+                            elif 'purple star' in s or 'purple attack' in s:
+                                if 'chance' in s:
+                                    e_type = f'purple-buff-chance'
+                                else:
+                                    e_type = f'purple-stars-{change}'
+                            elif 'roll' in s:
+                                e_type = 'reroll-on-miss'
+                            elif 'miss' in s:
+                                e_type = f'miss-{change}'
+                            elif 'damage' in s:
+                                color = ''
+                                if 'gold' in s:
+                                    color = 'gold-'
+                                elif 'white' in s:
+                                    color = 'white-'
+                                if 'chance' in s:
+                                    e_type = f'{color}buff-chance'
+                                else:
+                                    e_type = f'{color}damage-{change}'
+                            elif 'blue chance' in s:
+                                e_type = f'blue-{change}'
+                            elif '0 damage' in s:
+                                if 'gold' in s:
+                                    e_type = f'gold-to-zero'
+                                else:
+                                    e_type = f'white-to-zero'
+                            else:
+                                s = ' '.join(separated_note)
+                                if 'gold' in s and 'chance' in s:
+                                    e_type = f'gold-percent-{change}'
+                                elif 'white' in s and 'chance' in s:
+                                    e_type = f'white-percent-{change}'
+                                elif 'purple' in s and 'chance' in s:
+                                    e_type = f'purple-percent-{change}'
+                        effect_list.append({
+                            "type": e_type,
+                            "value": p_val,
+                            "unit": unit,
+                            "target": target,
+                            "specifics": {
+                                "type": change_val_type,
+                                "value": change_val
+                            }
+                        })
             # Insert the row data to MongoDB
             collection.update_one({'name': row[-1]}, {'$set': {
                 'type': row[0].lower().title(),
                 'name': row[-1],
-                'notes': [i for i in row[1:-1] if i != ""]
-            }})
+                'notes': [n for n in notes if n],
+                "effects": effect_list,
+            }}, upsert=True)
 
 
 def switch_cached():
@@ -763,7 +837,6 @@ def add_gym_trainers():
         )
 
 
-
 # gift_ascension_reward()
 # switch_cached()
 # import_boxes()
@@ -773,7 +846,7 @@ def add_gym_trainers():
 # import_ascend_levels()
 # gift_ascension_reward()
 
-# import_equipments()
+import_equipments()
 
 # add_gym_level_buffs()
 # add_gym_trainers()
@@ -783,6 +856,6 @@ def add_gym_trainers():
 # import_movesets()
 # import_attrs_img()
 # clean_attrs()
-cache_data()
+# cache_data()
 # update_all_zerp_moves()
 # save_30_level_zerp()
