@@ -6,7 +6,7 @@ from utils.checks import CustomEmbed, gen_image
 
 
 async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buffed_zerp1, buffed_zerp2,
-                                   extra_buffs, hp=None):
+                                   extra_buffs, firstRoundLog, hp=None):
     z1_obj, z2_obj = z1_equipped['zerpmon'], z2_equipped['zerpmon']
     z1_eq, z2_eq = z1_equipped['equipment'] if z1_equipped['equipment'] else {}, \
                    z2_equipped['equipment'] if z2_equipped['equipment'] else {}
@@ -35,9 +35,13 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
         value=f"{config.TYPE_MAPPING[buffed_zerp1.title()]} **Trainer buff**" if buffed_zerp1 else "\u200B",
         inline=False)
     if z1_eq != {}:
+        if firstRoundLog['zerpmonAImmunitiesGranted']:
+            notes = "Immune to" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonAImmunitiesGranted']])
+        else:
+            notes = '\n'.join([f"`{i}`" for i in eq1_effect_list])
         main_embed.add_field(
             name=f"{config.TYPE_MAPPING[z1_eq.get('type')]} Equipment",
-            value=f"{z1_eq['name']}:\n" + '\n'.join([f"`{i}`" for i in eq1_effect_list]),
+            value=f"{z1_eq['name']}:\n" + notes,
             inline=False)
 
     for i, move in enumerate(z1_moves):
@@ -61,9 +65,13 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
         value=f"{config.TYPE_MAPPING[buffed_zerp2.title()]} **Trainer buff**" if buffed_zerp2 else "\u200B",
         inline=False)
     if z2_eq != {}:
+        if firstRoundLog['zerpmonBImmunitiesGranted']:
+            notes = "Immune to:" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonBImmunitiesGranted']])
+        else:
+            notes = '\n'.join([f"`{i}`" for i in eq1_effect_list])
         main_embed.add_field(
             name=f"{config.TYPE_MAPPING[z2_eq.get('type')]} Equipment",
-            value=f"{z2_eq['name']}:\n" + '\n'.join([f"`{i}`" for i in z2_eq['notes']]),
+            value=f"{z2_eq['name']}:\n" + notes,
             inline=False)
         if eq2_note2:
             main_embed.add_field(

@@ -993,6 +993,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 gym_buff_obj,
+                                                                                result['roundLogs'][0],
                                                                                 None, )
             if msg_hook is None:
                 msg_hook = interaction
@@ -1240,6 +1241,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 {},
+                                                                                result['roundLogs'][0],
                                                                                 None, )
             if msg_hook is None:
                 if hidden:
@@ -1331,6 +1333,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 def get_type(doc: dict):
     if "type" in doc:
         return doc["type"]
+    elif "affinity" in doc:
+        return doc["affinity"]
     else:
         types = []
         for val in doc["attributes"]:
@@ -1398,6 +1402,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                                                                             has_buff,
                                                                             '',
                                                                             {},
+                                                                            result['roundLogs'][0],
                                                                             None, )
         await interaction.send(content="\u200B", embed=main_embed, file=file, ephemeral=True)
         for round_messages in result['roundLogs']:
@@ -1594,6 +1599,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 '',
                                                                                 {},
+                                                                                result['roundLogs'][0],
                                                                                 cur_hp, )
             cur_hp = boss_hp - result['dmgVariations'][idx1 + idx2]
             if msg_hook is None:
@@ -1825,6 +1831,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 gym_buff_obj,
+                                                                                result['roundLogs'][0],
                                                                                 None, )
             if msg_hook is None:
                 msg_hook = interaction
