@@ -27,6 +27,7 @@ sent = []
 loan_seq = None
 wager_seq = None
 gym_seq = None
+tower_seq = None
 gym_bal = None
 active_zrp_addr = config.B1_ADDR
 active_zrp_seed = config.B1_SEED
@@ -75,6 +76,18 @@ def inc_user_gp(address, inc):
     )
 
 
+def inc_user_trp(address, zrp_earned, trp):
+    users_col = db['temp_users_data']
+    users_col.update_one({
+        'address': address
+    },
+        {
+            '$max': {'max_level': trp + 1},
+            '$inc': {'total_zrp_earned': zrp_earned, 'tp': trp}
+        }
+    )
+
+
 async def setup_gym(amount):
     global gym_seq, gym_bal, active_zrp_addr, active_zrp_seed
     bal = float(await get_zrp_balance(active_zrp_addr)) if gym_bal is None else gym_bal
@@ -91,7 +104,7 @@ async def setup_gym(amount):
 
 async def accept_nft(from_, offer, sender='0', token='0'):
     client = await get_ws_client()
-    global wager_seq, loan_seq, gym_seq
+    global wager_seq, loan_seq, gym_seq, tower_seq
     for i in range(3):
         sequence, sending_address, sending_wallet = await get_seq(from_)
 
@@ -117,18 +130,20 @@ async def accept_nft(from_, offer, sender='0', token='0'):
 
 
 def update_seq(response, from_):
-    global gym_seq, loan_seq, wager_seq
+    global gym_seq, loan_seq, wager_seq, tower_seq
     if from_ == 'loan':
         loan_seq = response.result['account_sequence_next']
     elif from_ == 'gym':
         gym_seq = response.result['account_sequence_next']
+    elif from_ == 'tower':
+        tower_seq = response.result['account_sequence_next']
     else:
         wager_seq = response.result['account_sequence_next']
 
 
 async def send_nft(from_, to_address, token_id, memo=None):
     client = await get_ws_client()
-    global gym_seq, loan_seq, wager_seq
+    global gym_seq, loan_seq, wager_seq, tower_seq
     try:
         for i in range(5):
             sequence, sending_address, sending_wallet = await get_seq(from_)
@@ -183,7 +198,7 @@ async def send_nft(from_, to_address, token_id, memo=None):
 
 async def send_txn(to: str, amount: float, sender, memo=None):
     client = await get_ws_client()
-    global gym_seq, loan_seq, wager_seq
+    global gym_seq, loan_seq, wager_seq, tower_seq
     for i in range(5):
         try:
             sequence, sending_address, sending_wallet = await get_seq(sender)
@@ -232,7 +247,7 @@ async def send_txn(to: str, amount: float, sender, memo=None):
 
 async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
     client = await get_ws_client()
-    global wager_seq, active_zrp_seed, active_zrp_addr, gym_seq, loan_seq
+    global wager_seq, active_zrp_seed, active_zrp_addr, gym_seq, loan_seq, tower_seq
     for i in range(5):
         try:
             sequence, sending_address, sending_wallet = await get_seq(sender, amount)
@@ -318,6 +333,16 @@ async def get_seq(from_, amount=None):
             # Load the sending account's secret and address from a wallet
             sending_wallet = Wallet(seed=config.WAGER_SEED, sequence=sequence)
             sending_address = config.WAGER_ADDR
+            return sequence, sending_address, sending_wallet
+        case 'tower':
+            acc_info = AccountInfo(
+                account=config.TOWER_ADDR
+            )
+            account_info = await client.request(acc_info)
+            sequence = account_info.result["account_data"]["Sequence"] if tower_seq is None else tower_seq
+            # Load the sending account's secret and address from a wallet
+            sending_wallet = Wallet(seed=config.TOWER_SEED, sequence=sequence)
+            sending_address = config.TOWER_ADDR
             return sequence, sending_address, sending_wallet
         case 'gym':
             asyncio.create_task(setup_gym(amount))
@@ -418,8 +443,9 @@ async def main():
                                 else:
                                     inc_retry_cnt(_id)
                             elif txn['type'] == 'NFTokenAcceptOffer':
-                                success, offerID, hash_ = await accept_nft(txn['from'], txn.get('offer'), txn['destination'],
-                                                                         txn['nftokenID'])
+                                success, offerID, hash_ = await accept_nft(txn['from'], txn.get('offer'),
+                                                                           txn['destination'],
+                                                                           txn['nftokenID'])
                                 if success:
                                     sent.append(_id)
                                     txn['status'] = 'fulfilled'
@@ -437,11 +463,15 @@ async def main():
                                     update_txn_log(_id, txn)
                                     continue
                                 if txn['currency'] == 'XRP':
-                                    success, hash_ = await send_txn(txn['destination'], amt, txn['from'], txn.get('memo'))
+                                    success, hash_ = await send_txn(txn['destination'], amt, txn['from'],
+                                                                    txn.get('memo'))
                                 else:
-                                    success, hash_ = await send_zrp(txn['destination'], amt, txn['from'], memo=txn.get('memo'))
+                                    success, hash_ = await send_zrp(txn['destination'], amt, txn['from'],
+                                                                    memo=txn.get('memo'))
                                     if txn.get('gp'):
                                         inc_user_gp(txn['destination'], txn.get('gp'))
+                                    elif txn.get('trp'):
+                                        inc_user_trp(txn['destination'], amt, txn.get('trp'))
                                 # success, hash_ = True, 'x'
                                 if success:
                                     sent.append(_id)
