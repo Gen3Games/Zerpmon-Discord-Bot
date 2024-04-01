@@ -77,7 +77,7 @@ def inc_user_gp(address, inc):
 
 
 def inc_user_trp(address, zrp_earned, trp):
-    users_col = db['temp_users_data']
+    users_col = db['temp_user_data']
     users_col.update_one({
         'address': address
     },
