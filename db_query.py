@@ -2499,7 +2499,7 @@ async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
 
                                                       },
                                              '$max': {'max_level': lvl},
-                                             '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1}})
+                                             '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1, 'total_matches': 1}})
     return res.acknowledged
 
 
@@ -2519,7 +2519,7 @@ async def dec_life_gym_tower(user_id):
          'lives': 0
          }
     res = await users_collection.update_one({'discord_id': str(user_id)},
-                                            {'$set': q})
+                                            {'$set': q, '$inc': {'total_matches': 1}})
     return res.acknowledged
 
 
@@ -2540,7 +2540,7 @@ async def update_gym_tower(user_id, new_level):
              'equipments': [],
              'trainers': [],
              }
-    res = await users_collection.update_one({'discord_id': str(user_id)}, {'$set': q})
+    res = await users_collection.update_one({'discord_id': str(user_id)}, {'$set': q, '$inc': {'total_matches': 1}})
     return res.acknowledged
 
 
