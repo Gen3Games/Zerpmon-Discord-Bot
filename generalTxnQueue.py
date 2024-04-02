@@ -466,20 +466,20 @@ async def save_boss_rewards(defeated_by, winners, description, channel_id):
     stats_col.insert_one(obj)
 
 
-async def mark_failed_boss_txns(failed_address_list):
+async def mark_failed_boss_txns(failed_address_list, failed_str):
     stats_col = db['stats_log']
-    obj = {{f'rewards.{i}.failed': True} for i in failed_address_list}
+    obj = {f'rewards.{i}.failed': True for i in failed_address_list}
+    obj['failed_str'] = failed_str
+    print(obj)
     stats_col.update_one({'name': 'world_boss_reward_log'},
                          {'$set': obj})
 
 
-async def handle_boss_txn(txn):
-    _id = txn['_id']
+async def handle_boss_txn(_id, txn):
     dmgDealt = txn.get('dmgDealt', 0)
     startHp = txn.get('startHp', 0)
     addr = txn['destination']
     if txn['amount'] == 0:
-
         await set_boss_hp(addr, dmgDealt, startHp)
     else:
         reward_dict = {}
@@ -494,9 +494,10 @@ async def handle_boss_txn(txn):
                 for player in winners:
                     p_dmg = player['boss_battle_stats']['weekly_dmg']
                     if p_dmg > 0:
+                        print(total_dmg, t_reward, p_dmg)
                         amt = round(p_dmg * t_reward / total_dmg, 2)
                         reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
-                        description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
+                        description += f"<@{player['discord_id']}>\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
                 await save_boss_rewards(defeated_by=addr, winners=reward_dict, description=description, channel_id=config.BOSS_CHANNEL)
                 break
             except:
@@ -507,6 +508,7 @@ async def handle_boss_txn(txn):
         success_txn = 0
         failed_str = ''
         failed_list = []
+        saved = False
         for addr, obj in reward_dict.items():
             saved = await send_zrp(addr, obj['amt'], 'wager')
             if saved:
@@ -514,7 +516,7 @@ async def handle_boss_txn(txn):
             else:
                 failed_str += f"\n{obj['name']}\t`{obj['amt']} ZRP` ❌"
                 failed_list.append(addr)
-        await mark_failed_boss_txns(failed_list)
+        await mark_failed_boss_txns(failed_list, failed_str)
         await reset_weekly_dmg()
     txn['status'] = 'fulfilled'
     txn['hash'] = ''
@@ -566,7 +568,7 @@ async def main():
                             elif txn['type'] == 'Payment':
                                 amt = txn['amount']
                                 if txn['from'] == 'boss':
-                                    await handle_boss_txn(txn)
+                                    await handle_boss_txn(_id, txn)
                                 else:
                                     if amt == 0:
                                         txn['status'] = 'fulfilled'
