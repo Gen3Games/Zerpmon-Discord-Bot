@@ -413,6 +413,114 @@ async def get_zrp_balance(address, issuer=False):
         return None
 
 
+async def set_boss_hp(addr, dmg_done, cur_hp) -> None:
+    users_col = db['users']
+    users_col.update_one({'address': addr},
+                               {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done,
+                                         'boss_battle_stats.total_dmg': dmg_done},
+                                '$max': {'boss_battle_stats.max_dmg': dmg_done}},
+                               )
+    stats_col = db['stats_log']
+    new_hp = cur_hp - dmg_done
+    if new_hp > 0:
+        stats_col.update_one({'name': 'world_boss'},
+                                   {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}})
+    else:
+        stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
+
+
+async def get_boss_stats():
+    stats_col = db['stats_log']
+    obj = stats_col.find_one({'name': 'world_boss'})
+    return obj
+
+
+async def boss_reward_winners() -> list:
+    users_col = db['users']
+
+    filter = {"boss_battle_stats": {"$exists": True}}
+    projection = {"boss_battle_stats": 1, "address": 1, "discord_id": 1, "username": 1, '_id': 0}
+    li = users_col.find(filter, projection)
+
+    return [i for i in li]
+
+
+async def reset_weekly_dmg() -> None:
+    users_col = db['users']
+    users_col.update_many({'boss_battle_stats': {'$exists': True}},
+                                {'$set': {'boss_battle_stats.weekly_dmg': 0}})
+    stats_col = db['stats_log']
+    stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_active': False}})
+
+
+async def save_boss_rewards(defeated_by, winners, description, channel_id):
+    stats_col = db['stats_log']
+    obj = {
+        'name': 'world_boss_reward_log',
+        'defeated_by_address': defeated_by,
+        'rewards': winners,
+        'description': description,
+        'channel_id': channel_id,
+        'ts': int(time.time())
+    }
+    stats_col.insert_one(obj)
+
+
+async def mark_failed_boss_txns(failed_address_list):
+    stats_col = db['stats_log']
+    obj = {{f'rewards.{i}.failed': True} for i in failed_address_list}
+    stats_col.update_one({'name': 'world_boss_reward_log'},
+                         {'$set': obj})
+
+
+async def handle_boss_txn(txn):
+    _id = txn['_id']
+    dmgDealt = txn.get('dmgDealt', 0)
+    startHp = txn.get('startHp', 0)
+    addr = txn['destination']
+    if txn['amount'] == 0:
+
+        await set_boss_hp(addr, dmgDealt, startHp)
+    else:
+        reward_dict = {}
+        await set_boss_hp(addr, startHp, startHp)
+        new_boss_stats = await get_boss_stats()
+        total_dmg = new_boss_stats['total_weekly_dmg']
+        winners = await boss_reward_winners()
+        for i in range(10):
+            try:
+                t_reward = new_boss_stats['reward']
+                description = f"Starting to distribute **`{t_reward} ZRP` Boss reward!\n\n"
+                for player in winners:
+                    p_dmg = player['boss_battle_stats']['weekly_dmg']
+                    if p_dmg > 0:
+                        amt = round(p_dmg * t_reward / total_dmg, 2)
+                        reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
+                        description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
+                await save_boss_rewards(defeated_by=addr, winners=reward_dict, description=description, channel_id=config.BOSS_CHANNEL)
+                break
+            except:
+                logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
+                await asyncio.sleep(10)
+        logging.error(f'BossRewards: {reward_dict}')
+        total_txn = len(reward_dict)
+        success_txn = 0
+        failed_str = ''
+        failed_list = []
+        for addr, obj in reward_dict.items():
+            saved = await send_zrp(addr, obj['amt'], 'wager')
+            if saved:
+                success_txn += 1
+            else:
+                failed_str += f"\n{obj['name']}\t`{obj['amt']} ZRP` ❌"
+                failed_list.append(addr)
+        await mark_failed_boss_txns(failed_list)
+        await reset_weekly_dmg()
+    txn['status'] = 'fulfilled'
+    txn['hash'] = ''
+    update_txn_log(_id, txn)
+
+
 async def main():
     global ws_client, gym_bal
     await setup_gym(0)
@@ -457,30 +565,33 @@ async def main():
                                     inc_retry_cnt(_id)
                             elif txn['type'] == 'Payment':
                                 amt = txn['amount']
-                                if amt == 0:
-                                    txn['status'] = 'fulfilled'
-                                    txn['hash'] = ''
-                                    update_txn_log(_id, txn)
-                                    continue
-                                if txn['currency'] == 'XRP':
-                                    success, hash_ = await send_txn(txn['destination'], amt, txn['from'],
-                                                                    txn.get('memo'))
+                                if txn['from'] == 'boss':
+                                    await handle_boss_txn(txn)
                                 else:
-                                    success, hash_ = await send_zrp(txn['destination'], amt, txn['from'],
-                                                                    memo=txn.get('memo'))
-                                    if txn.get('gp'):
-                                        inc_user_gp(txn['destination'], txn.get('gp'))
-                                    elif txn.get('trp'):
-                                        inc_user_trp(txn['destination'], amt, txn.get('trp'))
-                                # success, hash_ = True, 'x'
-                                if success:
-                                    sent.append(_id)
-                                    txn['status'] = 'fulfilled'
-                                    txn['hash'] = hash_
-                                    update_txn_log(_id, txn)
-                                    sent.pop()
-                                else:
-                                    inc_retry_cnt(_id)
+                                    if amt == 0:
+                                        txn['status'] = 'fulfilled'
+                                        txn['hash'] = ''
+                                        update_txn_log(_id, txn)
+                                        continue
+                                    if txn['currency'] == 'XRP':
+                                        success, hash_ = await send_txn(txn['destination'], amt, txn['from'],
+                                                                        txn.get('memo'))
+                                    else:
+                                        success, hash_ = await send_zrp(txn['destination'], amt, txn['from'],
+                                                                        memo=txn.get('memo'))
+                                        if txn.get('gp'):
+                                            inc_user_gp(txn['destination'], txn.get('gp'))
+                                        elif txn.get('trp'):
+                                            inc_user_trp(txn['destination'], amt, txn.get('trp'))
+                                    # success, hash_ = True, 'x'
+                                    if success:
+                                        sent.append(_id)
+                                        txn['status'] = 'fulfilled'
+                                        txn['hash'] = hash_
+                                        update_txn_log(_id, txn)
+                                        sent.pop()
+                                    else:
+                                        inc_retry_cnt(_id)
         except Exception as e:
             logging.error(f'EXECPTION in WS: {traceback.format_exc()}')
 
