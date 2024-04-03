@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import random
+import re
 import sys
 import time
 import traceback
@@ -378,9 +379,15 @@ async def get_rand_zerpmon(level, lure_type=None):
     return zerp
 
 
-async def get_all_z():
+async def get_all_z(substr=None):
     zerpmon_collection = db['MoveSets']
-    data = await zerpmon_collection.find({}).to_list(None)
+    if not substr:
+        data = await zerpmon_collection.find({}).to_list(None)
+    else:
+        data = await zerpmon_collection.find(
+            {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
+            {'_id': 0, 'name': 1, 'zerpmonType': 1}) \
+            .to_list(None)
     return [i for i in data]
 
 
@@ -406,7 +413,7 @@ async def update_zerpmon_alive(zerpmon, serial, user_id):
     # if 'eq_applied_miss' in zerpmon:
     #     del zerpmon['eq_applied_miss']
     r = await users_collection.update_one({'discord_id': str(user_id)},
-                                                   {'$set': {f'zerpmons.{serial}.active_t': zerpmon['active_t']}})
+                                          {'$set': {f'zerpmons.{serial}.active_t': zerpmon['active_t']}})
     # print(r)
 
 
@@ -1195,7 +1202,7 @@ async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, res
 
 async def add_gp_queue(address, match_cnt, gp):
     uid = f'gym-{address}-{match_cnt}'
-    amt = round(gp/2, 2)
+    amt = round(gp / 2, 2)
     queue_query = {
         'uniqueId': uid,
         'type': 'Payment',
@@ -1723,8 +1730,8 @@ async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_te
     print(f'Updating battle log : {user1_name, user2_name}')
     if user1_id is not None:
         match = {'ts': int(time.time()), 'won': winner == 1, 'opponent': user2_name,
-                                   'battle_type': battle_type,
-                                   'data': {'teamA': user1_team, 'teamB': user2_team}}
+                 'battle_type': battle_type,
+                 'data': {'teamA': user1_team, 'teamB': user2_team}}
         user1_update = UpdateOne(
             {'discord_id': str(user1_id)},
             {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': 10}}},
@@ -1734,8 +1741,8 @@ async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_te
 
     if user2_id is not None:
         match = {'ts': int(time.time()), 'won': winner == 2, 'opponent': user1_name,
-                                   'battle_type': battle_type,
-                                   'data': {'teamA': user2_team, 'teamB': user1_team}}
+                 'battle_type': battle_type,
+                 'data': {'teamA': user2_team, 'teamB': user1_team}}
         user2_update = UpdateOne(
             {'discord_id': str(user2_id)},
             {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': 10}}},
@@ -1796,8 +1803,14 @@ async def get_eq_by_name(name, gym=False):
         return await equipment_col.find_one({'name': name}, )
 
 
-async def get_all_eqs(limit=None):
-    return list(await equipment_col.find({}, {'_id': 0}).to_list(None))
+async def get_all_eqs(limit=None, substr=None):
+    if not substr:
+        return list(await equipment_col.find({}, {'_id': 0}).to_list(None))
+    else:
+        return list(await equipment_col.find(
+            {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
+            {'_id': 0, 'name': 1, 'type': 1, 'effects': 0}) \
+                    .to_list(None))
 
 
 """LOAN"""
@@ -2090,6 +2103,22 @@ async def set_boss_battle_t(user_id, reset_next_t=False) -> None:
     await users_col.update_one({'discord_id': str(user_id)},
                                {'$set': {'boss_battle_stats.next_battle_t': (
                                                                                 await get_next_ts()) + 60 if not reset_next_t else 0}})
+
+
+async def add_boss_txn_log(uid: str, to_addr: str, amount: float, dmgDealt, startHp):
+    txn_log_col = db['general-txn-queue']
+    res = await txn_log_col.update_one({'uid': uid + f'-{(await get_next_ts()) + 60}'},
+                                       {'$setOnInsert': {
+                                           'type': 'Payment',
+                                           'from': 'boss',
+                                           'destination': to_addr,
+                                           'amount': amount,
+                                           'currency': 'ZRP',
+                                           'status': 'pending',
+                                           'dmgDealt': dmgDealt,
+                                           'startHp': startHp,
+                                       }}, upsert=True)
+    return res.acknowledged
 
 
 async def set_boss_hp(user_id, dmg_done, cur_hp) -> None:
@@ -2499,7 +2528,8 @@ async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
 
                                                       },
                                              '$max': {'max_level': lvl},
-                                             '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1, 'total_matches': 1}})
+                                             '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1,
+                                                      'total_matches': 1}})
     return res.acknowledged
 
 
@@ -2645,6 +2675,28 @@ async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission',
     for i in zerp_arr2:
         obj['playerBZerpmons'].append(i['name'])
         obj['playerBEquipments'].append(i.get('buff_eq'))
+
+    input_col.insert_one(obj)
+    config.battle_results[obj['uid']] = None
+    return obj['uid']
+
+
+async def make_sim_battle_req(playerA, playerB, battle_type='simulation', cnt=1):
+    input_col = db['discord_battle_requests']
+    obj = {
+        'uid': str(uuid.uuid4()),
+        'playerAZerpmons': playerA['zerpmons'],
+        'playerBZerpmons': playerB['zerpmons'],
+        'playerAEquipments': playerA['equipments'],
+        'playerBEquipments': playerB['equipments'],
+        'playerATrainer': playerA['trainer'],
+        'playerBTrainer': playerB['trainer'],
+        'battleType': battle_type,
+        'status': 'pending',
+        'cnt': cnt,
+        'extrabuff': None,
+        'startHp': None,
+    }
 
     input_col.insert_one(obj)
     config.battle_results[obj['uid']] = None
