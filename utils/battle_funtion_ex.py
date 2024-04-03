@@ -68,7 +68,7 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
         if firstRoundLog['zerpmonBImmunitiesGranted']:
             notes = "Immune to:" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonBImmunitiesGranted']])
         else:
-            notes = '\n'.join([f"`{i}`" for i in eq1_effect_list])
+            notes = '\n'.join([f"`{i}`" for i in eq2_effect_list])
         main_embed.add_field(
             name=f"{config.TYPE_MAPPING[z2_eq.get('type')]} Equipment",
             value=f"{z2_eq['name']}:\n" + notes,
