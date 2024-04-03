@@ -379,6 +379,18 @@ async def get_rand_zerpmon(level, lure_type=None):
     return zerp
 
 
+async def get_all_t(substr=None):
+    t_collection = db['trainers']
+    if not substr:
+        data = await t_collection.find({}).to_list(None)
+    else:
+        data = await t_collection.find(
+            {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
+            {'_id': 0, 'name': 1, 'type': 1, 'affinity': 1}) \
+            .to_list(25)
+    return data
+
+
 async def get_all_z(substr=None):
     zerpmon_collection = db['MoveSets']
     if not substr:
@@ -387,8 +399,8 @@ async def get_all_z(substr=None):
         data = await zerpmon_collection.find(
             {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
             {'_id': 0, 'name': 1, 'zerpmonType': 1}) \
-            .to_list(None)
-    return [i for i in data]
+            .to_list(25)
+    return data
 
 
 async def update_image(name, url):
@@ -1805,12 +1817,12 @@ async def get_eq_by_name(name, gym=False):
 
 async def get_all_eqs(limit=None, substr=None):
     if not substr:
-        return list(await equipment_col.find({}, {'_id': 0}).to_list(None))
+        return await equipment_col.find({}, {'_id': 0}).to_list(None)
     else:
-        return list(await equipment_col.find(
+        return await equipment_col.find(
             {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
             {'_id': 0, 'name': 1, 'type': 1, 'effects': 0}) \
-                    .to_list(None))
+                    .to_list(25)
 
 
 """LOAN"""
@@ -2685,12 +2697,12 @@ async def make_sim_battle_req(playerA, playerB, battle_type='simulation', cnt=1)
     input_col = db['discord_battle_requests']
     obj = {
         'uid': str(uuid.uuid4()),
-        'playerAZerpmons': playerA['zerpmons'],
-        'playerBZerpmons': playerB['zerpmons'],
-        'playerAEquipments': playerA['equipments'],
-        'playerBEquipments': playerB['equipments'],
-        'playerATrainer': playerA['trainer'],
-        'playerBTrainer': playerB['trainer'],
+        'playerAZerpmons': [(i if i else None) for i in playerA['zerpmons']],
+        'playerBZerpmons': [(i if i else None) for i in playerB['zerpmons']],
+        'playerAEquipments': [(i if i else None) for i in playerA['equipments']],
+        'playerBEquipments': [(i if i else None) for i in playerB['equipments']],
+        'playerATrainer': playerA['trainer'] if playerA['trainer'] else None,
+        'playerBTrainer': playerB['trainer'] if playerB['trainer'] else None,
         'battleType': battle_type,
         'status': 'pending',
         'cnt': cnt,
