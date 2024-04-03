@@ -30,7 +30,7 @@ from utils.simulation import simulation_callback
 from utils.trade import trade_item
 from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete, \
     loan_autocomplete, zerp_flair_autocomplete, deck_num_autocomplete, def_deck_autocomplete, zerpmon_sim_autocomplete, \
-    equipment_sim_autocomplete
+    equipment_sim_autocomplete, trainer_sim_autocomplete
 from utils.callback import wager_battle_r_callback
 
 intents = nextcord.Intents.all()
@@ -1646,72 +1646,78 @@ async def show_gym_cleared(interaction: nextcord.Interaction,
 @client.slash_command(name="simulation_battle",
                       description="Simulate battles between any zerpmon (admins only)")
 async def simulation_battle(interaction: nextcord.Interaction,
-                           battle_count: int = SlashOption(required=True, min_value=1, max_value=1000),
-                           zerpmonA1: str = SlashOption("1st", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           zerpmonA2: str = SlashOption("2nd", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           zerpmonA3: str = SlashOption("3rd", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           zerpmonA4: str = SlashOption("4th", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           zerpmonA5: str = SlashOption("5th", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           eqA1: str = SlashOption("equipment_1", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           eqA2: str = SlashOption("equipment_2", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           eqA3: str = SlashOption("equipment_3", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           eqA4: str = SlashOption("equipment_4", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           eqA5: str = SlashOption("equipment_5", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           zerpmonB1: str = SlashOption("vs_1st", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           zerpmonB2: str = SlashOption("vs_2nd", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           zerpmonB3: str = SlashOption("vs_3rd", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           zerpmonB4: str = SlashOption("vs_4th", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           zerpmonB5: str = SlashOption("vs_5th", autocomplete_callback=zerpmon_sim_autocomplete,
-                                                        required=False, default=''),
-                           eqB1: str = SlashOption("vs_equipment_1", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           eqB2: str = SlashOption("vs_equipment_2", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           eqB3: str = SlashOption("vs_equipment_3", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           eqB4: str = SlashOption("vs_equipment_4", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           eqB5: str = SlashOption("vs_equipment_5", autocomplete_callback=equipment_sim_autocomplete,
-                                                   required=False),
-                           ):
+                            battle_count: int = SlashOption(required=True, min_value=1, max_value=1000),
+                            trainerA: str = SlashOption("trainer",
+                                                               autocomplete_callback=trainer_sim_autocomplete,
+                                                               required=False, default=None),
+                            zerpmonA1: str = SlashOption("1st", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            zerpmonA2: str = SlashOption("2nd", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            zerpmonA3: str = SlashOption("3rd", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            zerpmonA4: str = SlashOption("4th", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            zerpmonA5: str = SlashOption("5th", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            eqA1: str = SlashOption("equipment_1", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            eqA2: str = SlashOption("equipment_2", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            eqA3: str = SlashOption("equipment_3", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            eqA4: str = SlashOption("equipment_4", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            eqA5: str = SlashOption("equipment_5", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            trainerB: str = SlashOption("vs_trainer",
+                                                               autocomplete_callback=trainer_sim_autocomplete,
+                                                               required=False, default=None),
+                            zerpmonB1: str = SlashOption("vs_1st", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            zerpmonB2: str = SlashOption("vs_2nd", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            zerpmonB3: str = SlashOption("vs_3rd", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            zerpmonB4: str = SlashOption("vs_4th", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            zerpmonB5: str = SlashOption("vs_5th", autocomplete_callback=zerpmon_sim_autocomplete,
+                                                         required=False, default=''),
+                            eqB1: str = SlashOption("vs_equipment_1", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            eqB2: str = SlashOption("vs_equipment_2", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            eqB3: str = SlashOption("vs_equipment_3", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            eqB4: str = SlashOption("vs_equipment_4", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            eqB5: str = SlashOption("vs_equipment_5", autocomplete_callback=equipment_sim_autocomplete,
+                                                    required=False),
+                            ):
     execute_before_command(interaction)
     await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in config.ADMINS:
         await interaction.edit_original_message(content=f"Only **Admins** can access this command")
         return
     playerA = {
-        'trainer': None,
-        'zerpmons': [zerpmonA1, zerpmonA2,zerpmonA3,zerpmonA4,zerpmonA5],
+        'trainer': trainerA,
+        'zerpmons': [zerpmonA1, zerpmonA2, zerpmonA3, zerpmonA4, zerpmonA5],
         'equipments': [eqA1, eqA2, eqA3, eqA4, eqA5],
     }
     playerB = {
-        'trainer': None,
-        'zerpmons': [zerpmonB1, zerpmonB2,zerpmonB3,zerpmonB4,zerpmonB5],
+        'trainer': trainerB,
+        'zerpmons': [zerpmonB1, zerpmonB2, zerpmonB3, zerpmonB4, zerpmonB5],
         'equipments': [eqB1, eqB2, eqB3, eqB4, eqB5],
     }
     result = await simulation_callback(interaction, battle_count, playerA, playerB)
-    csv_file_name = f'Result-{time.time() * 1000}.csv'
-    checks.save_csv(result, name=csv_file_name)
-    with open(csv_file_name, 'rb') as data:
-        csv_file = nextcord.File(csv_file_name, filename=csv_file_name)
-        await interaction.edit_original_message(content=f"**Found**", file=csv_file)
-    csv_file.close()
-    # Remove the CSV file after sending
-    os.remove(csv_file_name)
+    # csv_file_name = f'Result-{time.time() * 1000}.csv'
+    # checks.save_csv(result, name=csv_file_name)
+    # with open(csv_file_name, 'rb') as data:
+    #     csv_file = nextcord.File(csv_file_name, filename=csv_file_name)
+    #     await interaction.edit_original_message(content=f"**Found**", file=csv_file)
+    # csv_file.close()
+    # # Remove the CSV file after sending
+    # os.remove(csv_file_name)
 
 
 @client.slash_command(name="show_zerpmon", description="Show a Zerpmon's stats")

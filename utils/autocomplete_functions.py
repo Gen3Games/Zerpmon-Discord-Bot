@@ -192,6 +192,21 @@ async def def_deck_autocomplete(_i: nextcord.Interaction, item: str):
     await _i.response.send_autocomplete(dict(choices))
 
 
+async def trainer_sim_autocomplete(interaction: nextcord.Interaction, item: str):
+    cards = await db_query.get_all_t(item)
+    choices = {}
+    if (len(cards)) == 0:
+        pass
+    else:
+        for v in cards:
+            t_type = v['type'] if 'type' in v else v.get('affinity')
+            if len(choices) == 24:
+                break
+            choices[f'{v["name"]} ({t_type})'] = v["name"]
+    choices['Empty slot'] = ''
+    await interaction.response.send_autocomplete(choices)
+
+
 async def zerpmon_sim_autocomplete(interaction: nextcord.Interaction, item: str):
     params = interaction.data['options']
     try:
