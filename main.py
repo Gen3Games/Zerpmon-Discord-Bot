@@ -137,6 +137,10 @@ def check_and_restart(task_handle: asyncio.Task, fn, arg):
 async def setup_tasks():
     global task1, task2, task3
     task1 = check_and_restart(task1, nft_holding_updater.update_nft_holdings, client)
+    if task2 is not None and config_extra.reset_last_run < time.time() - 100:
+        logging.error(f'Task2 is stuck, restarting...')
+        task2.cancel()
+        task2 = None
     task2 = check_and_restart(task2, reset_alert.send_reset_message, client)
     task3 = check_and_restart(task3, checks.get_battle_results, config.battle_results)
 
