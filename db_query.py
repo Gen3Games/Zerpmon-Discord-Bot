@@ -1235,12 +1235,13 @@ async def add_gp_queue(address, match_cnt, gp):
 
 async def update_gym_won(discord_id, gym_obj, gym_type, stage, lost=False):
     users_collection = db['users']
+    next_day_ts = await get_next_ts(1)
     if lost:
         n_stage = stage
-        reset_t = await get_next_ts(1)
+        reset_t = next_day_ts
     else:
         n_stage = stage + 1
-        reset_t = min(config.gym_main_reset, (await get_next_ts(3)))
+        reset_t = config.gym_main_reset if config.gym_main_reset >= next_day_ts else (await get_gym_reset())
     if gym_obj == {}:
         gym_obj = {
             'won': {
@@ -1707,6 +1708,7 @@ async def set_gym_reset():
             {'$set': {'gym_reset_t': reset_t}}, upsert=True
         )
         config.gym_main_reset = reset_t
+    return reset_t
 
 
 async def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_amount=0, db_sep=None):
