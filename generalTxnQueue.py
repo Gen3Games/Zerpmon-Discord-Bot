@@ -6,7 +6,6 @@ import traceback
 from xrpl.models.requests import AccountInfo, tx
 from xrpl.asyncio.transaction import safe_sign_and_submit_transaction, safe_sign_and_autofill_transaction, \
     send_reliable_submission
-
 from xrpl.asyncio.clients import AsyncWebsocketClient
 from xrpl.models import Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag, AccountLines, NFTokenAcceptOffer
 from xrpl.wallet import Wallet
@@ -34,6 +33,19 @@ active_zrp_seed = config.B1_SEED
 ws_client = AsyncWebsocketClient(URL)
 
 
+def timeout_wrapper(timeout):
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            try:
+                res = await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
+                return res
+            except asyncio.TimeoutError:
+                logging.error(f"{func.__name__} timed out after {timeout} seconds")
+                return False
+        return wrapper
+    return decorator
+
+
 async def get_ws_client():
     global ws_client
     if not ws_client.is_open():
@@ -45,7 +57,10 @@ async def get_ws_client():
 def get_txn_log():
     txn_log_col = db['general-txn-queue']
     return [i for i in txn_log_col.find({'status': 'pending',
-                                         '$or': [{'retry_cnt': {'$lt': 5}}, {'retry_cnt': {'$exists': False}}]
+                                         '$or': [
+                                             {'retry_cnt': {'$lt': 5}},
+                                             {'retry_cnt': {'$exists': False}},
+                                         ]
                                          })]
 
 
@@ -102,6 +117,7 @@ async def setup_gym(amount):
                                left_amount=gym_bal)
 
 
+@timeout_wrapper(20)
 async def accept_nft(from_, offer, sender='0', token='0'):
     client = await get_ws_client()
     global wager_seq, loan_seq, gym_seq, tower_seq
@@ -141,6 +157,7 @@ def update_seq(response, from_):
         wager_seq = response.result['account_sequence_next']
 
 
+@timeout_wrapper(20)
 async def send_nft(from_, to_address, token_id, memo=None):
     client = await get_ws_client()
     global gym_seq, loan_seq, wager_seq, tower_seq
@@ -196,6 +213,7 @@ async def send_nft(from_, to_address, token_id, memo=None):
     return False, None, None
 
 
+@timeout_wrapper(20)
 async def send_txn(to: str, amount: float, sender, memo=None):
     client = await get_ws_client()
     global gym_seq, loan_seq, wager_seq, tower_seq
@@ -245,6 +263,7 @@ async def send_txn(to: str, amount: float, sender, memo=None):
     return False, ''
 
 
+@timeout_wrapper(20)
 async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
     client = await get_ws_client()
     global wager_seq, active_zrp_seed, active_zrp_addr, gym_seq, loan_seq, tower_seq
@@ -311,6 +330,7 @@ async def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, ja
     )
 
 
+@timeout_wrapper(20)
 async def get_seq(from_, amount=None):
     client = await get_ws_client()
     match from_:
@@ -358,6 +378,7 @@ async def get_seq(from_, amount=None):
             return None, None, None
 
 
+@timeout_wrapper(20)
 async def get_balance(address):
     bal = 0
     while bal == 0:
@@ -376,6 +397,7 @@ async def get_balance(address):
     return bal
 
 
+@timeout_wrapper(20)
 async def get_zrp_balance(address, issuer=False):
     try:
         async with AsyncWebsocketClient(config.NODE_URL) as client:
@@ -416,15 +438,15 @@ async def get_zrp_balance(address, issuer=False):
 async def set_boss_hp(addr, dmg_done, cur_hp) -> None:
     users_col = db['users']
     users_col.update_one({'address': addr},
-                               {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done,
-                                         'boss_battle_stats.total_dmg': dmg_done},
-                                '$max': {'boss_battle_stats.max_dmg': dmg_done}},
-                               )
+                         {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done,
+                                   'boss_battle_stats.total_dmg': dmg_done},
+                          '$max': {'boss_battle_stats.max_dmg': dmg_done}},
+                         )
     stats_col = db['stats_log']
     new_hp = cur_hp - dmg_done
     if new_hp > 0:
         stats_col.update_one({'name': 'world_boss'},
-                                   {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}})
+                             {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}})
     else:
         stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
 
@@ -448,7 +470,7 @@ async def boss_reward_winners() -> list:
 async def reset_weekly_dmg() -> None:
     users_col = db['users']
     users_col.update_many({'boss_battle_stats': {'$exists': True}},
-                                {'$set': {'boss_battle_stats.weekly_dmg': 0}})
+                          {'$set': {'boss_battle_stats.weekly_dmg': 0}})
     stats_col = db['stats_log']
     stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_active': False}})
 
@@ -498,7 +520,8 @@ async def handle_boss_txn(_id, txn):
                         amt = round(p_dmg * t_reward / total_dmg, 2)
                         reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
                         description += f"<@{player['discord_id']}>\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
-                await save_boss_rewards(defeated_by=addr, winners=reward_dict, description=description, channel_id=config.BOSS_CHANNEL)
+                await save_boss_rewards(defeated_by=addr, winners=reward_dict, description=description,
+                                        channel_id=config.BOSS_CHANNEL)
                 break
             except:
                 logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
