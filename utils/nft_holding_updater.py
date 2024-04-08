@@ -28,6 +28,7 @@ async def update_nft_holdings(client: nextcord.Client):
 
         for old_user in all_users:
             user_obj = old_user
+            print(user_obj['username'])
             try:
                 if 'address' not in user_obj or len(user_obj['address']) < 5 or user_obj[
                     'address'] in ['rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM']:

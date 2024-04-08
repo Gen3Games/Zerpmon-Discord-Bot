@@ -178,7 +178,7 @@ def import_moves(col_name):
 
 
 def import_purple_star_ids():
-    with open('Zerpmon_Moves_-_Purple_Effect_List_200224-2.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Purple_Effect_List.csv', 'r') as csvfile:
         collection = db['PurpleEffectList']
         collection.drop()
         csvreader = csv.reader(csvfile)
@@ -193,6 +193,7 @@ def import_purple_star_ids():
             purple_id = row.pop(0)
             filtered_rows = [i for i in row if i and i != '-']
             l_effect = f'{filtered_rows[0]} by {filtered_rows[1]}'.lower()
+
             get_effects(effects, entries, l_effect)
             l_e_effect = None
             if len(filtered_rows) > 2:
@@ -210,7 +211,7 @@ def import_purple_star_ids():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_240324.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_070424.csv', 'r') as csvfile:
         collection = db['MoveSets']
         movelist_col = db['MoveList']
         # c2 = db['MoveSets2']
@@ -299,7 +300,7 @@ def import_movesets():
                                                                                        'image': None, }}, upsert=True)
                 # c2.insert_one(document=doc)
             except Exception as e:
-                print(e, '\n', row)
+                print(traceback.format_exc(), '\n', row)
 
 
 # import_movesets()
@@ -659,9 +660,10 @@ def reset_all_gyms():
 
 def import_equipments():
     with open('Zerpmon_Moves_-_Equipment.csv', 'r') as csvfile:
-        collection = db['Equipment2']
+        collection = db['Equipment']
         # collection.drop()
         csvreader = csv.reader(csvfile)
+        unique_types = set()
         for row in csvreader:
             if row[1] == "":
                 continue
@@ -677,7 +679,7 @@ def import_equipments():
 
                         change = 'decrease' if ('decrease' in s) else 'increase'
                         change_val_type = 'percent' if 'halved' in s else 'flat'
-                        s = s.replace('halved', '50%')
+                        s = s.replace('halved', '50% less')
                         nums = extract_numbers(s)
                         p_val = abs(nums[-1])
                         change_val = None if len(nums) < 2 else (-1 if 'less' in s or 'weaker' in s else 1) * abs(
@@ -693,6 +695,7 @@ def import_equipments():
                                 e_type = 'pierce'
                             elif 'crit' in s:
                                 e_type = 'crit-chance'
+                                p_val *= 1 if change == 'increase' else -1
                             elif 'purple star' in s or 'purple attack' in s:
                                 if 'chance' in s:
                                     e_type = f'purple-buff-chance'
@@ -703,7 +706,7 @@ def import_equipments():
                             elif 'miss' in s:
                                 e_type = f'miss-{change}'
                             elif 'damage' in s:
-                                color = ''
+                                color = 'damage-'
                                 if 'gold' in s:
                                     color = 'gold-'
                                 elif 'white' in s:
@@ -719,6 +722,10 @@ def import_equipments():
                                     e_type = f'gold-to-zero'
                                 else:
                                     e_type = f'white-to-zero'
+                            elif 'immuni' in s:
+                                e_type = 'immunity'
+                            elif 'favour' in s:
+                                e_type = 'favoured-chance'
                             else:
                                 s = ' '.join(separated_note)
                                 if 'gold' in s and 'chance' in s:
@@ -737,6 +744,8 @@ def import_equipments():
                                 "value": change_val
                             }
                         })
+                        unique_types.add(e_type)
+                        print(e_type)
             # Insert the row data to MongoDB
             collection.update_one({'name': row[-1]}, {'$set': {
                 'type': row[0].lower().title(),
@@ -744,6 +753,7 @@ def import_equipments():
                 'notes': [n for n in notes if n],
                 "effects": effect_list,
             }}, upsert=True)
+        print(unique_types)
 
 
 def switch_cached():
@@ -846,16 +856,16 @@ def add_gym_trainers():
 # import_ascend_levels()
 # gift_ascension_reward()
 
-import_equipments()
+# import_equipments()
 
 # add_gym_level_buffs()
 # add_gym_trainers()
-# import_moves('MoveList')
-# import_moves('MoveList2')
-# import_purple_star_ids()
-# import_movesets()
-# import_attrs_img()
-# clean_attrs()
-# cache_data()
-# update_all_zerp_moves()
-# save_30_level_zerp()
+import_moves('MoveList')
+import_moves('MoveList2')
+import_purple_star_ids()
+import_movesets()
+import_attrs_img()
+clean_attrs()
+cache_data()
+update_all_zerp_moves()
+save_30_level_zerp()

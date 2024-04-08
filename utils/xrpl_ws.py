@@ -1061,7 +1061,9 @@ async def get_latest_nft_offers(address):
 #         break
 
 # print(f'Tokens sent {tokens_sent}')
-# asyncio.run(cancel_offer('gift', '3816CA33654AD9927F4832259D0254C3BCABC98C512CFA99C9CD208F816E1A50'))
+# asyncio.run(cancel_offer('loan', '689DD94274FF5A82E60F2059FFAC12AFE7D1647028FEF764542C9979DB18F678'))
+# asyncio.run(cancel_offer('loan', 'DC01CBAA641E52CB81FF00CC65449AA32418C8574D129B6F687FCADD1586A8A3'))
+# asyncio.run(cancel_offer('loan', 'EC1C9D51CA00B64E214C522417B1A9AE1345093F3C2F86DBD511DB975C59BAB8'))
 # asyncio.run(cancel_offer('gift', '3584875BF6F66FD9611ED2A7B497A85FCF2DDA2D5C00BB450F8B98B9719649AC'))
 # asyncio.run(cancel_offer('gift', 'A323AE67B27F1DF5F7487610EA931070E1A09E90A821C3B325A2200AAEED746E'))
 # res, offer = asyncio.run(
@@ -1074,14 +1076,16 @@ async def get_latest_nft_offers(address):
 # asyncio.run(accept_nft('auction', offer='9DE087BFBBD4F35BBBCC6BCE49FC13F537AFF401437AB178685C0252409A5308', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
 #                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E808CEC1F048F1E84'))
 # asyncio.run(send_nft('auction', to_address='r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7ED29FD31400000079'))
-# asyncio.run(send_nft('loan', to_address='rUseRiLXCCn9q32CMZXDTA6AgvuxZFXYjx', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E50E6FD60048F1EC5'))
+# asyncio.run(send_nft('loan', to_address='rKXQxhG2ieKb1EauS5kWG9VceBN4soDbQN', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E3C46E497048F1EFC'))
+# asyncio.run(send_nft('loan', to_address='rKXQxhG2ieKb1EauS5kWG9VceBN4soDbQN', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E68A194A300000308'))
 # asyncio.run(send_nft('wager', to_address='rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7EC92FB492000003F7'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
 # asyncio.run(send_zrp('rGnBUCwMJSX57QDecdyT5drdG3gvsmVqxD', 2.5, 'loan'))
 # asyncio.run(send_zrp('rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', 5.56, 'tower'))
-# asyncio.run(send_zrp('r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM', 10, 'safari'))
+
+# asyncio.run(test())
 # asyncio.run(send_txn(config.JACKPOT_ADDR, 1, 'store'))
 # asyncio.run(send_txn('rsTwpXdRU4JitSUkYcVhnmXsoG5PVjJvYz', 1, 'loan'))
 

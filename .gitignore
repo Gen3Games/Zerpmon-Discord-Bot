@@ -16,3 +16,5 @@ test.json
 config_extra.py
 *.png
 *.csv
+/sim
+/static/zerpmon-translations/

@@ -36,7 +36,7 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
         inline=False)
     if z1_eq != {}:
         if firstRoundLog['zerpmonAImmunitiesGranted']:
-            notes = "Immune to" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonAImmunitiesGranted']])
+            notes = "Immune to\n" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonAImmunitiesGranted']])
         else:
             notes = '\n'.join([f"`{i}`" for i in eq1_effect_list])
         main_embed.add_field(
@@ -66,7 +66,7 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
         inline=False)
     if z2_eq != {}:
         if firstRoundLog['zerpmonBImmunitiesGranted']:
-            notes = "Immune to:" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonBImmunitiesGranted']])
+            notes = "Immune to:\n" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonBImmunitiesGranted']])
         else:
             notes = '\n'.join([f"`{i}`" for i in eq2_effect_list])
         main_embed.add_field(

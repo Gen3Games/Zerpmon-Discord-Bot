@@ -1331,13 +1331,15 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
 
 def get_type(doc: dict):
+    if doc.get('nft_id', '') in OMNI_TRAINERS:
+        return 'Omni'
     if "type" in doc:
         return doc["type"]
     elif "affinity" in doc:
         return doc["affinity"]
     else:
         types = []
-        for val in doc["attributes"]:
+        for val in doc.get("attributes", []):
             if val["trait_type"] in ['Type', 'Affinity']:
                 types.append(val["value"])
         return types
@@ -1657,7 +1659,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, tc2['name'],
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
-            await db_query.set_boss_hp(_data1['discord_id'], dmg_done, boss_hp)
+            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'], 1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
             # Save user's match
             await asyncio.sleep(1)
             return 2
@@ -1678,7 +1680,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 embeds=[embed],
                 ephemeral=True)
             reward_dict = {}
-            await db_query.set_boss_hp(_data1['discord_id'], boss_hp, boss_hp)
+            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'], 1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
             total_dmg = boss_info['total_weekly_dmg'] + boss_hp
             winners = await db_query.boss_reward_winners()
             for i in range(10):
@@ -1696,7 +1698,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                         if p_dmg > 0:
                             amt = round(p_dmg * t_reward / total_dmg, 2)
                             reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
-                            description += f"<@{player['discord_id']}\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
+                            description += f"<@{player['discord_id']}>\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
                     embed.description = description
                     await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
                                               channel_id=config.BOSS_CHANNEL)
@@ -1708,22 +1710,22 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             total_txn = len(reward_dict)
             success_txn = 0
             failed_str = ''
-            for addr, obj in reward_dict.items():
-                saved = await xrpl_ws.send_zrp(addr, obj['amt'], 'wager')
-                if saved:
-                    success_txn += 1
-                else:
-                    failed_str += f"\n{obj['name']}\t`{obj['amt']} ZRP` ❌"
-            try:
-                if success_txn == 0:
-                    await interaction.send(
-                        f"**Failed**, something went wrong." + failed_str)
-                else:
-                    await interaction.send(
-                        f"**Successfully** sent ZRP. \n`({success_txn}/{total_txn} transactions confirmed)`" + failed_str)
-            except:
-                pass
-            await db_query.reset_weekly_dmg()
+            # for addr, obj in reward_dict.items():
+            #     saved = await xrpl_ws.send_zrp(addr, obj['amt'], 'wager')
+            #     if saved:
+            #         success_txn += 1
+            #     else:
+            #         failed_str += f"\n{obj['name']}\t`{obj['amt']} ZRP` ❌"
+            # try:
+            #     if success_txn == 0:
+            #         await interaction.send(
+            #             f"**Failed**, something went wrong." + failed_str)
+            #     else:
+            #         await interaction.send(
+            #             f"**Successfully** sent ZRP. \n`({success_txn}/{total_txn} transactions confirmed)`" + failed_str)
+            # except:
+            #     pass
+            # await db_query.reset_weekly_dmg()
             config.boss_active = False
             return 1
 

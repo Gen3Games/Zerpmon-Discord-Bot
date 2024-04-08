@@ -237,20 +237,22 @@ async def equipment_sim_autocomplete(interaction: nextcord.Interaction, item: st
         pass
 
     # print(params)
-    focused = [i['name'] for i in params if i.get('focused', False)][0].split('_')[-1]
+    focused = [i['name'] for i in params if i.get('focused', False)][0]
+    focused = focused.split('_')
+    oppo = focused[0] == 'vs'
+    focused = focused[-1]
     print(focused)
 
-    slot_zerpmon = [i['value'] for i in params if i['name'][-3] == focused]
+    slot_zerpmon = [i['value'] for i in params if i['name'][-3] == focused and (not oppo or 'vs' in i['name'])]
     slot_zerpmon = slot_zerpmon[0] if len(slot_zerpmon) > 0 else False
     types = config.TYPE_MAPPING if not slot_zerpmon else (await db_query.get_zerpmon(slot_zerpmon))['move_types']
     print(slot_zerpmon, types)
-    remove_items = [i['value'] for i in params if 'equipment' in i['name']]
+    # remove_items = [i['value'] for i in params if 'equipment' in i['name']]
     eqs = await db_query.get_all_eqs(substr=item)
     print(eqs)
     if eqs:
         choices = {f'{i["name"]} ({i["type"]})': i["name"] for i in
-                   eqs if i["name"] not in remove_items and
-                   i["type"] == 'Omni' or i["type"] in types}
+                   eqs if i["type"] == 'Omni' or i["type"] in types}
     else:
         choices = {}
     sorted_c = sorted(choices.items())

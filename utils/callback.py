@@ -1633,15 +1633,15 @@ async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextc
             return False
         else:
             # Put potions on hold os user doesn't spam
+            await interaction.send(
+                f"Successfully gifted {f'**{item}**' if item else f'**{qty}**'} {potion} to **{user.name}**!",
+                ephemeral=False)
             if potion_key not in ['bg', 'flair']:
                 await fn(sender['address'], -qty)
                 await fn(user_owned_nfts['data']['address'], qty)
             else:
                 await fn(sender['discord_id'], item, -qty)
                 await fn(user_id, item, qty)
-            await interaction.send(
-                f"Successfully gifted {f'**{item}**' if item else f'**{qty}**'} {potion} to **{user.name}**!",
-                ephemeral=False)
             return
 
     for owned_nfts in [user_owned_nfts]:

@@ -4,6 +4,7 @@ import time
 import traceback
 import nextcord
 import config
+import config_extra
 import db_query
 from utils import battle_function
 from utils.checks import get_next_ts, get_time_left_utc, get_days_left
@@ -75,16 +76,19 @@ async def send_reset_message(client: nextcord.Client):
     global next_run, last_cache_embed
     await db_query.choose_gym_zerp()
     while True:
-        await asyncio.sleep(20)
         next_day_ts = await get_next_ts()
-        reset_time = next_day_ts - time.time()
+        cur_ts = time.time()
+        reset_time = next_day_ts - cur_ts
         # print(reset_time)
+        config_extra.reset_last_run = cur_ts
         if reset_time < 300:
+            # Skip checks for 600s (10 min)
+            config_extra.reset_last_run = cur_ts + 600
             await asyncio.sleep(abs(reset_time))
             config.store_24_hr_buyers = []
             await db_query.choose_gym_zerp()
             gym_str = '\nLost Gyms and Gym Zerpmon refreshed for each Leader!\n'
-            is_gym_reset = await db_query.get_gym_reset() - time.time() < 60
+            is_gym_reset = (await db_query.get_gym_reset()) - time.time() < 60
             if is_gym_reset:
                 gym_str += '**Cleared Gyms** have been refreshed and progressed to next Stage as well!'
                 await db_query.set_gym_reset()
@@ -94,7 +98,8 @@ async def send_reset_message(client: nextcord.Client):
             for guild in guilds:
                 try:
                     channel = nextcord.utils.get(guild.channels, name="🌐│zerpmon-center")
-                    await channel.send('@everyone, Global Missions, Zerpmon, Store prices restored.' + gym_str)
+                    if channel:
+                        await channel.send('@everyone, Global Missions, Zerpmon, Store prices restored.' + gym_str)
                     if guild.id in config.MAIN_GUILD:
                         main_channel = nextcord.utils.get(guild.channels, id=1154376146985697391)
                 except Exception as e:
@@ -147,13 +152,16 @@ async def send_reset_message(client: nextcord.Client):
                         else:
                             await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
                         await db_query.decrease_loan_pending(loan['zerpmon_name'], loan['per_day_cost'])
+                logging.error(f"offer_expired: {offer_expired}")
                 if len(offer_expired) > 0:
                     expiry_msg = f'{", ".join(offer_expired)}Please use: `/loan relist` command to reactivate your Loan listing'
                     await main_channel.send(
                         content=f'**📢 Loan Announcement (Sell offer not active) 📢**\n{expiry_msg}', )
             except:
-                pass
-        print('here')
+                logging.error(f'Loan reset error {traceback.format_exc()}')
+        task_id = asyncio.current_task().get_name()
+        logging.error(f"Task {task_id} running.")
+        ti = time.time()
         if next_run < time.time():
             guilds = client.guilds
             print('here')
@@ -341,3 +349,6 @@ async def send_reset_message(client: nextcord.Client):
             except Exception as e:
                 logging.error(f'ERROR while burning ZRP: {traceback.format_exc()}')
             next_run = time.time() + 300
+
+        logging.error(f"Updates sent in {time.time() - ti}s")
+        await asyncio.sleep(20)

@@ -18,7 +18,7 @@ from db_query import get_safari_nfts, get_mission_nfts
 
 last_checked_price = 0
 
-client = pymongo.MongoClient("mongodb://127.0.0.1:27017")
+client = pymongo.MongoClient(config.MONGO_URL)
 db = client['Zerpmon']
 
 

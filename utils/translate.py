@@ -15,7 +15,7 @@ list_l = ['en', 'de', 'es', 'ja', 'cn', 'ko']
 battle_translations = {}
 
 
-def translate_message(code: str, messages: dict) -> list[str]:
+def translate_message(code: str, messages: dict, bold=True) -> list[str]:
     global battle_translations
     # code = mapping.get(code, 'en.json')
     code = code if code in list_l else 'en'
@@ -37,6 +37,9 @@ def translate_message(code: str, messages: dict) -> list[str]:
 
         # Replace dynamic values in the translation
         for key, value in msg.get('dynamicValues', {}).items():
-            translation = translation.replace(f'{{{key}}}', f'**{value if value else "⚫" }**')
+            fmt = ''
+            if bold:
+                fmt = '**'
+            translation = translation.replace(f'{{{key}}}', f'{fmt}{value if value else "⚫" }{fmt}')
         msgs.append(translation)
     return msgs
