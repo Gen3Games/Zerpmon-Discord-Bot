@@ -265,7 +265,7 @@ async def get_move(name, stars=0):
     result = await move_collection.find_one({"move_name": name})
     if stars > 0 and result and stars > result['stars']:
         new_move = await db['PurpleEffectList'].find_one(
-            {'purple_id': result['purple_id'] + stars - result['stars']},
+            {'purple_id': result['purple_id'] + max(0, stars - result['stars'])},
             {'_id': 0, 'strings': 1}
         )
         result['notes'] = '\n'.join(new_move.get('strings'))
@@ -1823,7 +1823,7 @@ async def get_all_eqs(limit=None, substr=None):
     else:
         return await equipment_col.find(
             {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
-            {'_id': 0, 'name': 1, 'type': 1, 'effects': 0}) \
+            {'_id': 0, 'name': 1, 'type': 1}) \
                     .to_list(25)
 
 
@@ -1965,11 +1965,15 @@ async def get_active_loans():
     all_listings = await loan_col.find().to_list(None)
     active = []
     expired = []
+    ts = time.time()
     for listing in all_listings:
         if listing['accepted_by']['id'] is not None:
             active.append(listing)
         elif listing['offer'] is None:
-            expired.append(listing)
+            if listing['expires_at'] < ts:
+                await remove_listed_loan(listing['zerpmon_name'], listing['listed_by']['id'])
+            else:
+                expired.append(listing)
     return active, expired
 
 
@@ -2121,7 +2125,7 @@ async def set_boss_battle_t(user_id, reset_next_t=False) -> None:
 
 async def add_boss_txn_log(uid: str, to_addr: str, amount: float, dmgDealt, startHp):
     txn_log_col = db['general-txn-queue']
-    res = await txn_log_col.update_one({'uid': uid + f'-{(await get_next_ts()) + 60}'},
+    res = await txn_log_col.update_one({'uniqueId': uid + f'-{(await get_next_ts()) + 60}'},
                                        {'$setOnInsert': {
                                            'type': 'Payment',
                                            'from': 'boss',
@@ -2699,10 +2703,10 @@ async def make_sim_battle_req(playerA, playerB, battle_type='simulation', cnt=1)
     input_col = db['discord_battle_requests']
     obj = {
         'uid': str(uuid.uuid4()),
-        'playerAZerpmons': [(i if i else None) for i in playerA['zerpmons']],
-        'playerBZerpmons': [(i if i else None) for i in playerB['zerpmons']],
-        'playerAEquipments': [(i if i else None) for i in playerA['equipments']],
-        'playerBEquipments': [(i if i else None) for i in playerB['equipments']],
+        'playerAZerpmons': [],
+        'playerBZerpmons': [],
+        'playerAEquipments': [],
+        'playerBEquipments': [],
         'playerATrainer': playerA['trainer'] if playerA['trainer'] else None,
         'playerBTrainer': playerB['trainer'] if playerB['trainer'] else None,
         'battleType': battle_type,
@@ -2711,9 +2715,23 @@ async def make_sim_battle_req(playerA, playerB, battle_type='simulation', cnt=1)
         'extrabuff': None,
         'startHp': None,
     }
-
+    for idx, item in enumerate(playerA['zerpmons']):
+        if item:
+            obj['playerAZerpmons'].append(item)
+            if playerA['equipments'][idx]:
+                obj['playerAEquipments'].append(playerA['equipments'][idx])
+            else:
+                obj['playerAEquipments'].append(None)
+    for idx, item in enumerate(playerB['zerpmons']):
+        if item:
+            obj['playerBZerpmons'].append(item)
+            if playerB['equipments'][idx]:
+                obj['playerBEquipments'].append(playerB['equipments'][idx])
+            else:
+                obj['playerBEquipments'].append(None)
     input_col.insert_one(obj)
-    config.battle_results[obj['uid']] = None
+    for idx in range(cnt):
+        config.battle_results[obj['uid'] + f'{idx}'] = None
     return obj['uid']
 
 
