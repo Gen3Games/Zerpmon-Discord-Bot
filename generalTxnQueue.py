@@ -41,7 +41,7 @@ def timeout_wrapper(timeout):
                 return res
             except asyncio.TimeoutError:
                 logging.error(f"{func.__name__} timed out after {timeout} seconds")
-                return False
+                return False, '', False
         return wrapper
     return decorator
 
@@ -250,7 +250,7 @@ async def send_txn(to: str, amount: float, sender, memo=None):
             print(response.result)
             if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
                 update_seq(response, sender)
-                return True, response.result['tx_json']['hash']
+                return True, response.result['tx_json']['hash'], False
             elif response.result['engine_result'] in ["tefPAST_SEQ"]:
                 update_seq(response, sender)
                 await asyncio.sleep(random.randint(1, 4))
@@ -260,7 +260,7 @@ async def send_txn(to: str, amount: float, sender, memo=None):
             logging.error(f"XRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
     # await db_query.save_error_txn(to, amount, None)
-    return False, ''
+    return False, '', False
 
 
 @timeout_wrapper(20)
@@ -302,7 +302,7 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
             print(response.result)
             if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
                 update_seq(response, sender)
-                return True, response.result['tx_json']['hash']
+                return True, response.result['tx_json']['hash'], False
             elif response.result['engine_result'] in ["tefPAST_SEQ"]:
                 update_seq(response, sender)
                 await asyncio.sleep(random.randint(1, 4))
@@ -312,7 +312,7 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
             logging.error(f"ZRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
     # await db_query.save_error_txn(to, amount, None)
-    return False, ''
+    return False, '', False
 
 
 async def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_amount=0, db_sep=None):
@@ -599,10 +599,10 @@ async def main():
                                         update_txn_log(_id, txn)
                                         continue
                                     if txn['currency'] == 'XRP':
-                                        success, hash_ = await send_txn(txn['destination'], amt, txn['from'],
+                                        success, hash_, _ = await send_txn(txn['destination'], amt, txn['from'],
                                                                         txn.get('memo'))
                                     else:
-                                        success, hash_ = await send_zrp(txn['destination'], amt, txn['from'],
+                                        success, hash_, _ = await send_zrp(txn['destination'], amt, txn['from'],
                                                                         memo=txn.get('memo'))
                                         if txn.get('gp'):
                                             inc_user_gp(txn['destination'], txn.get('gp'))
