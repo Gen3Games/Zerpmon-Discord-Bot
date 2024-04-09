@@ -7,7 +7,7 @@ from nextcord import Interaction, ui, File
 import config
 import db_query
 from globals import CustomEmbed
-from utils import translate
+from utils import translate, battle_funtion_ex
 from utils.checks import get_type_emoji
 
 
@@ -24,7 +24,11 @@ def save_items(result, zerpmonWinrate):
         print(traceback.format_exc())
 
 
-async def simulation_callback(interaction: Interaction, battle_count: int, playerA: dict, playerB: dict):
+async def simulation_callback(interaction: Interaction,
+                              battle_count: int,
+                              playerA: dict,
+                              playerB: dict,
+                              show_moves: bool):
     embed = CustomEmbed(title=f"Simulation Results", color=0x430f58)
     uid = await db_query.make_sim_battle_req(playerA, playerB, cnt=battle_count)
     file_path = f'./sim/{interaction.user.id}-{int(time.time())}.txt'
@@ -35,7 +39,9 @@ async def simulation_callback(interaction: Interaction, battle_count: int, playe
         **{i: {'t': 0, 'w': 0} for i in playerA['zerpmons'] if i},
         **{i: {'t': 0, 'w': 0} for i in playerB['zerpmons'] if i},
     }
+    show_moves = battle_count < 50 and show_moves
     setup_done = False
+    move_embeds = [[] for _ in range(battle_count)]
     with open(file_path, 'w', encoding='utf-8') as file:
         for i in range(10):
             try:
@@ -60,13 +66,39 @@ async def simulation_callback(interaction: Interaction, battle_count: int, playe
                         if firstRoundLog['zerpmonBImmunitiesGranted']:
                             buffer += f"{firstRoundLog['zerpmonB']} is immune to\n" + '\n '.join(
                                 [i.title() for i in firstRoundLog['zerpmonBImmunitiesGranted']]) + '\n\n'
-                        for round_messages in result['roundLogs']:
-                            msgs = translate.translate_message(interaction.locale.split('-')[0],
-                                                               round_messages['messages'])
-                            msg = ''
-                            for i in msgs:
-                                msg += i + '\n'
-                            buffer += f'{msg}\n\n'
+                        idx1, idx2, log_idx = 0, 0, 0
+                        while idx1 < len(result['playerAZerpmons']) and idx2 < len(result['playerBZerpmons']):
+                            if show_moves:
+                                z1_obj, z2_obj = result['playerAZerpmons'][idx1], result['playerBZerpmons'][idx2]
+
+                                main_embed, _ = await battle_funtion_ex.get_zerp_battle_embed_ex(interaction,
+                                                                                                    z1_obj,
+                                                                                                    z2_obj,
+                                                                                                    result['moveVariations'][idx1 + idx2],
+                                                                                                    z1_obj['zerpmon'][
+                                                                                                        'trainer_buff'],
+                                                                                                    z2_obj['zerpmon'][
+                                                                                                        'trainer_buff'],
+                                                                                                    {},
+                                                                                                    result['roundLogs'][0],
+                                                                                                    None, False)
+                                move_embeds[idx].append(main_embed)
+                            while log_idx < len(result['roundLogs']):
+                                round_messages = result['roundLogs'][log_idx]
+                                msgs = translate.translate_message(interaction.locale.split('-')[0],
+                                                                   round_messages['messages'], bold=False)
+                                msg = ''
+                                for i in msgs:
+                                    msg += i + '\n'
+                                buffer += f'{msg}\n\n'
+                                log_idx += 1
+                                if round_messages['KOd']:
+                                    if round_messages['roundResult'] == 'zerpmonAWin':
+                                        idx2 += 1
+                                    else:
+                                        idx1 += 1
+                                    break
+
                         for round_stat in [*result['roundStatsA'], *result['roundStatsB']]:
                             name = round_stat['name']
                             obj = zerpmonWinrate[name]
@@ -75,7 +107,7 @@ async def simulation_callback(interaction: Interaction, battle_count: int, playe
                 file.write(buffer)
                 break
             except:
-                pass
+                print(traceback.format_exc())
     file = File(file_path, filename='simulation_result.txt')
     embed.add_field(name=f"Total Matches **{battle_count}**",
                     value=f"\u200B",
@@ -108,4 +140,14 @@ async def simulation_callback(interaction: Interaction, battle_count: int, playe
                         value="\u200B",
                         inline=False)
         idx += 1
-    await interaction.send(embeds=[embed], files=[file])
+    await interaction.send(embeds=[embed], files=[file], ephemeral=True)
+
+    for match_cnt, embeds in enumerate(move_embeds):
+        max_len = len(embeds)
+        print(len(move_embeds), max_len)
+        for idx in range(0, max_len, 3):
+            await interaction.send(content=f"Match #{match_cnt+1}" if idx == 0 else "----",
+                                   embeds=embeds[idx:min(max_len, idx+3)],
+                                   ephemeral=True
+                                   )
+            await asyncio.sleep(1)

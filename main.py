@@ -1651,9 +1651,10 @@ async def show_gym_cleared(interaction: nextcord.Interaction,
                       description="Simulate battles between any zerpmon (admins only)")
 async def simulation_battle(interaction: nextcord.Interaction,
                             battle_count: int = SlashOption(required=True, min_value=1, max_value=1000),
+                            show_moves: str = SlashOption(required=True, choices=['yes', 'no']),
                             trainerA: str = SlashOption("trainer",
-                                                               autocomplete_callback=trainer_sim_autocomplete,
-                                                               required=False, default=None),
+                                                        autocomplete_callback=trainer_sim_autocomplete,
+                                                        required=False, default=None),
                             zerpmonA1: str = SlashOption("1st", autocomplete_callback=zerpmon_sim_autocomplete,
                                                          required=False, default=''),
                             zerpmonA2: str = SlashOption("2nd", autocomplete_callback=zerpmon_sim_autocomplete,
@@ -1675,8 +1676,8 @@ async def simulation_battle(interaction: nextcord.Interaction,
                             eqA5: str = SlashOption("equipment_5", autocomplete_callback=equipment_sim_autocomplete,
                                                     required=False),
                             trainerB: str = SlashOption("vs_trainer",
-                                                               autocomplete_callback=trainer_sim_autocomplete,
-                                                               required=False, default=None),
+                                                        autocomplete_callback=trainer_sim_autocomplete,
+                                                        required=False, default=None),
                             zerpmonB1: str = SlashOption("vs_1st", autocomplete_callback=zerpmon_sim_autocomplete,
                                                          required=False, default=''),
                             zerpmonB2: str = SlashOption("vs_2nd", autocomplete_callback=zerpmon_sim_autocomplete,
@@ -1713,7 +1714,7 @@ async def simulation_battle(interaction: nextcord.Interaction,
         'zerpmons': [zerpmonB1, zerpmonB2, zerpmonB3, zerpmonB4, zerpmonB5],
         'equipments': [eqB1, eqB2, eqB3, eqB4, eqB5],
     }
-    result = await simulation_callback(interaction, battle_count, playerA, playerB)
+    result = await simulation_callback(interaction, battle_count, playerA, playerB, show_moves == 'yes')
     # csv_file_name = f'Result-{time.time() * 1000}.csv'
     # checks.save_csv(result, name=csv_file_name)
     # with open(csv_file_name, 'rb') as data:
