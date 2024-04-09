@@ -6,7 +6,7 @@ from utils.checks import CustomEmbed, gen_image
 
 
 async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buffed_zerp1, buffed_zerp2,
-                                   extra_buffs, firstRoundLog, hp=None):
+                                   extra_buffs, firstRoundLog, hp=None, show_image=True):
     z1_obj, z2_obj = z1_equipped['zerpmon'], z2_equipped['zerpmon']
     z1_eq, z2_eq = z1_equipped['equipment'] if z1_equipped['equipment'] else {}, \
                    z2_equipped['equipment'] if z2_equipped['equipment'] else {}
@@ -36,12 +36,12 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
         inline=False)
     if z1_eq != {}:
         if firstRoundLog['zerpmonAImmunitiesGranted']:
-            notes = "Immune to\n" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonAImmunitiesGranted']])
+            notes = "Immune to\n> " + '\n> '.join([i.title() for i in firstRoundLog['zerpmonAImmunitiesGranted']])
         else:
             notes = '\n'.join([f"`{i}`" for i in eq1_effect_list])
         main_embed.add_field(
             name=f"{config.TYPE_MAPPING[z1_eq.get('type')]} Equipment",
-            value=f"{z1_eq['name']}:\n" + notes,
+            value=f"**{z1_eq['name']}**:\n" + notes,
             inline=False)
 
     for i, move in enumerate(z1_moves):
@@ -66,17 +66,17 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
         inline=False)
     if z2_eq != {}:
         if firstRoundLog['zerpmonBImmunitiesGranted']:
-            notes = "Immune to:\n" + '\n> '.join([i.title() for i in firstRoundLog['zerpmonBImmunitiesGranted']])
+            notes = "Immune to\n> " + '\n> '.join([i.title() for i in firstRoundLog['zerpmonBImmunitiesGranted']])
         else:
             notes = '\n'.join([f"`{i}`" for i in eq2_effect_list])
         main_embed.add_field(
             name=f"{config.TYPE_MAPPING[z2_eq.get('type')]} Equipment",
-            value=f"{z2_eq['name']}:\n" + notes,
+            value=f"**{z2_eq['name']}**:\n" + notes,
             inline=False)
         if eq2_note2:
             main_embed.add_field(
                 name=f"{config.TYPE_MAPPING[eq2_note2.get('type')]} Equipment",
-                value=f"{eq2_note2['name']}:\n" + '\n'.join([f"`{i}`" for i in eq2_note2['notes']]),
+                value=f"**{eq2_note2['name']}**:\n" + '\n'.join([f"`{i}`" for i in eq2_note2['notes']]),
                 inline=False)
     for i, move in enumerate(z2_moves):
         notes = f"{(await db_query.get_move(move['name'], stars=move.get('stars', 0)))['notes']}" if move['color'] == 'purple' else ''
@@ -94,9 +94,10 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
             name=f"**HP 💚:**",
             value=f"> **{hp}**",
             inline=True)
-
-    file = File(f"{message.id}.png", filename="image.png")
-    main_embed.set_image(url=f'attachment://image.png')
+    file = None
+    if show_image:
+        file = File(f"{message.id}.png", filename="image.png")
+        main_embed.set_image(url=f'attachment://image.png')
     z1_obj['applied'] = True
     z2_obj['applied'] = True
     return main_embed, file
