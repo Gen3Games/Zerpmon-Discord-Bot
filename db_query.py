@@ -360,17 +360,19 @@ async def temp_move_update(document):
                 document['moves'][i] = move
 
 
-async def get_rand_zerpmon(level, lure_type=None):
+async def get_rand_zerpmon(level, lure_type=None, includeOmni=True):
     zerpmon_collection = db['MoveSets2']
-    if lure_type:
-        query = {'$match': {'attributes': {'$elemMatch': {'trait_type': 'Type', 'value': lure_type}}}}
+    if lure_type is None:
+        query = {}
     else:
-        query = {'$match': {}}
-    random_doc = list(await zerpmon_collection.aggregate([
+        query = {'zerpmonType': {'$elemMatch': lure_type.lower()}}
+    if not includeOmni:
+        query['isOmni'] = {'$exists': False}
+    random_doc = await zerpmon_collection.aggregate([
         query,
         {'$sample': {'size': 1}},
         {'$limit': 1}
-    ]).to_list(None))
+    ]).to_list(None)
     zerp = random_doc[0]
     zerp['level'] = level
     await temp_move_update(zerp)
@@ -1124,13 +1126,14 @@ async def update_rank(user_id, win, decay=False, field='rank'):
     # print(r)
 
 
-async def get_random_doc_with_type(type_value=None, limit=5, level=None):
+async def get_random_doc_with_type(type_value=None, limit=5, level=None, includeOmni=True):
     collection = db['MoveSets2']
     if type_value is None:
         query = {}
     else:
-        query = {'attributes': {'$elemMatch': {'trait_type': 'Type', 'value': type_value}}}
-
+        query = {'zerpmonType': {'$elemMatch': type_value.lower()}}
+    if not includeOmni:
+        query['isOmni'] = {'$exists': False}
     random_documents = await collection.aggregate([
         {'$match': query},
         {'$sample': {'size': limit}}
@@ -1160,7 +1163,7 @@ async def choose_gym_zerp():
                    'image': f'./static/gym/{leader_name}.png',
                    'bg': f'./static/gym/{leader_type}.png'}
         while gym_obj['zerpmons'] is None:
-            gym_obj['zerpmons'] = await get_random_doc_with_type(leader_type)
+            gym_obj['zerpmons'] = await get_random_doc_with_type(leader_type, includeOmni=False)
         await gym_col.update_one({'name': leader_name},
                                  {'$set': gym_obj}, upsert=True)
 

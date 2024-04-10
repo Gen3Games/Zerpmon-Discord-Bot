@@ -1370,9 +1370,9 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
 
     lure = _data1.get('zerp_lure', {})
     lure_active = lure.get('expire_ts', 0) > time.time()
-    z2 = await db_query.get_rand_zerpmon(level=1, lure_type=lure.get('type') if lure_active else None)
+    z2 = await db_query.get_rand_zerpmon(level=1, includeOmni=False, lure_type=lure.get('type') if lure_active else None)
     while z2['name'] == z1['name']:
-        z2 = await db_query.get_rand_zerpmon(level=1, lure_type=lure.get('type') if lure_active else None)
+        z2 = await db_query.get_rand_zerpmon(level=1, includeOmni=False, lure_type=lure.get('type') if lure_active else None)
     # Dealing with Equipment
     try:
         cur_z_index = [key for key, value in _data1['mission_deck'].items() if value == str(serial)][0]
