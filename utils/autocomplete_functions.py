@@ -79,19 +79,24 @@ async def equipment_autocomplete(interaction: nextcord.Interaction, item: str):
         slot_zerpmon = [i['value'] for i in params if i['name'] == focused]
     slot_zerpmon = slot_zerpmon[0] if len(slot_zerpmon) > 0 else False
     z_moves = [] if not slot_zerpmon else (user_owned['zerpmons'][int(slot_zerpmon)] if temp_mode else (
-        await db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name'])))['moves']
-    types = config.TYPE_MAPPING if not slot_zerpmon else [i['type'] for idx, i in enumerate(z_moves) if idx < 4]
+        await db_query.get_zerpmon(user_owned['zerpmons'][slot_zerpmon]['name'])))
+    is_omni = False
+    if not slot_zerpmon:
+        types = config.TYPE_MAPPING
+    else:
+        types = z_moves['move_types']
+        is_omni = z_moves.get('isOmni', False)
     # print(slot_zerpmon, types)
     remove_items = [i['value'] for i in params if 'equipment' in i['name']]
     if user_owned is not None and 'equipments' in user_owned:
         if temp_mode:
             choices = {f'{i["name"]} ({i["type"]})': str(k) for k, i in
                        enumerate(user_owned['equipments']) if
-                       item in i['name'] and str(k) not in remove_items and (i["type"] == 'Omni' or i["type"] in types)}
+                       item in i['name'] and str(k) not in remove_items and (i["type"] == 'Omni' or is_omni or i["type"] in types)}
         else:
             choices = {f'{i["name"]} ({get_type_emoji(i["attributes"], emoji=False)})': k for k, i in
                        user_owned['equipments'].items() if item in i['name'] and k not in remove_items and
-                       any((_i['value'] == 'Omni' or _i['value'] in types) for _i in i['attributes'] if
+                       any((_i['value'] == 'Omni' or is_omni or _i['value'] in types) for _i in i['attributes'] if
                            _i['trait_type'] == 'Type')}
     else:
         choices = {}
@@ -245,14 +250,20 @@ async def equipment_sim_autocomplete(interaction: nextcord.Interaction, item: st
 
     slot_zerpmon = [i['value'] for i in params if i['name'][-3] == focused and (not oppo or 'vs' in i['name'])]
     slot_zerpmon = slot_zerpmon[0] if len(slot_zerpmon) > 0 else False
-    types = config.TYPE_MAPPING if not slot_zerpmon else (await db_query.get_zerpmon(slot_zerpmon))['move_types']
+    is_omni = False
+    if not slot_zerpmon:
+        types = config.TYPE_MAPPING
+    else:
+        types = (await db_query.get_zerpmon(slot_zerpmon))
+        is_omni = types.get('isOmni', False)
+        types = types['move_types']
     print(slot_zerpmon, types)
     # remove_items = [i['value'] for i in params if 'equipment' in i['name']]
     eqs = await db_query.get_all_eqs(substr=item)
     print(eqs)
     if eqs:
         choices = {f'{i["name"]} ({i["type"]})': i["name"] for i in
-                   eqs if i["type"] == 'Omni' or i["type"] in types}
+                   eqs if i["type"] == 'Omni' or is_omni or i["type"] in types}
     else:
         choices = {}
     sorted_c = sorted(choices.items())

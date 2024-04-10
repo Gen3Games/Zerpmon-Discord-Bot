@@ -797,7 +797,7 @@ async def mission_equipment(interaction: nextcord.Interaction,
             zerp_types = all_types[eq_i]
             for item in user_obj['equipments'][equipment]['attributes']:
                 if item['trait_type'] == 'Type':
-                    if item['value'] not in zerp_types and item['value'] != 'Omni':
+                    if item['value'] not in zerp_types and item['value'] != 'Omni' and 'Omni' not in zerp_types:
                         fail_msg += f"Sorry, **{user_obj['equipments'][equipment]['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
                         eqs[eq_i] = None
         await db_query.set_equipment_on(user_obj['discord_id'], eqs, 'mission_deck', None)
@@ -1068,13 +1068,13 @@ async def battle_deck(interaction: nextcord.Interaction,
             zerp_types = all_types[eq_i]
             eq = user_obj['equipments'][int(equipment)] if temp_mode else user_obj['equipments'][equipment]
             if temp_mode:
-                if eq['type'] not in zerp_types and eq['type'] != 'Omni':
+                if eq['type'] not in zerp_types and eq['type'] != 'Omni' and 'Omni' not in zerp_types:
                     fail_msg += f"Sorry, **{eq['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
                     eqs[eq_i] = None
             else:
                 for item in user_obj['equipments'][equipment]['attributes']:
                     if item['trait_type'] == 'Type':
-                        if item['value'] not in zerp_types and item['value'] != 'Omni':
+                        if item['value'] not in zerp_types and item['value'] != 'Omni' and 'Omni' not in zerp_types:
                             fail_msg += f"Sorry, **{user_obj['equipments'][equipment]['name']}** can't be equipped to **{user1_z[eq_i]['name']}** because they do not know a {config.TYPE_MAPPING[item['value']]} **{item['value']}** type attack!\n"
                             eqs[eq_i] = None
     # print(new_deck)
