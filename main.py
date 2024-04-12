@@ -2568,6 +2568,7 @@ async def trade_nft(interaction: nextcord.Interaction, your_nft_id: str, opponen
     if your_nft_id == opponent_nft_id:
         await interaction.send("Sorry, you are trying to Trade a single NFT 🥲, this trade isn't possible in this "
                                "Planet yet.")
+        return
     #
     user_owned_nfts = await db_query.get_owned(user_id)
     u_flair = f' | {user_owned_nfts.get("flair", [])[0]}' if len(
@@ -2581,6 +2582,9 @@ async def trade_nft(interaction: nextcord.Interaction, your_nft_id: str, opponen
 
     url1, name1 = await xrpl_ws.get_nft_data_wager(your_nft_id)
     url2, name2 = await xrpl_ws.get_nft_data_wager(opponent_nft_id)
+    if url1 == '' or url2 == '':
+        await interaction.send("Failed to grab metadata for one of the NFTs")
+        return
 
     async def button_callback(_i: nextcord.Interaction):
         if _i.user.id in [user_id, opponent.id]:
