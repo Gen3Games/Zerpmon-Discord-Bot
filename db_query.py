@@ -268,7 +268,7 @@ async def get_move(name, stars=0):
             {'purple_id': result['purple_id'] + max(0, stars - result['stars'])},
             {'_id': 0, 'strings': 1}
         )
-        result['notes'] = '\n'.join(new_move.get('strings'))
+        result['notes'] = '\n > '.join(new_move.get('strings'))
 
     # print(f"Found move {result}")
 
@@ -2128,7 +2128,7 @@ async def set_boss_battle_t(user_id, reset_next_t=False) -> None:
 
 async def add_boss_txn_log(uid: str, to_addr: str, amount: float, dmgDealt, startHp):
     txn_log_col = db['general-txn-queue']
-    res = await txn_log_col.update_one({'uniqueId': uid + f'-{(await get_next_ts()) + 60}'},
+    res = await txn_log_col.update_one({'uniqueId': uid + f'-{int(await get_next_ts()) + 60}'},
                                        {'$setOnInsert': {
                                            'type': 'Payment',
                                            'from': 'boss',
