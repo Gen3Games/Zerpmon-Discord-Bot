@@ -168,23 +168,22 @@ async def get_zrp_price_api(total_tokens=50):
 
 
 # print(asyncio.run(get_zrp_price_api()))
-# async def get_zrp_price():
-#     # req = requests.post('https://api.xrpl.to/api/search', json={'search': 'zrp'})
-#     try:
-#         req = requests.get('https://s1.xrplmeta.org/token/ZRP:rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe')
-#         result = req.json()
-#         token_price = float(result['metrics']['price'])
-#         config.zrp_price = token_price
-#         print(token_price)
-#         return token_price
-#     except Exception as e:
-#         print("Error occurred while fetching ZRP price:", e)
-#         return config.zrp_price
+async def get_zrp_price():
+    # req = requests.post('https://api.xrpl.to/api/search', json={'search': 'zrp'})
+    try:
+        req = requests.get('https://api.xrpl.to/api/token/4b53d132672efcbee4386ab35d64fd14')
+        result = req.json()
+        token_price = float(result['token']['exch'])
+        # config.zrp_price = token_price
+        print(token_price)
+        return token_price
+    except Exception as e:
+        print("Error occurred while fetching ZRP price:", e)
+        return config.zrp_price
 
 
 # asyncio.run(get_zrp_price_api())
 # res = asyncio.run(get_zrp_price())
-# print(res)
 
 
 def get_nft_metadata(uri, nft_id, multi=False):
