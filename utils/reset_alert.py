@@ -9,7 +9,7 @@ import db_query
 from utils import battle_function
 from utils.checks import get_next_ts, get_time_left_utc, get_days_left
 from utils.xrpl_ws import get_balance, send_zrp, send_txn, send_nft
-from xrpl_functions import get_zrp_balance
+from xrpl_functions import get_zrp_balance, get_zrp_price
 
 
 class CustomEmbed(nextcord.Embed):
@@ -313,6 +313,9 @@ async def send_reset_message(client: nextcord.Client):
                             else:
                                 r_msg = await channel.send(embed=embed)
                                 config.GYM_MSG_ID = r_msg.id
+                        zrp_p_channel = nextcord.utils.get(guild.channels, id=config_extra.ZRP_PRICE_CHANNEL_ID)
+                        if zrp_p_channel:
+                            await zrp_p_channel.edit(name=f"🪙 ZRP Price: {await get_zrp_price():.4} XRP")
                     channel = [i for i in guild.channels if 'Restore' in i.name]
                     h, m, s = await get_time_left_utc()
                     # print(channel, time.time()//1)
