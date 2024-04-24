@@ -980,6 +980,31 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         await asyncio.sleep(0.2)
     del config.battle_results[uid]
     if result:
+        # DB state changes comes first
+        battle_log = {'teamA': {'trainer': {'name': tc1['name']}, 'zerpmons': result['roundStatsA']},
+                      'teamB': {'trainer': {'name': leader_name}, 'zerpmons': result['roundStatsB']},
+                      'battle_type': 'Gym Battle'}
+        loser = 2 if result['winner'] == 'A' else 1
+        total_gp = 0 if "gym" not in _data1 else _data1["gym"].get("gp", 0) + stage
+        zrp_reward = 0
+        if loser == 1:
+            await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1,
+                                        0)
+            await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
+                                             battle_log['teamA'],
+                                             battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
+            # Save user's match
+            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=True)
+        elif loser == 2:
+            # Add GP to user
+            zrp_reward = await db_query.add_gp_queue(_data1['address'],
+                                                     _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1, stage)
+            await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
+                                             battle_log['teamA'],
+                                             battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
+
+            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=False)
+        # Now send messages
         idx1, idx2, log_idx = 0, 0, 0
         while idx1 < len(result['playerAZerpmons']) and idx2 < len(result['playerBZerpmons']):
             z1_obj, z2_obj = result['playerAZerpmons'][idx1], result['playerBZerpmons'][idx2]
@@ -993,7 +1018,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 gym_buff_obj,
-                                                                                result['roundLogs'][0],
+                                                                                result['roundLogs'][log_idx],
                                                                                 None, )
             if msg_hook is None:
                 msg_hook = interaction
@@ -1016,35 +1041,15 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                     else:
                         idx1 += 1
                     break
-        battle_log = {'teamA': {'trainer': {'name': tc1['name']}, 'zerpmons': result['roundStatsA']},
-                      'teamB': {'trainer': {'name': leader_name}, 'zerpmons': result['roundStatsB']},
-                      'battle_type': 'Gym Battle'}
-        loser = 2 if result['winner'] == 'A' else 1
 
         await del_images(msg_hook, file, file2)
-        total_gp = 0 if "gym" not in _data1 else _data1["gym"].get("gp", 0) + stage
         if loser == 1:
             await interaction.send(
                 f"Sorry you **LOST** 💀 \nYou can try battling **{leader_name}** again tomorrow",
                 ephemeral=True)
-            await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
-                                             battle_log['teamA'],
-                                             battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
-            # Save user's match
-            await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1,
-                                        0)
-            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=True)
             await asyncio.sleep(1)
             return 2
         elif loser == 2:
-            # Add GP to user
-            await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
-                                             battle_log['teamA'],
-                                             battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
-
-            zrp_reward = await db_query.add_gp_queue(_data1['address'],
-                                                     _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1, stage)
-            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=False)
             embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
                                 description=f"{user_mention} vs {leader_name} {config.TYPE_MAPPING[gym_type]}")
 
@@ -1099,13 +1104,33 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         trainer_embed = CustomEmbed(title=f"Trainers Battle",
                                     description=f"({battle_instance['username1']} VS {battle_instance['username2']})",
                                     color=0xf23557)
-
-        tc1 = list(_data1['trainer_cards'].values())[0] if ('battle_deck' not in _data1) or (
-                '0' in _data1['battle_deck'] and (not _data1['battle_deck']['0'].get('trainer', None))) else \
-            _data1['trainer_cards'][_data1['battle_deck']['0']['trainer']]
+        tc1, zerpmon1 = None, None
+        tc2, zerpmon2 = None, None
+        if 'Battle Royale' in battle_name:
+            if _data1.get('br_champion_decks') and _data1['br_champion_decks']['0']:
+                br_deck = _data1['br_champion_decks']['0']
+                if br_deck['zerpmon'] and br_deck['trainer']:
+                    zerpmon1 = user1_zerpmons[br_deck['zerpmon']]
+                    tc1 = _data1['trainer_cards'][br_deck['trainer']]
+                    if br_deck['equipment']:
+                        eq_ = _data1['equipments'][br_deck['equipment']]
+                        zerpmon1['buff_eq'] = eq_['name']
+            if _data2.get('br_champion_decks') and _data2['br_champion_decks']['0']:
+                br_deck = _data2['br_champion_decks']['0']
+                if br_deck['zerpmon'] and br_deck['trainer']:
+                    zerpmon2 = user2_zerpmons[br_deck['zerpmon']]
+                    tc2 = _data2['trainer_cards'][br_deck['trainer']]
+                    if br_deck['equipment']:
+                        eq_ = _data2['equipments'][br_deck['equipment']]
+                        zerpmon2['buff_eq'] = eq_['name']
+        if tc1 is None:
+            tc1 = list(_data1['trainer_cards'].values())[0] if ('battle_deck' not in _data1) or (
+                    '0' in _data1['battle_deck'] and (not _data1['battle_deck']['0'].get('trainer', None))) else \
+                _data1['trainer_cards'][_data1['battle_deck']['0']['trainer']]
         tc1i = tc1['image']
 
-        tc2 = list(_data2['trainer_cards'].values())[0] if ('battle_deck' not in _data2) or (
+        if tc2 is None:
+            tc2 = list(_data2['trainer_cards'].values())[0] if ('battle_deck' not in _data2) or (
                 '0' in _data2['battle_deck'] and (not _data2['battle_deck']['0'].get('trainer', None))) else \
             _data2['trainer_cards'][_data2['battle_deck']['0']['trainer']]
         tc2i = tc2['image']
@@ -1143,65 +1168,71 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         if b_type <= low_z:
             low_z = b_type
 
-        # Sanity check
-        if 'battle_deck' in _data1 and (
-                len(_data1['battle_deck']) == 0 or (
-                '0' in _data1['battle_deck'] and len(_data1['battle_deck']['0']) == 0)):
-            await message.reply(content=f"**{_data1['username']}** please check your battle deck, it's empty.")
-        elif 'battle_deck' in _data2 and (
-                len(_data2['battle_deck']) == 0 or (
-                '0' in _data2['battle_deck'] and len(_data2['battle_deck']['0']) == 0)):
-            await message.reply(content=f"**{_data2['username']}** please check your battle deck, it's empty.")
-        # Proceed
-
-        print("Start")
-        try:
-            del _data1['battle_deck']['0']['trainer']
-        except:
-            pass
-        try:
-            del _data2['battle_deck']['0']['trainer']
-        except:
-            pass
-        if 'battle_deck' not in _data1 or (
-                len(_data1['battle_deck']) == 0 or (
-                '0' in _data1['battle_deck'] and len(_data1['battle_deck']['0']) == 0)):
-            user1_zerpmons = list(user1_zerpmons.values())[
-                             :low_z if len(user1_zerpmons) > low_z else len(user1_zerpmons)]
+        if zerpmon1 is None:
+            # Sanity check
+            if 'battle_deck' in _data1 and (
+                    len(_data1['battle_deck']) == 0 or (
+                    '0' in _data1['battle_deck'] and len(_data1['battle_deck']['0']) == 0)):
+                await message.reply(content=f"**{_data1['username']}** please check your battle deck, it's empty.")
+            try:
+                del _data1['battle_deck']['0']['trainer']
+            except:
+                pass
+            if 'battle_deck' not in _data1 or (
+                    len(_data1['battle_deck']) == 0 or (
+                    '0' in _data1['battle_deck'] and len(_data1['battle_deck']['0']) == 0)):
+                user1_zerpmons = list(user1_zerpmons.values())[
+                                 :low_z if len(user1_zerpmons) > low_z else len(user1_zerpmons)]
+            else:
+                user1_z = []
+                for i in range(5):
+                    try:
+                        temp_zerp = user1_zerpmons[_data1['battle_deck']['0'][str(i)]]
+                        eq = _data1['equipment_decks']['battle_deck']['0'][str(i)]
+                        if eq is not None and eq in _data1['equipments']:
+                            eq_ = _data1['equipments'][eq]
+                            temp_zerp['buff_eq'], temp_zerp['eq'] = eq_['name'], eq
+                        user1_z.append(temp_zerp)
+                    except:
+                        # print(f'{traceback.format_exc()}')
+                        pass
+                user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[:low_z]
         else:
-            user1_z = []
-            for i in range(5):
-                try:
-                    temp_zerp = user1_zerpmons[_data1['battle_deck']['0'][str(i)]]
-                    eq = _data1['equipment_decks']['battle_deck']['0'][str(i)]
-                    if eq is not None and eq in _data1['equipments']:
-                        eq_ = _data1['equipments'][eq]
-                        temp_zerp['buff_eq'], temp_zerp['eq'] = eq_['name'], eq
-                    user1_z.append(temp_zerp)
-                except:
-                    # print(f'{traceback.format_exc()}')
-                    pass
-            user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[:low_z]
-        if 'battle_deck' not in _data2 or (
-                len(_data2['battle_deck']) == 0 or (
-                '0' in _data2['battle_deck'] and len(_data2['battle_deck']['0']) == 0)):
-            user2_zerpmons = list(user2_zerpmons.values())[
-                             :low_z if len(user2_zerpmons) > low_z else len(user2_zerpmons)]
-        else:
-            user2_z = []
-            for i in range(5):
-                try:
-                    temp_zerp2 = user2_zerpmons[_data2['battle_deck']['0'][str(i)]]
-                    eq = _data2['equipment_decks']['battle_deck']['0'][str(i)]
-                    if eq is not None and eq in _data2['equipments']:
-                        eq_ = _data2['equipments'][eq]
-                        temp_zerp2['buff_eq'], temp_zerp2['eq'] = eq_['name'], eq
-                    user2_z.append(temp_zerp2)
-                except:
-                    # print(f'{traceback.format_exc()}')
-                    pass
-            user2_zerpmons = user2_z if len(user2_z) <= low_z else user2_z[:low_z]
+            user1_zerpmons = [zerpmon1]
 
+        if zerpmon2 is None:
+            if 'battle_deck' in _data2 and (
+                    len(_data2['battle_deck']) == 0 or (
+                    '0' in _data2['battle_deck'] and len(_data2['battle_deck']['0']) == 0)):
+                await message.reply(content=f"**{_data2['username']}** please check your battle deck, it's empty.")
+            # Proceed
+
+            try:
+                del _data2['battle_deck']['0']['trainer']
+            except:
+                pass
+
+            if 'battle_deck' not in _data2 or (
+                    len(_data2['battle_deck']) == 0 or (
+                    '0' in _data2['battle_deck'] and len(_data2['battle_deck']['0']) == 0)):
+                user2_zerpmons = list(user2_zerpmons.values())[
+                                 :low_z if len(user2_zerpmons) > low_z else len(user2_zerpmons)]
+            else:
+                user2_z = []
+                for i in range(5):
+                    try:
+                        temp_zerp2 = user2_zerpmons[_data2['battle_deck']['0'][str(i)]]
+                        eq = _data2['equipment_decks']['battle_deck']['0'][str(i)]
+                        if eq is not None and eq in _data2['equipments']:
+                            eq_ = _data2['equipments'][eq]
+                            temp_zerp2['buff_eq'], temp_zerp2['eq'] = eq_['name'], eq
+                        user2_z.append(temp_zerp2)
+                    except:
+                        # print(f'{traceback.format_exc()}')
+                        pass
+                user2_zerpmons = user2_z if len(user2_z) <= low_z else user2_z[:low_z]
+        else:
+            user2_zerpmons = [zerpmon2]
     else:
         tc1, tc2 = None, None
         user1_zerpmons = [user1_zerpmons[battle_instance['z1']]] if type(battle_instance['z1']) is str else [
@@ -1241,7 +1272,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 {},
-                                                                                result['roundLogs'][0],
+                                                                                result['roundLogs'][log_idx],
                                                                                 None, )
             if msg_hook is None:
                 if hidden:
@@ -1337,6 +1368,8 @@ def get_type(doc: dict):
         return doc["type"]
     elif "affinity" in doc:
         return doc["affinity"]
+    elif "zerpmonType" in doc:
+        return [i.title() for i in doc['zerpmonType']]
     else:
         types = []
         for val in doc.get("attributes", []):
@@ -1356,23 +1389,27 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
     z1_type = get_type(z1)
     has_buff = False
     trainer = None
+    print(z1_type)
     for key, tc1 in _data1['trainer_cards'].items():
         if tc1.get('nft_id', '') in OMNI_TRAINERS:
             trainer = tc1.get('name')
             has_buff = 'Omni'
             break
         trainer_type = get_type(tc1)
-        if len(trainer_type) > 0 and trainer_type[0] in z1_type:
+        if 'Omni' in z1_type or (len(trainer_type) > 0 and trainer_type[0] in z1_type):
+            print('tbuff')
             trainer = tc1.get('name')
             has_buff = trainer_type[0]
-            print(trainer, trainer_type)
+            # print(trainer, trainer_type)
             break
 
     lure = _data1.get('zerp_lure', {})
     lure_active = lure.get('expire_ts', 0) > time.time()
-    z2 = await db_query.get_rand_zerpmon(level=1, includeOmni=False, lure_type=lure.get('type') if lure_active else None)
+    z2 = await db_query.get_rand_zerpmon(level=1, includeOmni=False,
+                                         lure_type=lure.get('type') if lure_active else None)
     while z2['name'] == z1['name']:
-        z2 = await db_query.get_rand_zerpmon(level=1, includeOmni=False, lure_type=lure.get('type') if lure_active else None)
+        z2 = await db_query.get_rand_zerpmon(level=1, includeOmni=False,
+                                             lure_type=lure.get('type') if lure_active else None)
     # Dealing with Equipment
     try:
         cur_z_index = [key for key, value in _data1['mission_deck'].items() if value == str(serial)][0]
@@ -1421,13 +1458,13 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
         stats_arr = [False, False, False, 0]
         t_matches = str(_data1.get('total_matches', 0))
         if not lure_active:
-            await db_query.save_zerpmon_winrate([*result['roundStatsA'], *result['roundStatsB']])
+            await db_query.save_zerpmon_winrate([*result['roundStatsA']])
         if loser == 2:
             await asyncio.sleep(1)
             await interaction.send(
                 f"**WINNER**   👑**{user_mention}**👑",
                 ephemeral=True)
-            await db_query.update_user_wr(user_id, 1, old_num, is_reset)
+            await db_query.update_user_wr(user_id, 1, int(t_matches), is_reset)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
@@ -1481,7 +1518,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             z1['active_t'] = await checks.get_next_ts()
             await db_query.add_xrp_txn_log(t_matches, 'mission', _data1['address'], 0, 0, )
             await db_query.update_zerpmon_alive(z1, serial, user_id)
-            await db_query.update_user_wr(user_id, 0, old_num, is_reset)
+            await db_query.update_user_wr(user_id, 0, int(t_matches), is_reset)
 
         await asyncio.sleep(1)
         file.close()
@@ -1578,7 +1615,8 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
         user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[-low_z:]
     user2_zerpmons[0]['buff_eq'] = boss_info.get('boss_eq', None)
     msg_hook = None
-    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['name'], tc2['name'], 'boss', startHp=boss_hp)
+    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['name'], tc2['name'], 'boss',
+                                         startHp=boss_hp)
     result = {}
     for cnt in range(120):
         if config.battle_results[uid]:
@@ -1601,7 +1639,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                                                                                 z1_obj['zerpmon']['trainer_buff'],
                                                                                 '',
                                                                                 {},
-                                                                                result['roundLogs'][0],
+                                                                                result['roundLogs'][log_idx],
                                                                                 cur_hp, )
             cur_hp = boss_hp - result['dmgVariations'][idx1 + idx2]
             if msg_hook is None:
@@ -1659,7 +1697,8 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, tc2['name'],
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
-            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'], 1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
+            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'],
+                                            1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
             # Save user's match
             await asyncio.sleep(1)
             return 2
@@ -1680,7 +1719,8 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 embeds=[embed],
                 ephemeral=True)
             reward_dict = {}
-            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'], 1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
+            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'],
+                                            1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
             total_dmg = boss_info['total_weekly_dmg'] + boss_hp
             winners = await db_query.boss_reward_winners()
             for i in range(10):
@@ -1688,8 +1728,9 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                     embed = CustomEmbed(title=f"🏆 World Boss Defeated! 🏆",
                                         color=0x680747)
 
-                    embed.set_image(z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
-                        'image'].replace("ipfs://", ""))
+                    embed.set_image(
+                        z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
+                            'image'].replace("ipfs://", ""))
                     content = f'🔥 🔥 Congratulations {user_mention} has defeated **{z2["name"]}**!! 🔥 🔥\n@everyone'
                     t_reward = boss_info['reward']
                     description = f"Starting to distribute **`{t_reward} ZRP` Boss reward!\n\n"
