@@ -37,7 +37,7 @@ SAFARI_REWARD_CHANCES = {
     "candy_white": 2.1667,
     "candy_gold": 2.1667,
     "candy_level_up": 0.8333,
-    "equipment": 0,  # 0.7000,
+    "equipment": 0.7000,
     "jackpot": 0.1833,
     "gym_refill": 2.6667,
     "revive_potion": 1.2667,
@@ -614,7 +614,7 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     jawb_p = config.ZRP_STORE['jawbreaker'] / zrp_price
     candy_gummy_p = config.ZRP_STORE['gummy_candy'] / zrp_price
 
-    omni_p = round(equip_p * 188 / config.ZRP_STORE['equipment'], 2)
+    omni_p = round(equip_p * 160 / config.ZRP_STORE['equipment'], 2)
 
     main_embed.add_field(name="**Zerpmon Equipment**" + '\t🗡️',
                          value=f"Cost: `{equip_p:.2f} ZRP` (Omni: `{omni_p}`)",
@@ -887,6 +887,7 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
     # zerps = {str(k + 100): v for k, v in enumerate(await db_query.get_all_z())}
     view = View()
     cards = {k: v for k, v in user_owned['zerpmons'].items()} if user_owned is not None else {}
+    print(f'ZerpmonLen {len(cards)}')
     # cards = {k: v for k, v in zerps.items()} if user_owned is not None else {}
     key_list = [k for k, v in cards.items()]
     key_list = key_list[next_page * 80:]
@@ -989,9 +990,12 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
         await interaction.response.defer(ephemeral=True)
     match label:
         case "Buy Zerpmon Equipment":
+            # await interaction.edit_original_message(content="Please wait new **equipment** will soon go live!", embeds=[], view=None)
+            # return
             select_menu = nextcord.ui.StringSelect(placeholder="Select an option")
             found, stored_nfts = await xrpl_functions.get_nfts(config.STORE_ADDR)
             stored_eqs = [nft for nft in stored_nfts if nft["Issuer"] == config.ISSUER["Equipment"]]
+            # print(stored_eqs)
             if not found:
                 await interaction.edit_original_message(
                     content="**Error** in getting Store Equipment NFTs from XRPL server", embeds=[])
@@ -2123,3 +2127,29 @@ async def setup_gym_tower(interaction: nextcord.Interaction, user_d, reset=False
                     f"\n`/add battle_deck deck_type: Tower Rush`\n\n"
                     f" ❗ **Upcoming Battle** ❗ {gym_t} Leader **{config.LEADER_NAMES[gym_t]}**", embeds=[embed, embed2],
             view=View())
+
+
+async def eq_info(interaction: nextcord.Interaction, cnt=0):
+    await interaction.response.defer(ephemeral=True)
+    embed3 = CustomEmbed(title=f"**ZERPMON** EQUIPMENTS\n",
+                         color=0x962071,
+                         )
+    all_eqs = await db_query.get_all_eqs()
+    eqs = sorted(all_eqs, key=lambda k: k['name'])
+    eqs = eqs[cnt*25:]
+    for i, nft in enumerate(eqs):
+        if len(embed3.fields) > 24:
+            break
+        nft_type = ', '.join(
+            [config.TYPE_MAPPING[i] for i in nft['type'].split(',')])
+
+        embed3.add_field(
+            name=f" **{nft['name']}** ({nft_type})",
+            value=f'> **Effect**: \n' + '\n'.join([f'> `{i}`' for i in nft['notes']]),
+            inline=False)
+    view = View()
+    if len(eqs) > 25:
+        b1 = Button(label='Show more', style=ButtonStyle.green)
+        view.add_item(b1)
+        b1.callback = lambda _i: eq_info(_i, cnt=cnt + 1)
+    await interaction.edit_original_message(embeds=[embed3], view=view)
