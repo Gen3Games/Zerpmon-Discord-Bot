@@ -276,7 +276,7 @@ async def send_reset_message(client: nextcord.Client):
                             zerp_msg = ('> Battle Zerpmons:\n'
                                         f'> \n') if len(battle_deck) > 0 else '> Battle Zerpmons:\n'
                             for index, v in battle_deck.items():
-                                if index == "trainer":
+                                if index == "trainer" and v:
                                     attrs = user['trainer_cards'][v]['attributes']
                                     emj = '🧙'
                                     for attr in attrs:
@@ -315,7 +315,10 @@ async def send_reset_message(client: nextcord.Client):
                                 config.GYM_MSG_ID = r_msg.id
                         zrp_p_channel = nextcord.utils.get(guild.channels, id=config_extra.ZRP_PRICE_CHANNEL_ID)
                         if zrp_p_channel:
-                            await zrp_p_channel.edit(name=f"🪙 ZRP Price: {await get_zrp_price():.4} XRP")
+                            zp = await get_zrp_price()
+                            if zp != config_extra.zrp_price:
+                                await zrp_p_channel.edit(name=f"{'🟢 ↗' if zp >= config_extra.zrp_price else '🔴 ⇲'} ZRP: {zp:.4} XRP")
+                                config_extra.zrp_price = zp
                     channel = [i for i in guild.channels if 'Restore' in i.name]
                     h, m, s = await get_time_left_utc()
                     # print(channel, time.time()//1)
