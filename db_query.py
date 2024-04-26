@@ -365,11 +365,11 @@ async def get_rand_zerpmon(level, lure_type=None, includeOmni=True):
     if lure_type is None:
         query = {}
     else:
-        query = {'zerpmonType': {'$elemMatch': lure_type.lower()}}
+        query = {'zerpmonType': {'$elemMatch': {'$eq': lure_type.lower()}}}
     if not includeOmni:
         query['isOmni'] = {'$exists': False}
     random_doc = await zerpmon_collection.aggregate([
-        query,
+        {'$match': query},
         {'$sample': {'size': 1}},
         {'$limit': 1}
     ]).to_list(None)
@@ -393,8 +393,8 @@ async def get_all_t(substr=None):
     return data
 
 
-async def get_all_z(substr=None):
-    zerpmon_collection = db['MoveSets']
+async def get_all_z(substr=None, test=False):
+    zerpmon_collection = db['MoveSets'] if not test else db['MoveSets2']
     if not substr:
         data = await zerpmon_collection.find({}).to_list(None)
     else:
@@ -446,21 +446,35 @@ async def update_battle_count(user_id, num):
     # print(r)
 
 
-async def update_user_wr(user_id, win, battleCount, is_reset):
+async def update_user_wr(user_id, win, total_m, is_reset):
     from utils.checks import get_next_ts
     users_collection = db['users']
     new_ts = int(await get_next_ts())
-    update_operation = {
-        '$set': {
-            'battle.reset_t': new_ts,
-        },
-        '$inc': {
-            'battle.num': (1 if not is_reset else 1 - battleCount) if battleCount < 10 else -9,
-            'total_matches': 1,
-            'win': 1 if win else 0,
-            'loss': 0 if win else 1,
+    if is_reset:
+        update_operation = {
+            '$set': {
+                'battle.reset_t': new_ts,
+                'battle.num': 1,
+                'total_matches': total_m + 1,
+            },
+            '$inc': {
+
+                'win': 1 if win else 0,
+                'loss': 0 if win else 1,
+            }
         }
-    }
+    else:
+        update_operation = {
+            '$set': {
+                'battle.reset_t': new_ts,
+                'total_matches': total_m + 1,
+            },
+            '$inc': {
+                'battle.num': 1,
+                'win': 1 if win else 0,
+                'loss': 0 if win else 1,
+            }
+        }
 
     r = await users_collection.update_one({'discord_id': str(user_id)},
                                           update_operation,
@@ -1131,7 +1145,7 @@ async def get_random_doc_with_type(type_value=None, limit=5, level=None, include
     if type_value is None:
         query = {}
     else:
-        query = {'zerpmonType': {'$elemMatch': type_value.lower()}}
+        query = {'zerpmonType': {'$elemMatch': {'$eq': type_value.lower()}}}
     if not includeOmni:
         query['isOmni'] = {'$exists': False}
     random_documents = await collection.aggregate([
@@ -1147,7 +1161,7 @@ async def get_random_doc_with_type(type_value=None, limit=5, level=None, include
                 doc['level'] = level
                 await update_moves(doc, False, effective=True)
             doc['name2'] = doc['name']
-
+        print(random_documents)
         return random_documents
     else:
         return None
@@ -1167,6 +1181,8 @@ async def choose_gym_zerp():
         await gym_col.update_one({'name': leader_name},
                                  {'$set': gym_obj}, upsert=True)
 
+
+# asyncio.run(choose_gym_zerp())
 
 async def get_gym_leader(gym_type):
     collection_name = 'gym_zerp'
@@ -1274,8 +1290,10 @@ async def update_gym_won(discord_id, gym_obj, gym_type, stage, lost=False):
         # gym_obj['gp'] += stage
         await users_collection.update_one(
             {'discord_id': str(discord_id)},
-            {'$set': {f'gym.won.{gym_type}': gym_obj['won'][gym_type]},
-             '$inc': {'gym.match_cnt': 1}}
+            {'$set': {f'gym.won.{gym_type}': gym_obj['won'][gym_type],
+                      'gym.match_cnt': gym_obj.get('match_cnt', 0) + 1
+                      },
+             }
         )
 
 
@@ -1827,7 +1845,7 @@ async def get_all_eqs(limit=None, substr=None):
         return await equipment_col.find(
             {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
             {'_id': 0, 'name': 1, 'type': 1}) \
-                    .to_list(25)
+            .to_list(25)
 
 
 """LOAN"""
