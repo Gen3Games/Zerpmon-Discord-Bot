@@ -25,7 +25,9 @@ def translate_message(code: str, messages: dict, bold=True) -> list[str]:
         with open(fp, "r", encoding="utf-8") as file:
             translations = json.load(file)
         translations = translations.get('battle')
-        if translations.popitem()[-1]:
+        kv = translations.popitem()
+        if kv[-1]:
+            translations[kv[0]] = kv[1]
             battle_translations[code] = translations
         else:
             return translate_message('en', messages)

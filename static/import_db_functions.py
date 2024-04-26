@@ -145,7 +145,7 @@ def get_effects(effects, entries, l_effect):
 
 
 def import_moves(col_name):
-    with open('Zerpmon_Moves_-_Move_List_170324.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Move_List_140424.csv', 'r') as csvfile:
         collection = db[col_name]
         csvreader = csv.reader(csvfile)
         entries = []
@@ -211,7 +211,7 @@ def import_purple_star_ids():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_070424.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_140424.csv', 'r') as csvfile:
         collection = db['MoveSets']
         movelist_col = db['MoveList']
         # c2 = db['MoveSets2']
@@ -428,6 +428,9 @@ def clean_attrs():
                     r = zerpmon_collection.find_one_and_update({'name': i['name']},
                                                                {'$set': {'attributes': i['attributes']}})
                     print(r)
+        if 'omni' in i.get('zerpmonType', []):
+            r = zerpmon_collection.update_one({'name': i['name']},
+                                              {'$set': {'isOmni': True}})
     c2 = db['MoveSets2']
     c2.drop()
     for doc in zerpmon_collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
@@ -592,6 +595,15 @@ def cache_data():
         # exit(0)
         e_nfts = get_issuer_nfts_data('rEQQ8tTnJm4ECbPv71K9syrHrTJTv6DX3T')
         c_nfts = get_collab_nfts()
+        for nft in c_nfts:
+            obj = {'nft_id': nft['nftokenID'], 'image': nft['metadata']['image'], 'name': nft['metadata']['name']}
+
+            for key in nft['metadata']['attributes']:
+                key, val = key['trait_type'], key['value']
+                obj[key.lower()] = val
+            db['trainers'].update_one({'nft_id': obj['nft_id']}, {'$setOnInsert': obj}, upsert=True)
+            print(obj)
+        exit(0)
         z_nfts.extend(nfts)
         z_nfts.extend(e_nfts)
         z_nfts.extend(c_nfts)
@@ -659,7 +671,7 @@ def reset_all_gyms():
 
 
 def import_equipments():
-    with open('Zerpmon_Moves_-_Equipment.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Equipment_180424.csv', 'r') as csvfile:
         collection = db['Equipment']
         # collection.drop()
         csvreader = csv.reader(csvfile)
@@ -667,7 +679,7 @@ def import_equipments():
         for row in csvreader:
             if row[1] == "":
                 continue
-            notes = [f"{row[1]} by {row[2]}", (f"{row[3]} by {row[4]}" if row[3] else None)]
+            notes = [f"{row[1]} {row[2]}", (f"{row[3]} {row[4]}" if row[3] else None)]
             effect_list = []
             for note in notes:
                 if note:
@@ -696,22 +708,24 @@ def import_equipments():
                             elif 'crit' in s:
                                 e_type = 'crit-chance'
                                 p_val *= 1 if change == 'increase' else -1
-                            elif 'purple star' in s or 'purple attack' in s:
+                            elif 'purple star' in s or ('purple' in s and 'weaker' in s):
                                 if 'chance' in s:
                                     e_type = f'purple-buff-chance'
                                 else:
                                     e_type = f'purple-stars-{change}'
-                            elif 'roll' in s:
+                            elif 'roll again' in s:
                                 e_type = 'reroll-on-miss'
                             elif 'miss' in s:
                                 e_type = f'miss-{change}'
                             elif 'damage' in s:
-                                color = 'damage-'
+                                color = ''
                                 if 'gold' in s:
                                     color = 'gold-'
                                 elif 'white' in s:
                                     color = 'white-'
                                 if 'chance' in s:
+                                    if color == '':
+                                        color = 'damage-'
                                     e_type = f'{color}buff-chance'
                                 else:
                                     e_type = f'{color}damage-{change}'

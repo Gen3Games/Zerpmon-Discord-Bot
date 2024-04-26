@@ -220,7 +220,7 @@ async def zerpmon_sim_autocomplete(interaction: nextcord.Interaction, item: str)
         print(e)
     remove_items = [i['value'] for i in params if i['name'][-3].isdigit()]
 
-    zerps = await db_query.get_all_z(item)
+    zerps = await db_query.get_all_z(item, test=True)
     cards = [v for v in zerps if v['name'] not in remove_items]
     choices = {}
     if (len(cards)) == 0:

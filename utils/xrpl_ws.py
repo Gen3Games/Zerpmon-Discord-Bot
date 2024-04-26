@@ -298,7 +298,7 @@ async def listener(client, db_sep, store_address, wager_address):
                                                 del config.revive_potion_buyers[user_id]
                                                 if st_bal > 40:
                                                     await send_txn(Reward_address, amount, 'store')
-                                        if user_id in config.mission_potion_buyers:
+                                        elif user_id in config.mission_potion_buyers:
                                             qty = config.mission_potion_buyers[user_id]
                                             if amount == round(config.MISSION_REFILL[0] * qty, 6) or (
                                                     amount == round((config.MISSION_REFILL[0] * (qty - 1 / 2)),
@@ -1078,7 +1078,7 @@ async def get_latest_nft_offers(address):
 # asyncio.run(send_nft('auction', to_address='r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7ED29FD31400000079'))
 # asyncio.run(send_nft('loan', to_address='rKXQxhG2ieKb1EauS5kWG9VceBN4soDbQN', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E3C46E497048F1EFC'))
 # asyncio.run(send_nft('loan', to_address='rKXQxhG2ieKb1EauS5kWG9VceBN4soDbQN', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E68A194A300000308'))
-# asyncio.run(send_nft('wager', to_address='rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7EC92FB492000003F7'))
+# asyncio.run(send_nft('wager', to_address='rGNAoM3punrrP5rPc94EqYvzD67Sedopuo', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E283CC566000000CB'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
@@ -1086,7 +1086,8 @@ async def get_latest_nft_offers(address):
 # asyncio.run(send_zrp('rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', 5.56, 'tower'))
 
 # asyncio.run(test())
-# asyncio.run(send_txn(config.JACKPOT_ADDR, 1, 'store'))
-# asyncio.run(send_txn('rsTwpXdRU4JitSUkYcVhnmXsoG5PVjJvYz', 1, 'loan'))
+# asyncio.run(send_txn(config.REWARDS_ADDR, 150, 'store'))
+# asyncio.run(send_txn('rpTe9tS8PyizHXaRrg8XFX9WGM35fZQQLW', 2.5, 'reward'))
+# asyncio.run(send_txn('rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', 0.38, 'reward'))
 
-# asyncio.run(xrpl_functions.get_nft_metadata('697066733A2F2F516D545338766152346559395A3575634558624136666975397465346B706A6652695464384A777A7947546A43462F3236392E6A736F6E'))
+# asyncio.run(get_nft_data_wager('0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E283CC566000000CB'))

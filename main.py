@@ -3201,23 +3201,7 @@ async def equipment(interaction: nextcord.Interaction):
 @equipment.subcommand(name='info', description="Show info of all equipments")
 async def show_equipments(interaction: nextcord.Interaction):
     execute_before_command(interaction)
-    await interaction.response.defer(ephemeral=True)
-    embed3 = CustomEmbed(title=f"**ZERPMON** EQUIPMENTS\n",
-                         color=0x962071,
-                         )
-    all_eqs = await db_query.get_all_eqs()
-    eqs = sorted(all_eqs, key=lambda k: k['name'])
-    for i, nft in enumerate(eqs):
-        if len(embed3.fields) > 24:
-            break
-        nft_type = ', '.join(
-            [config.TYPE_MAPPING[i] for i in nft['type'].split(',')])
-
-        embed3.add_field(
-            name=f" **{nft['name']}** ({nft_type})",
-            value=f'> **Effect**: \n' + '\n'.join([f'> `{i}`' for i in nft['notes']]),
-            inline=False)
-    await interaction.edit_original_message(embeds=[embed3])
+    await callback.eq_info(interaction)
 
 
 @client.slash_command(name="view",
