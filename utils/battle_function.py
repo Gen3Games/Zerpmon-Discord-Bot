@@ -67,9 +67,11 @@ def check_battle_happening(channel_id):
     return battles_in_channel == [] and wager_battles_in_channel == [] and free_br_channels == []
 
 
-async def send_global_message(guild, text, image, embed=None, channel_id=None):
+async def send_global_message(guild: nextcord.Guild, text, image, embed=None, channel_id=None):
     try:
         if channel_id is None:
+            if guild.id != config.MAIN_GUILD[0]:
+                guild = config_extra.MAIN_GUILD
             channel = nextcord.utils.get(guild.channels, name='🤖│zerpmon-caught')
         else:
             channel = nextcord.utils.get(guild.channels, id=channel_id)

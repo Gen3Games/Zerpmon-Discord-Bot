@@ -2052,6 +2052,14 @@ async def remove_token_sent(token_id):
     await col.delete_one({'nft': token_id})
 
 
+async def remove_mission_nft(nft_to_remove: str):
+    result = await db['stats_log'].update_one(
+        {'name': 'mission-nfts-bithomp'},
+        {'$pull': {'nfts': {'nftokenID': nft_to_remove}}}
+    )
+    return result.acknowledged if result else None
+
+
 async def get_all_tokens_sent():
     col = db['rewarded_nfts']
     return [i['nft'] for i in await col.find({}).to_list(None)]

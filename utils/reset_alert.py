@@ -169,6 +169,7 @@ async def send_reset_message(client: nextcord.Client):
                 try:
                     if guild.id in config.MAIN_GUILD:
                         # TOWER EMBED
+                        config_extra.MAIN_GUILD = guild
                         users = await db_query.get_tower_rush_leaderboard(None)
                         embed = CustomEmbed(color=0xa56cc1,
                                             title=f"TOWER RUSH LEADERBOARD")

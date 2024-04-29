@@ -512,7 +512,7 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
     issuers = [issuer]
     if safari:
         issuers.append(config.ISSUER['TrainerV2'])
-    stored_zerpmons = [nft for nft in stored_nfts if nft.get(issuer_k) in issuers and nft.get(issuer_k) not in tokens_sent]
+    stored_zerpmons = [nft for nft in stored_nfts if nft.get(issuer_k) in issuers and nft.get(nft_key) not in tokens_sent]
     logging.error(f'Found Zerpmons {issuer} {len(stored_zerpmons)}')
     if len(stored_zerpmons) == 0:
         return
@@ -536,6 +536,7 @@ async def send_random_zerpmon(to_address, safari=False, gift_box=False, issuer=c
                                                      is_safari=False, uid=uid)
             tokens_sent.append(token_id)
             await db_query.save_token_sent(token_id, to_address)
+            await db_query.remove_mission_nft(token_id)
             nft_data = await get_nft_metadata_safe(random_zerpmon.get(uri_key), token_id)
             img = nft_data['image']
             # if not gift_box:
@@ -1088,6 +1089,7 @@ async def get_latest_nft_offers(address):
 # asyncio.run(test())
 # asyncio.run(send_txn(config.REWARDS_ADDR, 150, 'store'))
 # asyncio.run(send_txn('rpTe9tS8PyizHXaRrg8XFX9WGM35fZQQLW', 2.5, 'reward'))
-# asyncio.run(send_txn('rPexguxEfaBaVtGmdPZDxwcc4PwNUTm3y8', 0.38, 'reward'))
+# asyncio.run(send_txn('rK1c4NwJnQ62T6LfTvvtLPq9wXNWF76zw3', 0.38, 'reward'))
+# asyncio.run(send_txn('rPBwMeDTbrkfVPkGCAVvWMeLXwXaTwMRz6', 0.19, 'reward'))
 
 # asyncio.run(get_nft_data_wager('0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E283CC566000000CB'))

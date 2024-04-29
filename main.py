@@ -3586,15 +3586,16 @@ async def view_gyms(interaction: nextcord.Interaction):
             }
         won_gyms = user_d['gym'].get('won', {})
         won_list = [[k, v['stage'], int(v['next_battle_t'])] for k, v in won_gyms.items() if
-                    v['lose_streak'] == 0]
+                    v['lose_streak'] == 0 and v['next_battle_t'] > time.time()]
         won_list = sorted(won_list, key=lambda x: x[0])
         lost_list = [[k, v['stage'], int(v['next_battle_t'])] for k, v in won_gyms.items() if
-                     [k, v['stage'], int(v['next_battle_t'])] not in won_list]
+                     v['lose_streak'] != 0 and v['next_battle_t'] > time.time()]
         lost_list = sorted(lost_list, key=lambda x: x[0])
         won_list.append(['', 0])
         won_list.extend(lost_list)
 
-    not_played = [[k, 1, 0] for k in config.GYMS if k not in [i[0] for i in won_list]]
+    won_gym_types = [i[0] for i in won_list]
+    not_played = [[k, 1, 0] for k in config.GYMS if k not in won_gym_types]
     not_played = sorted(not_played, key=lambda x: x[0])
     won_list.append(['x', 0])
     won_list.extend(not_played)
