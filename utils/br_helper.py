@@ -53,9 +53,11 @@ async def do_matches(channel_id: int, msg: Message, participants=None, name="Bat
                 p2 = winners.pop()
             else:
                 try:
-                    p2 = random.choice(losers)
+                    random_index = random.randint(0, len(losers) - 1)
+                    p2 = losers.pop(random_index)
                 except:
-                    p2 = random.choice(old_losers)
+                    random_index = random.randint(0, len(old_losers) - 1)
+                    p2 = losers.pop(random_index)
 
             size -= 2
             config.ongoing_battles.append(p1['id'])

@@ -30,7 +30,7 @@ from utils.simulation import simulation_callback
 from utils.trade import trade_item
 from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocomplete, trade_autocomplete, \
     loan_autocomplete, zerp_flair_autocomplete, deck_num_autocomplete, def_deck_autocomplete, zerpmon_sim_autocomplete, \
-    equipment_sim_autocomplete, trainer_sim_autocomplete
+    equipment_sim_autocomplete, trainer_sim_autocomplete, event_autocomplete
 from utils.callback import wager_battle_r_callback
 
 intents = nextcord.Intents.all()
@@ -510,6 +510,7 @@ async def battle(interaction: nextcord.Interaction, opponent: Optional[nextcord.
                       )
 async def mission(interaction: nextcord.Interaction):
     execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
     user_id = interaction.user.id
 
     user_owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
@@ -3573,10 +3574,12 @@ async def claim(interaction: nextcord.Interaction, *, name: str):
 @view_main.subcommand(name="gyms", description="Show Gyms")
 async def view_gyms(interaction: nextcord.Interaction):
     execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
     # ...
     embed = CustomEmbed(color=0x01f39d,
                         title=f"Gym Info")
     user_d = await db_query.get_owned(interaction.user.id)
+    won_gyms = {}
     won_list = []
     if user_d is not None:
         embed.add_field(name='GYMS COMPLETED ✅', value='\u200B', inline=False)
@@ -3595,7 +3598,7 @@ async def view_gyms(interaction: nextcord.Interaction):
         won_list.extend(lost_list)
 
     won_gym_types = [i[0] for i in won_list]
-    not_played = [[k, 1, 0] for k in config.GYMS if k not in won_gym_types]
+    not_played = [[k, won_gyms.get(k, {}).get('stage', 1), 0] for k in config.GYMS if k not in won_gym_types]
     not_played = sorted(not_played, key=lambda x: x[0])
     won_list.append(['x', 0])
     won_list.extend(not_played)
@@ -3630,6 +3633,7 @@ async def view_gyms(interaction: nextcord.Interaction):
 @view_main.subcommand(name="battle_log", description="Show Battle logs")
 async def view_logs(interaction: nextcord.Interaction):
     execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
     # ...
     embed = CustomEmbed(color=0x01f39d,
                         title=f"Battle Log")
@@ -3831,6 +3835,7 @@ async def gym(interaction: nextcord.Interaction):
 async def gym_battle(interaction: nextcord.Interaction,
                      gym_leader: str = SlashOption(name="gym_leader", description="Gym Leader Type"), ):
     execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
     user = interaction.user
 
     proceed = await checks.check_gym_battle(user.id, interaction, gym_leader)
@@ -4352,6 +4357,57 @@ async def gym_ld(interaction: nextcord.Interaction):
 
 
 # Gym Tower CMD
+
+# Event CMD
+
+@client.slash_command(name="event",
+                      description="Event commands",
+                      )
+async def event_cmd(interaction: nextcord.Interaction):
+    # ...
+    pass
+
+
+@event_cmd.subcommand(name='add', description="Add a new event.")
+async def add_event(interaction: nextcord.Interaction):
+    if interaction.user.id not in config_extra.ADMINS:
+        await interaction.send("Only admins can add a new Zerpmon.")
+        return
+
+    b1 = Button(label="Add basic details", style=ButtonStyle.blurple, row=0)
+    b2 = Button(label="Add date", style=ButtonStyle.blurple, row=0)
+    b3 = Button(label="Add buttons", style=ButtonStyle.blurple, row=0)
+    b4 = Button(label="Submit", style=ButtonStyle.green, row=2)
+    view = View()
+    view.add_item(b1)
+    view.add_item(b2)
+    view.add_item(b3)
+    view.add_item(b4)
+    event_id = str(uuid.uuid4())
+    b1.callback = lambda i: callback.add_event(i, event_id)
+    b2.callback = lambda i: callback.add_event_date(i, event_id)
+    b3.callback = lambda i: callback.add_event_btn(i, event_id)
+    b4.callback = lambda i: callback.submit_event(i, event_id)
+    await interaction.send(content='**Fill these out please** (__Basic details are a **required**__)\n', view=view,
+                           ephemeral=True)
+
+
+@event_cmd.subcommand(name='delete', description="Delete an event.")
+async def add_event(interaction: nextcord.Interaction,
+                    event: str = SlashOption("event_name", autocomplete_callback=event_autocomplete,
+                                             required=True), ):
+    await interaction.response.defer(ephemeral=True)
+    if interaction.user.id not in config_extra.ADMINS:
+        await interaction.edit_original_message(content="Only admins can add a new Zerpmon.")
+        return
+
+    b1 = Button(label="Add basic details", style=ButtonStyle.blurple, row=0)
+    if (await db_query.delete_event(event)).acknowledged:
+        await interaction.edit_original_message(content='**Success**')
+    else:
+        await interaction.edit_original_message(content='**Failed**')
+
+# Event CMD
 
 # Reaction Tracker
 

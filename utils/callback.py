@@ -6,8 +6,10 @@ import random
 import time
 import traceback
 from collections import Counter, defaultdict
+from datetime import datetime
 from functools import partial
 import nextcord
+import pytz
 from PIL import Image, ImageDraw, ImageFont
 from nextcord import ButtonStyle
 from nextcord.ui import Button, View
@@ -2136,7 +2138,7 @@ async def eq_info(interaction: nextcord.Interaction, cnt=0):
                          )
     all_eqs = await db_query.get_all_eqs()
     eqs = sorted(all_eqs, key=lambda k: k['name'])
-    eqs = eqs[cnt*25:]
+    eqs = eqs[cnt * 25:]
     for i, nft in enumerate(eqs):
         if len(embed3.fields) > 24:
             break
@@ -2153,3 +2155,153 @@ async def eq_info(interaction: nextcord.Interaction, cnt=0):
         view.add_item(b1)
         b1.callback = lambda _i: eq_info(_i, cnt=cnt + 1)
     await interaction.edit_original_message(embeds=[embed3], view=view)
+
+
+event_map = {
+    "code": "Event Code",
+    "name": "Name",
+    "title": "Title",
+    "description": "Description",
+    "bannerImage": "Banner Image URL",
+    "start": "Start date",  # start timestamp (ms)
+    "end": "End date",  # end timestamp (ms)
+    "indefiniteDate": "Indefinite Date",
+    "primaryButtonText": "Primary button text",
+    "primaryButtonUrl": "Primary button url",
+    "secondaryButtonText": "Secondary button text",
+    "secondaryButtonUrl": "Secondary button url"
+}
+
+events = {}
+main_event = {
+    "code": "",
+    "name": "",
+    "title": "",
+    "description": "",
+    "bannerImage": "",
+}
+
+
+async def add_event(interaction: nextcord.Interaction, event_id):
+    zerpmon_event = main_event.copy()
+    modal = nextcord.ui.Modal(title=f"Event basic details")
+    for key, v in zerpmon_event.items():
+        days = nextcord.ui.TextInput(label=event_map[key], required=True, custom_id=key)
+        modal.add_item(days)
+    if event_id not in events:
+        events[event_id] = {}
+    await interaction.response.send_modal(modal)
+
+    async def proceed_event_d(i: nextcord.Interaction, ):
+        inputs = i.data['components']
+        print(inputs[0])
+        for form_input in inputs:
+            try:
+                input_val = form_input['components'][0]['value']
+                input_key = form_input['components'][0]['custom_id']
+                events[event_id][input_key] = input_val
+                print(events)
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(tb)
+        await interaction.send("**Success** basic details added", ephemeral=True)
+
+    modal.callback = lambda i: proceed_event_d(i)
+
+
+async def add_event_date(interaction: nextcord.Interaction, event_id):
+    modal = nextcord.ui.Modal(title=f"Event basic details")
+    days = nextcord.ui.TextInput(label=event_map["start"], required=False, custom_id="start", placeholder='31-9-2024')
+    modal.add_item(days)
+    days = nextcord.ui.TextInput(label=event_map["end"], required=False, custom_id="end", placeholder='31-12-2024')
+    modal.add_item(days)
+    days = nextcord.ui.TextInput(label=event_map["indefiniteDate"], required=False, custom_id="indefiniteDate",
+                                 placeholder='Coming Soon')
+    modal.add_item(days)
+    if event_id not in events:
+        events[event_id] = {}
+    await interaction.response.send_modal(modal)
+
+    async def proceed_event_d(i: nextcord.Interaction, ):
+        inputs = i.data['components']
+        print(inputs[0])
+        for form_input in inputs:
+            try:
+                input_val = form_input['components'][0]['value']
+                input_key = form_input['components'][0]['custom_id']
+                if input_val:
+                    match input_key:
+                        case "start":
+                            day, month, year = [int(j) for j in input_val.split('-')]
+                            events[event_id][input_key] = int(datetime(year, month, day, tzinfo=pytz.utc).timestamp() * 1000)
+                        case "end":
+                            day, month, year = [int(j) for j in input_val.split('-')]
+                            events[event_id][input_key] = int(datetime(year, month, day, tzinfo=pytz.utc).timestamp() * 1000)
+                            if events[event_id][input_key] < events[event_id]["start"]:
+                                raise Exception("invalid start and end dates")
+                        case "indefiniteDate":
+                            events[event_id][input_key] = input_val
+                print(events)
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(tb)
+                await interaction.send(f"Sorry, something went wrong, Event data ({input_key}).\n"
+                                       f"Error message: `{e}`\n"
+                                       f"On line: {tb.splitlines()[-2]}", ephemeral=True)
+                break
+        await interaction.send("**Success** date added", ephemeral=True)
+    modal.callback = lambda i: proceed_event_d(i)
+
+
+async def add_event_btn(interaction: nextcord.Interaction, event_id):
+    opt_fields = {
+        "primaryButtonText": "",
+        "primaryButtonUrl": "",
+        "secondaryButtonText": "",
+        "secondaryButtonUrl": ""
+    }
+    modal = nextcord.ui.Modal(title=f"Event basic details")
+    for key, v in opt_fields.items():
+        days = nextcord.ui.TextInput(label=event_map[key], required=False, custom_id=key)
+        modal.add_item(days)
+    if event_id not in events:
+        events[event_id] = {}
+    await interaction.response.send_modal(modal)
+
+    async def proceed_event_d(i: nextcord.Interaction, ):
+        inputs = i.data['components']
+        print(inputs[0])
+        for form_input in inputs:
+            try:
+                input_val = form_input['components'][0]['value']
+                input_key = form_input['components'][0]['custom_id']
+                if input_val:
+                    events[event_id][input_key] = input_val
+                    print(events)
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(tb)
+        await interaction.send("**Success** button details added", ephemeral=True)
+    modal.callback = lambda i: proceed_event_d(i)
+
+
+async def submit_event(interaction: nextcord.Interaction, event_id):
+    try:
+        await interaction.response.defer(ephemeral=True)
+        if event_id not in events:
+            await interaction.send("**Failed**, event not found", ephemeral=True)
+            return
+        event = events[event_id]
+        for key in main_event:
+            if event.get(key) is None:
+                await interaction.send("**Failed**, event basic data missing", ephemeral=True)
+                return
+        await interaction.send("**Success**", ephemeral=True)
+        await db_query.insert_event(event)
+        del events[event_id]
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(tb)
+        await interaction.send(f"Sorry, something went wrong.\n"
+                               f"Error message: `{e}`\n"
+                               f"On line: {tb.splitlines()[-2]}", ephemeral=True)

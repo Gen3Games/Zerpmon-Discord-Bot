@@ -2774,3 +2774,29 @@ async def delete_battle_results(batch_uids):
     output_col = db['discord_battle_results']
     res = await output_col.delete_many({'uid': {'$in': batch_uids}})
     return res.acknowledged
+
+
+async def insert_event(event):
+    return await db['events'].update_one(
+        {'code': event['code']},
+        {
+            '$set': event
+        }, upsert=True
+    )
+
+
+async def delete_event(code):
+    return await db['events'].delete_one(
+        {'code': code}
+    )
+
+
+async def get_events(substr):
+    return await db['events'].find(
+        {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
+        projection={
+            '_id': 0,
+            'name': 1,
+            'code': 1,
+        }
+    ).to_list(None)

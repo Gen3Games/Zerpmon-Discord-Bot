@@ -270,3 +270,16 @@ async def equipment_sim_autocomplete(interaction: nextcord.Interaction, item: st
     choices = dict(sorted_c if len(sorted_c) <= 24 else sorted_c[:24])
     choices['Empty slot'] = ''
     await interaction.response.send_autocomplete(choices)
+
+
+async def event_autocomplete(interaction: nextcord.Interaction, item: str):
+    # remove_items = [i['value'] for i in params if 'equipment' in i['name']]
+    events = await db_query.get_events(substr=item)
+    print(events)
+    if events:
+        choices = {f'{i["name"]} ({i["code"]})': i["code"] for i in events}
+    else:
+        choices = {}
+    sorted_c = sorted(choices.items())
+    choices = dict(sorted_c if len(sorted_c) <= 24 else sorted_c[:24])
+    await interaction.response.send_autocomplete(choices)
