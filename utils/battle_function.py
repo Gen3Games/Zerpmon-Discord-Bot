@@ -1683,15 +1683,15 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 name="Damage dealt 🏹",
                 value=f"{dmg_done}",
                 inline=False)
-            t_dmg_user = _data1.get('boss_battle_stats', {}).get('weekly_dmg', 0) + dmg_done
+            t_dmg_user = float(_data1.get('boss_battle_stats', {}).get('weekly_dmg', 0) + dmg_done)
             embed.add_field(name=f'Total damage since last defeated World Boss',
-                            value=f"{t_dmg_user:.2}",
+                            value=f"{t_dmg_user:.2f}",
                             inline=False)
             embed.add_field(name=f"Percentage of Boss's total health",
                             value=f"{int(t_dmg_user * 100 / boss_info['start_hp'])}%",
                             inline=False)
             embed.add_field(name=f'World Boss HP left',
-                            value=f"{(boss_hp - dmg_done):.2}",
+                            value=f"{(boss_hp - dmg_done):.2f}",
                             inline=False)
             await interaction.send(
                 embeds=[embed],

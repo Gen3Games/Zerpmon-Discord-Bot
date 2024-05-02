@@ -170,6 +170,13 @@ async def send_reset_message(client: nextcord.Client):
                     if guild.id in config.MAIN_GUILD:
                         # TOWER EMBED
                         config_extra.MAIN_GUILD = guild
+                        zrp_p_channel = nextcord.utils.get(guild.channels, id=config_extra.ZRP_PRICE_CHANNEL_ID)
+                        if zrp_p_channel:
+                            zp = await get_zrp_price()
+                            if zp != config_extra.zrp_price:
+                                await zrp_p_channel.edit(
+                                    name=f"{'🟢 ↗' if zp >= config_extra.zrp_price else '🔴 ⇲'} ZRP: {zp:.4f} XRP")
+                                config_extra.zrp_price = zp
                         users = await db_query.get_tower_rush_leaderboard(None)
                         embed = CustomEmbed(color=0xa56cc1,
                                             title=f"TOWER RUSH LEADERBOARD")
@@ -314,12 +321,7 @@ async def send_reset_message(client: nextcord.Client):
                             else:
                                 r_msg = await channel.send(embed=embed)
                                 config.GYM_MSG_ID = r_msg.id
-                        zrp_p_channel = nextcord.utils.get(guild.channels, id=config_extra.ZRP_PRICE_CHANNEL_ID)
-                        if zrp_p_channel:
-                            zp = await get_zrp_price()
-                            if zp != config_extra.zrp_price:
-                                await zrp_p_channel.edit(name=f"{'🟢 ↗' if zp >= config_extra.zrp_price else '🔴 ⇲'} ZRP: {zp:.4} XRP")
-                                config_extra.zrp_price = zp
+
                     channel = [i for i in guild.channels if 'Restore' in i.name]
                     h, m, s = await get_time_left_utc()
                     # print(channel, time.time()//1)
