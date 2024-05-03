@@ -226,12 +226,18 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     await db_query.remove_user_nft(user_obj['discord_id'], serial, False)
         for serial in list(user_obj['trainer_cards'].keys()):
             if serial not in t_serial:
-                # if False:
-                await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
+                loaned = user_obj['trainer_cards'][serial].get('loaned', False)
+                if loaned:
+                    serials.append(serial)
+                else:
+                    await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
         for serial in list(user_obj['equipments'].keys()):
             if serial not in e_serial:
-                # if False:
-                await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
+                loaned = user_obj['equipments'][serial].get('loaned', False)
+                if loaned:
+                    serials.append(serial)
+                else:
+                    await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
         if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
             if MAIN_GUILD == guild.id:
