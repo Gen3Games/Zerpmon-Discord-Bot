@@ -2798,5 +2798,6 @@ async def get_events(substr):
             '_id': 0,
             'name': 1,
             'code': 1,
+            'title': 1
         }
     ).to_list(None)

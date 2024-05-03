@@ -4371,7 +4371,7 @@ async def event_cmd(interaction: nextcord.Interaction):
 @event_cmd.subcommand(name='add', description="Add a new event.")
 async def add_event(interaction: nextcord.Interaction):
     if interaction.user.id not in config_extra.ADMINS:
-        await interaction.send("Only admins can add a new Zerpmon.")
+        await interaction.edit_original_message(content="Only admins can use this command.")
         return
 
     b1 = Button(label="Add basic details", style=ButtonStyle.blurple, row=0)
@@ -4393,20 +4393,38 @@ async def add_event(interaction: nextcord.Interaction):
 
 
 @event_cmd.subcommand(name='delete', description="Delete an event.")
-async def add_event(interaction: nextcord.Interaction,
+async def delete_event(interaction: nextcord.Interaction,
                     event: str = SlashOption("event_name", autocomplete_callback=event_autocomplete,
                                              required=True), ):
     await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in config_extra.ADMINS:
-        await interaction.edit_original_message(content="Only admins can add a new Zerpmon.")
+        await interaction.edit_original_message(content="Only admins can use this command.")
         return
 
-    b1 = Button(label="Add basic details", style=ButtonStyle.blurple, row=0)
     if (await db_query.delete_event(event)).acknowledged:
         await interaction.edit_original_message(content='**Success**')
     else:
         await interaction.edit_original_message(content='**Failed**')
 
+
+@event_cmd.subcommand(name='list', description="List all events.")
+async def list_event(interaction: nextcord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    if interaction.user.id not in config_extra.ADMINS:
+        await interaction.edit_original_message(content="Only admins can use this command.")
+        return
+
+    events = await db_query.get_events('')
+    if events:
+        embed = CustomEmbed(color=0xa56cc1,
+                            title=f"Events list")
+        if len(events) > 25:
+            events = events[:25]
+        for i, event in enumerate(events):
+            embed.add_field(name=f"{event.get('title', 'No title')}", value=f"**{event['name']}** (`{event['code']}`)", inline=False)
+        await interaction.edit_original_message(embed=embed)
+    else:
+        await interaction.edit_original_message(content='**Failed**')
 # Event CMD
 
 # Reaction Tracker
