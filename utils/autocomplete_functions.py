@@ -188,12 +188,18 @@ async def def_deck_autocomplete(_i: nextcord.Interaction, item: str):
                ('14th', '13'), ('15th', '14'), ('16th', '15'), ('17th', '16'), ('18th', '17'), ('19th', '18'),
                ('20th', '19')]
 
-    deck_n_key = deck_type + 's'
-    deck_names = (await db_query.get_deck_names(str(_i.user.id))).get('deck_names', {}).get(deck_n_key, {})
+    if 'br_' in deck_type:
+        deck_names = (await db_query.get_deck_names(str(_i.user.id))).get('br_champion_decks', {})
+    else:
+        deck_n_key = deck_type + 's'
+        deck_names = (await db_query.get_deck_names(str(_i.user.id))).get('deck_names', {}).get(deck_n_key, {})
 
     for idx, (k, i) in enumerate(choices):
         if i in deck_names:
-            choices[idx] = (deck_names[i] + f' ({k})', i)
+            if 'br_' in deck_type:
+                choices[idx] = (deck_names[i].get('name', '') + f' ({k})', i)
+            else:
+                choices[idx] = (deck_names[i] + f' ({k})', i)
     await _i.response.send_autocomplete(dict(choices))
 
 

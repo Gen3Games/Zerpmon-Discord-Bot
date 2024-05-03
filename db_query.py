@@ -891,6 +891,16 @@ async def set_default_deck(deck_no, doc, user_id, type_: str):
         r = await users_collection.update_one({'discord_id': str(user_id)},
                                               {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck,
                                                         f'deck_names.{deck_name_key}': deck_names}})
+    elif type_ == 'br_champion_decks':
+        arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "br_champion_decks" not in doc or doc["br_champion_decks"] == {} else \
+            doc["br_champion_decks"]
+        # Deck names exchange
+        #
+        arr[deck_no], arr['0'] = arr['0'], arr.get(deck_no, {})
+        # save the updated document
+        r = await users_collection.update_one({'discord_id': str(user_id)},
+                                              {"$set": {'br_champion_decks': arr}
+                                               })
     else:
         users_collection = db['temp_user_data']
         arr = doc["battle_deck"]
@@ -918,7 +928,7 @@ async def reset_deck():
 
 async def get_deck_names(d_id: str):
     users_collection = db['users']
-    doc = await users_collection.find_one({'discord_id': d_id}, {'_id': 0, 'deck_names': 1})
+    doc = await users_collection.find_one({'discord_id': d_id}, {'_id': 0, 'deck_names': 1, 'br_champion_decks': 1})
     return doc
 
 

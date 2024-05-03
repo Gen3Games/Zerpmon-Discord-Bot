@@ -1146,7 +1146,7 @@ async def battle_deck(interaction: nextcord.Interaction,
 async def default_deck(interaction: nextcord.Interaction,
                        deck_type: str = SlashOption(
                            name="deck_type",
-                           choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK},
+                           choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK, "Battle Royale": 'br_champion_decks'},
                        ),
                        deck_number: str = SlashOption(
                            name="deck_number",
@@ -1165,7 +1165,7 @@ async def default_deck(interaction: nextcord.Interaction,
         'user': user.name}
 
     # Sanity checks
-    if deck_type == 'battle_deck' and user.id in [i['id'] for i in config.battle_royale_participants]:
+    if deck_type != 'gym_deck' and user.id in [i['id'] for i in config.battle_royale_participants]:
         await interaction.send(
             f"Sorry you can't change your deck while in the middle of a Battle Royale", ephemeral=True)
         return
