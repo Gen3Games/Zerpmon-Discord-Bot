@@ -35,7 +35,12 @@ async def send_boss_update_msg(msg_channel: nextcord.TextChannel, edit_msg: bool
     embed.set_image(
         boss_zerp['image'] if "https:/" in boss_zerp['image'] else 'https://cloudflare-ipfs.com/ipfs/' + boss_zerp[
             'image'].replace("ipfs://", ""))
-    embed.add_field(name="Total HP 💚:", value=f"> **{boss_info['start_hp']}**", inline=False)
+    if boss_info.get('penalty_hp', 0) > 0:
+        e_start_hp = boss_info['start_hp'] - boss_info['penalty_hp']
+        embed.add_field(name=f"Total HP 💚 ({boss_info.get('penalty_week', 0)} week debuff):",
+                        value=f"> **{boss_info['start_hp']} - {boss_info['penalty_hp']} = {e_start_hp}**", inline=False)
+    else:
+        embed.add_field(name="Total HP 💚:", value=f"> **{boss_info['start_hp']}**", inline=False)
     embed.add_field(name="HP Left 💚:", value=f"> **{round(boss_info['boss_hp'])}**", inline=False)
     embed.add_field(name="Reward Pool 💰:", value=f"> **{boss_info['reward']} ZRP**", inline=False)
     embed.add_field(name="Reset time 🕟:", value=f"> <t:{boss_info['boss_reset_t']}:R>", inline=False)

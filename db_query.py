@@ -2133,14 +2133,23 @@ async def get_boss_reset(hp) -> [bool, int, int, int, bool]:
         boss = await get_rand_boss()
         trainer = await get_trainer('0008138805D83B701191193A067C4011056D3DEE2B298C553C7172B400000019')
         del boss['_id']
+        boss_alive = obj.get('boss_active', False)
+        if boss_alive:
+            penalty = 5 * hp / 100
+            penalty_hp = penalty + obj.get('penalty_hp', 0)
+            penalty_week = 1 + obj.get('penalty_week', 0)
+        else:
+            penalty_hp, penalty_week = 0, 0
         await stats_col.update_one({
             'name': 'world_boss'
         },
-            {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp, 'boss_zerpmon': boss,
+            {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp - penalty_hp, 'boss_zerpmon': boss,
                       'boss_trainer': trainer, 'boss_eq': random.choice(await get_all_eqs()).get('name'),
-                      "reward": 500 if not obj.get('boss_active', False) else obj['reward'] + 300,
+                      "reward": 500 if not boss_alive else obj['reward'] + 300,
                       'start_hp': hp, 'boss_msg_id': msg_id,
-                      'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg']
+                      'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg'],
+                      'penalty_hp': penalty_hp,
+                      'penalty_week': penalty_week
                       }
              }, upsert=True
         )
