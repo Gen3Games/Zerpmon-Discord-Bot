@@ -68,13 +68,14 @@ async def save_user(user):
         print(f"Updated user")
 
 
-async def update_user_decks(address, discord_id, serials, t_serial):
+async def update_user_decks(address, discord_id, serials, t_serial, e_serial):
     user_obj = await get_owned(discord_id)
 
     mission_trainer = user_obj["mission_trainer"] if 'mission_trainer' in user_obj else ""
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
     battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {},
                                                                              '4': {}}
+    br_deck = user_obj["br_champion_decks"] if 'br_champion_decks' in user_obj else {}
     gym_deck = user_obj["gym_deck"] if 'gym_deck' in user_obj else {}
 
     new_mission_deck = {i: None for i in range(20)}
@@ -101,10 +102,19 @@ async def update_user_decks(address, discord_id, serials, t_serial):
                     new_gym_deck[k][serial] = v[serial]
             elif v[serial] in serials:
                 new_gym_deck[k][serial] = v[serial]
+    if br_deck.get('0'):
+        b_deck = br_deck.get('0')
+        if b_deck.get('trainer') not in t_serial:
+            b_deck['trainer'] = None
+        if b_deck.get('equipment') not in e_serial:
+            b_deck['equipment'] = None
+        if b_deck.get('zerpmon') not in serials:
+            b_deck['zerpmon'] = None
 
     logging.error(f'Serials {serials} \nnew deck: {new_battle_deck}')
     await save_user({'mission_trainer': mission_trainer, 'mission_deck': new_mission_deck,
                      'battle_deck': new_battle_deck, 'gym_deck': new_gym_deck,
+                     'br_champion_decks': br_deck,
                      'discord_id': user_obj["discord_id"], 'address': address})
 
 
@@ -1394,7 +1404,6 @@ async def add_flair(user_id, flair_name, type_):
         user_id = str(user_id)
         user_obj = await users_collection.find_one({'discord_id': user_id}, {'flair': 1})
         user_obj['flair'].remove(flair_name)
-
         await users_collection.update_one(
             {'discord_id': user_id},
             {'$set': {'flair': user_obj['flair']}}
@@ -1939,9 +1948,9 @@ async def get_loaned(user_id=None, zerp_name=None):
     loan_col = db['loan']
     if user_id is not None:
         listings = await loan_col.find({'listed_by.id': user_id}).to_list(None)
-        loanee_list = await loan_col.find({'accepted_by.id': user_id}).to_list(None)
-        return [i for i in listings] if listings is not None else [], [i for i in
-                                                                       loanee_list] if loanee_list is not None else []
+        loanee_list = await loan_col.find({'accepted_by.id': user_id, }).to_list(None)
+        return [i for i in listings if i['zerp_data'].get('category', 'zerpmon') == 'zerpmon'] if listings is not None else [], \
+               [i for i in loanee_list if i['zerp_data'].get('category', 'zerpmon') == 'zerpmon'] if loanee_list is not None else []
     else:
         listed = await loan_col.find_one({'zerpmon_name': zerp_name})
         return listed
@@ -2002,7 +2011,7 @@ async def get_active_loans():
             active.append(listing)
         elif listing['offer'] is None:
             if listing['expires_at'] < ts:
-                await remove_listed_loan(listing['zerpmon_name'], listing['listed_by']['id'])
+                await remove_listed_loan(listing['token_id'], listing['listed_by']['id'], is_id=True)
             else:
                 expired.append(listing)
     return active, expired

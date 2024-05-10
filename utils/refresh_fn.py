@@ -228,14 +228,14 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
             if serial not in t_serial:
                 loaned = user_obj['trainer_cards'][serial].get('loaned', False)
                 if loaned:
-                    serials.append(serial)
+                    t_serial.append(serial)
                 else:
                     await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
         for serial in list(user_obj['equipments'].keys()):
             if serial not in e_serial:
                 loaned = user_obj['equipments'][serial].get('loaned', False)
                 if loaned:
-                    serials.append(serial)
+                    e_serial.append(serial)
                 else:
                     await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
@@ -267,7 +267,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     print(f"USER already has the required role {e}")
                 await asyncio.sleep(2)
 
-        await db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial)
+        await db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial, e_serial)
         return True
     except Exception as e:
         logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")

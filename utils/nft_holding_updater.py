@@ -115,14 +115,20 @@ async def update_nft_holdings(client: nextcord.Client):
                         else:
                             # if False:
                             await db_query.remove_user_nft(user_obj['discord_id'], serial, False)
-                for serial in list(old_user['trainer_cards'].keys()):
+                for serial in list(user_obj['trainer_cards'].keys()):
                     if serial not in t_serial:
-                        # if False:
-                        await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
-                for serial in list(old_user['equipments'].keys()):
+                        loaned = user_obj['trainer_cards'][serial].get('loaned', False)
+                        if loaned:
+                            t_serial.append(serial)
+                        else:
+                            await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
+                for serial in list(user_obj['equipments'].keys()):
                     if serial not in e_serial:
-                        # if False:
-                        await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
+                        loaned = user_obj['equipments'][serial].get('loaned', False)
+                        if loaned:
+                            e_serial.append(serial)
+                        else:
+                            await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
                 if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
                     for guild in guilds:
@@ -153,7 +159,7 @@ async def update_nft_holdings(client: nextcord.Client):
                                 print(f"USER already has the required role {e}")
                             await asyncio.sleep(2)
 
-                await db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial)
+                await db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial, e_serial)
             except Exception as e:
                 logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
 
