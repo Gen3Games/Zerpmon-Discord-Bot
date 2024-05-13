@@ -441,6 +441,28 @@ async def show_battlezone(interaction: nextcord.Interaction):
     await interaction.edit_original_message(embeds=[embed3])
 
 
+@client.slash_command(name="show_name_flairs", description="Show owned Name flairs")
+async def show_name_flairs(interaction: nextcord.Interaction):
+    execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
+    owned_nfts = await db_query.get_owned(interaction.user.id)
+    embed3 = CustomEmbed(title=f"YOUR **NAME FLAIR** HOLDINGS:\n",
+                         color=0xffc93c,
+                         )
+    counter = Counter(owned_nfts.get('flair', []))
+    name_values = sorted(list(counter.keys()))
+    for i, name in enumerate(name_values):
+        if len(embed3.fields) > 24:
+            break
+        count = counter[name]
+        if name:
+            embed3.add_field(
+                name=f" **{name}** (x{count})",
+                value=f'\u200B',
+                inline=False)
+    await interaction.edit_original_message(embeds=[embed3])
+
+
 @client.slash_command(name="battle",
                       description="Friendly battle among Trainers (require: 1 Zerpmon and 1 Trainer card)",
                       )
@@ -1146,7 +1168,8 @@ async def battle_deck(interaction: nextcord.Interaction,
 async def default_deck(interaction: nextcord.Interaction,
                        deck_type: str = SlashOption(
                            name="deck_type",
-                           choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK, "Battle Royale": 'br_champion_decks'},
+                           choices={"Gym": config.GYM_DECK, "Battle": config.BATTLE_DECK,
+                                    "Battle Royale": 'br_champion_decks'},
                        ),
                        deck_number: str = SlashOption(
                            name="deck_number",
@@ -3890,7 +3913,7 @@ async def loan_dashboard(interaction: nextcord.Interaction, ):
         if len(embed.fields) == 24:
             break
         if listing['expires_at'] <= time.time() and listing['accepted_by']['id'] is None:
-            await db_query.remove_listed_loan(listing['zerpmon_name'], str(user.id))
+            await db_query.remove_listed_loan(listing['token_id'], str(user.id), is_id=True)
             continue
         my_button = f"https://xrp.cafe/nft/{listing['token_id']}"
         nft_type = listing['zerp_type']
@@ -3908,7 +3931,7 @@ async def loan_dashboard(interaction: nextcord.Interaction, ):
         if len(embed2.fields) == 24:
             break
         if listing['expires_at'] <= time.time() and listing['accepted_by']['id'] is None:
-            await db_query.remove_listed_loan(listing['zerpmon_name'], str(user.id))
+            await db_query.remove_listed_loan(listing['token_id'], str(user.id), is_id=True)
             continue
         my_button = f"https://xrp.cafe/nft/{listing['token_id']}"
         nft_type = listing['zerp_type']
@@ -4394,8 +4417,8 @@ async def add_event(interaction: nextcord.Interaction):
 
 @event_cmd.subcommand(name='delete', description="Delete an event.")
 async def delete_event(interaction: nextcord.Interaction,
-                    event: str = SlashOption("event_name", autocomplete_callback=event_autocomplete,
-                                             required=True), ):
+                       event: str = SlashOption("event_name", autocomplete_callback=event_autocomplete,
+                                                required=True), ):
     await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in config_extra.ADMINS:
         await interaction.edit_original_message(content="Only admins can use this command.")
@@ -4421,11 +4444,54 @@ async def list_event(interaction: nextcord.Interaction):
         if len(events) > 25:
             events = events[:25]
         for i, event in enumerate(events):
-            embed.add_field(name=f"{event.get('title', 'No title')}", value=f"**{event['name']}** (`{event['code']}`)", inline=False)
+            embed.add_field(name=f"{event.get('title', 'No title')}", value=f"**{event['name']}** (`{event['code']}`)",
+                            inline=False)
         await interaction.edit_original_message(embed=embed)
     else:
         await interaction.edit_original_message(content='**Failed**')
+
+
 # Event CMD
+
+# Ban Cmd
+
+@client.slash_command(name="admin",
+                      description="Event commands",
+                      )
+async def admin_cmd(interaction: nextcord.Interaction):
+    # ...
+    pass
+
+
+@admin_cmd.subcommand(name='ban', description="Ban a player.")
+async def ban_player(interaction: nextcord.Interaction,
+                     address: str = SlashOption(required=False, default='')):
+    if interaction.user.id not in config_extra.ADMINS:
+        await interaction.edit_original_message(content="Only admins can use this command.")
+        return
+
+    await callback.ban_player(interaction, address if address != '' else None)
+
+
+@admin_cmd.subcommand(name='unban', description="Unban a player.")
+async def unban_player(interaction: nextcord.Interaction):
+    if interaction.user.id not in config_extra.ADMINS:
+        await interaction.edit_original_message(content="Only admins can use this command.")
+        return
+
+    await callback.unban_player(interaction)
+
+
+@admin_cmd.subcommand(name='unban_nft', description="Unban a specific zerpmon.")
+async def unban_nft(interaction: nextcord.Interaction, nft_id: str):
+    if interaction.user.id not in config_extra.ADMINS:
+        await interaction.edit_original_message(content="Only admins can use this command.")
+        return
+
+    await callback.unban_nft(interaction, nft_id)
+
+
+# Ban Cmd
 
 # Reaction Tracker
 
@@ -4604,7 +4670,7 @@ async def flair_autocomplete(interaction: nextcord.Interaction, item: str):
     user_owned = await db_query.get_owned(interaction.user.id)
     if user_owned is not None and 'flair' in user_owned:
         vals = [i for i in user_owned['flair'] if item in i]
-        choices = {i: i for i in vals}
+        choices = {i: i for idx, i in enumerate(vals) if item in i and idx < 24}
     else:
         choices = {}
     choices = dict(sorted(choices.items()))

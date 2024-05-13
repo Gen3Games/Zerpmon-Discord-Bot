@@ -902,7 +902,8 @@ async def set_default_deck(deck_no, doc, user_id, type_: str):
                                               {"$set": {'battle_deck': arr, 'equipment_decks.battle_deck': eq_deck,
                                                         f'deck_names.{deck_name_key}': deck_names}})
     elif type_ == 'br_champion_decks':
-        arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "br_champion_decks" not in doc or doc["br_champion_decks"] == {} else \
+        arr = {'0': {}, '1': {}, '2': {}, '3': {}, '4': {}} if "br_champion_decks" not in doc or doc[
+            "br_champion_decks"] == {} else \
             doc["br_champion_decks"]
         # Deck names exchange
         #
@@ -1949,8 +1950,10 @@ async def get_loaned(user_id=None, zerp_name=None):
     if user_id is not None:
         listings = await loan_col.find({'listed_by.id': user_id}).to_list(None)
         loanee_list = await loan_col.find({'accepted_by.id': user_id, }).to_list(None)
-        return [i for i in listings if i['zerp_data'].get('category', 'zerpmon') == 'zerpmon'] if listings is not None else [], \
-               [i for i in loanee_list if i['zerp_data'].get('category', 'zerpmon') == 'zerpmon'] if loanee_list is not None else []
+        return [i for i in listings if
+                i['zerp_data'].get('category', 'zerpmon') == 'zerpmon'] if listings is not None else [], \
+               [i for i in loanee_list if
+                i['zerp_data'].get('category', 'zerpmon') == 'zerpmon'] if loanee_list is not None else []
     else:
         listed = await loan_col.find_one({'zerpmon_name': zerp_name})
         return listed
@@ -2829,3 +2832,79 @@ async def get_events(substr):
             'title': 1
         }
     ).to_list(None)
+
+
+async def ban_user_and_nfts(user_addr, is_id=False):
+    users_collection = db['users']
+    q = {'discord_id': user_addr} if is_id else {'address': user_addr}
+    user = await users_collection.find_one_and_update(q, {'$set': {'banned': True}},
+                                                      return_document=ReturnDocument.AFTER)
+    # Ban all nfts
+    ts = int(time.time())
+    # Zerpmon
+    zerpmon_list = [i['name'] for k, i in user['zerpmons'].items()]
+    await db['MoveSets'].update_many({
+        'name': {'$in': zerpmon_list},
+    },
+        {
+            'banned': True
+        }
+    )
+    # Trainer & Equipment
+    trainer_list = [i['token_id'] for k, i in user['trainer_cards'].items()]
+    eq_list = [i['token_id'] for k, i in user['equipments'].items()]
+    await db['banned_nfts'].insert_many([{
+        'address': user['address'],
+        'nft_id': i,
+        'ban_ts': ts,
+        'category': 'trainer'
+    } for i in trainer_list])
+    await db['banned_nfts'].insert_many([{
+        'address': user['address'],
+        'nft_id': i,
+        'ban_ts': ts,
+        'category': 'equipment'
+    } for i in eq_list])
+    return user.acknowledged
+
+
+async def unban_user_and_nfts(user_addr, is_id=False):
+    users_collection = db['users']
+    q = {'discord_id': user_addr} if is_id else {'address': user_addr}
+    user = await users_collection.find_one_and_update(q, {'$unset': {'banned': ''}},
+                                                      return_document=ReturnDocument.AFTER)
+    # Ban all nfts
+    ts = int(time.time())
+    # Zerpmon
+    zerpmon_list = [i['name'] for k, i in user['zerpmons'].items()]
+    await db['MoveSets'].update_many({
+        'name': {'$in': zerpmon_list},
+        },
+        {
+            'banned': False
+        }
+    )
+    # Trainer & Equipment
+    trainer_list = [i['token_id'] for k, i in user['trainer_cards'].items()]
+    eq_list = [i['token_id'] for k, i in user['equipments'].items()]
+    await db['banned_nfts'].delete_many({
+        'nft_id': {'$in': trainer_list}
+    })
+    await db['banned_nfts'].delete_many({
+        'nft_id': {'$in': eq_list}
+    })
+    return user.acknowledged
+
+
+async def unban_nft(nft_id):
+    r1 = await db['MoveSets'].update_one({
+        'nft_id': nft_id
+        },
+        {
+            'banned': False
+        }
+    )
+    r2 = await db['banned_nfts'].delete_one({
+        'nft_id': nft_id
+    })
+    return r1.acknowledged or r2.acknowledged

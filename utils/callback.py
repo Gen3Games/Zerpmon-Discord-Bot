@@ -33,7 +33,7 @@ class CustomEmbed(nextcord.Embed):
 
 button_cache = {'revive': {}, 'mission': {}}
 SAFARI_REWARD_CHANCES = {
-    "zrp": 88.2832,
+    "zrp": 87.6333,
     "battle_zone": 0.8667,
     "name_flair": 0.1667,
     "candy_white": 2.1667,
@@ -44,7 +44,7 @@ SAFARI_REWARD_CHANCES = {
     "gym_refill": 2.6667,
     "revive_potion": 1.2667,
     "mission_refill": 1.2667,
-    "zerpmon": 0.1333
+    "zerpmon": 0.0833
 }
 
 print(sum(list(SAFARI_REWARD_CHANCES.values())))
@@ -1186,7 +1186,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                     SAFARI_REWARD_CHANCES['equipment'] = 0
                                 if success:
                                     rewards.append(f"Gained 1 Equipment({data[0]})!\nhttps://xrp.cafe/nft/{data[-1]}")
-                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{data[0]}**\n{data[1]} ! 🔥 🔥\n@everyone'
+                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{data[0]}**\n{data[1]} ! 🔥 🔥\n<@&{config_extra.SAFARI_ROLE}>'
                                     await db_query.remove_nft_from_safari_stat(data[-1])
                                     await send_general_message(guild=interaction.guild, text=description,
                                                                image='')
@@ -1231,7 +1231,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                 msg = config.JACKPOT_MSG(interaction.user.name,
                                                          amount_) + f'\n{"Transaction added to queue" if status else ""}!'
                                 rewards.append(f"Won Jackpot {amount_} $ZRP!")
-                                description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won the **Jackpot**(`{amount_} $ZRP`)! 🔥 🔥\n@everyone'
+                                description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won the **Jackpot**(`{amount_} $ZRP`)! 🔥 🔥\n<@&{config_extra.SAFARI_ROLE}>'
                                 await send_general_message(guild=interaction.guild, text=description,
                                                            image='')
                             case "gym_refill":
@@ -1252,10 +1252,10 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                                     SAFARI_REWARD_CHANCES['zerpmon'] = 0
                                 if token_id[3] == config.ISSUER['TrainerV2']:
                                     msg = f"**{token_id[0]}** bumped into you on your journey! They decided to follow you!"
-                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{token_id[0]}** !! 🔥 🔥\n@everyone'
+                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just won **{token_id[0]}** !! 🔥 🔥\n<@&{config_extra.SAFARI_ROLE}>'
                                 else:
                                     msg = config.ZERP_MSG(token_id[0])
-                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just caught **{token_id[0]}** !! 🔥 🔥\n@everyone'
+                                    description = f'🔥 🔥 **Congratulations** {interaction.user.mention} just caught **{token_id[0]}** !! 🔥 🔥\n<@&{config_extra.SAFARI_ROLE}>'
                                 rewards.append(f"Won {token_id[0]}!")
                                 await db_query.remove_nft_from_safari_stat(token_id[2])
                                 await send_general_message(guild=interaction.guild, text=description,
@@ -1754,7 +1754,7 @@ async def loan_marketplace_callback(interaction: nextcord.Interaction, page=1, f
         if len(embed.fields) == 24:
             break
         if listing['expires_at'] <= time.time() and listing['accepted_by']['id'] is None:
-            await db_query.remove_listed_loan(listing['zerpmon_name'], str(user.id))
+            await db_query.remove_listed_loan(listing['token_id'], str(user.id), is_id=True)
             continue
         my_button = f"https://xrp.cafe/nft/{listing['token_id']}"
         nft_type = ', '.join([i['value'] for i in listing['zerp_data']['attributes'] if i['trait_type'] == 'Type'])
@@ -1975,9 +1975,9 @@ async def cancel_loan(interaction: nextcord.Interaction, listing: dict, is_listi
                         await interaction.edit_original_message(
                             content=f"Sending pending **${'XRP' if listing['xrp'] else 'ZRP'} (`{listing['amount_pending']}`)** to **{listing['accepted_by']['username']}**")
                     else:
-                        await db_query.remove_listed_loan(listing['zerpmon_name'], listing['listed_by']['id'])
+                        await db_query.remove_listed_loan(listing['token_id'], listing['listed_by']['id'], is_id=True)
             else:
-                await db_query.remove_listed_loan(listing['zerpmon_name'], listing['listed_by']['id'])
+                await db_query.remove_listed_loan(listing['token_id'], listing['listed_by']['id'], is_id=True)
                 sent = True
         else:
             addr = listing['accepted_by']['address']
@@ -2233,10 +2233,12 @@ async def add_event_date(interaction: nextcord.Interaction, event_id):
                     match input_key:
                         case "start":
                             day, month, year = [int(j) for j in input_val.split('-')]
-                            events[event_id][input_key] = int(datetime(year, month, day, tzinfo=pytz.utc).timestamp() * 1000)
+                            events[event_id][input_key] = int(
+                                datetime(year, month, day, tzinfo=pytz.utc).timestamp() * 1000)
                         case "end":
                             day, month, year = [int(j) for j in input_val.split('-')]
-                            events[event_id][input_key] = int(datetime(year, month, day, tzinfo=pytz.utc).timestamp() * 1000)
+                            events[event_id][input_key] = int(
+                                datetime(year, month, day, tzinfo=pytz.utc).timestamp() * 1000)
                             if events[event_id][input_key] < events[event_id]["start"]:
                                 raise Exception("invalid start and end dates")
                         case "indefiniteDate":
@@ -2250,6 +2252,7 @@ async def add_event_date(interaction: nextcord.Interaction, event_id):
                                        f"On line: {tb.splitlines()[-2]}", ephemeral=True)
                 break
         await interaction.send("**Success** date added", ephemeral=True)
+
     modal.callback = lambda i: proceed_event_d(i)
 
 
@@ -2282,6 +2285,7 @@ async def add_event_btn(interaction: nextcord.Interaction, event_id):
                 tb = traceback.format_exc()
                 print(tb)
         await interaction.send("**Success** button details added", ephemeral=True)
+
     modal.callback = lambda i: proceed_event_d(i)
 
 
@@ -2305,3 +2309,55 @@ async def submit_event(interaction: nextcord.Interaction, event_id):
         await interaction.send(f"Sorry, something went wrong.\n"
                                f"Error message: `{e}`\n"
                                f"On line: {tb.splitlines()[-2]}", ephemeral=True)
+
+
+async def ban_player(interaction: nextcord.Interaction, address=None):
+    if address is None:
+        view = View()
+        user_input = nextcord.ui.UserSelect(custom_id='user')
+        view.add_item(user_input)
+
+        await interaction.send(view=view, ephemeral=True)
+
+        async def proceed_event_d(i: nextcord.Interaction, ):
+            print(i.data['values'])
+            discord_id = i.data['values']
+            success = await db_query.ban_user_and_nfts(discord_id, is_id=True)
+            if success:
+                await interaction.send("**Success**", ephemeral=True)
+
+        user_input.callback = lambda i: proceed_event_d(i)
+    else:
+        success = await db_query.ban_user_and_nfts(address)
+        if success:
+            await interaction.send("**Success**", ephemeral=True)
+
+
+async def unban_player(interaction: nextcord.Interaction, address=None):
+    if address is None:
+        view = View()
+        user_input = nextcord.ui.UserSelect(custom_id='user')
+        view.add_item(user_input)
+
+        await interaction.send(view=view, ephemeral=True)
+
+        async def proceed_event_d(i: nextcord.Interaction, ):
+            print(i.data['values'])
+            discord_id = i.data['values']
+            success = await db_query.unban_user_and_nfts(discord_id, is_id=True)
+            if success:
+                await interaction.send("**Success**", ephemeral=True)
+
+        user_input.callback = lambda i: proceed_event_d(i)
+    else:
+        success = await db_query.unban_user_and_nfts(address)
+        if success:
+            await interaction.send("**Success**", ephemeral=True)
+
+
+async def unban_nft(interaction: nextcord.Interaction, nft_id):
+    success = await db_query.unban_nft(nft_id)
+    if success:
+        await interaction.send("**Success**", ephemeral=True)
+    else:
+        await interaction.send("**Failed**, invalid nft id", ephemeral=True)
