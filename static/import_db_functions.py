@@ -211,7 +211,7 @@ def import_purple_star_ids():
 
 
 def import_movesets():
-    with open('Zerpmon_Moves_-_Zerpmon_Movesets_140424.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Zerpmon_Movesets_190524.csv', 'r') as csvfile:
         collection = db['MoveSets']
         movelist_col = db['MoveList']
         # c2 = db['MoveSets2']
@@ -397,9 +397,16 @@ def import_attrs_img():
         id = i['nft_id']
         if i.get('image') and i.get('attributes'):
             continue
-        path = f"./static/images/{i['name']}.png"
+        chain = 'xahau' if i['chain'] == 'xahau' else 'xrpl'
+        match chain:
+            case 'xrpl':
+                path = 'https://bithomp.com/api/cors/v2/nft/'
+            case 'xahau':
+                path = 'https://xahauexplorer.com/api/cors/v2/nft/'
+            case _:
+                path = 'https://bithomp.com/api/cors/v2/nft/'
         rr2 = requests.get(
-            f"https://bithomp.com/api/cors/v2/nft/{id}?uri=true&metadata=true")
+            path + f"{id}?uri=true&metadata=true")
         res = rr2.json()
         print(i, res, id)
         meta = res['metadata']['attributes']
@@ -431,17 +438,11 @@ def clean_attrs():
         if 'omni' in i.get('zerpmonType', []):
             r = zerpmon_collection.update_one({'name': i['name']},
                                               {'$set': {'isOmni': True}})
-    c2 = db['MoveSets2']
-    c2.drop()
-    for doc in zerpmon_collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
-                                            'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0,
-                                            'winrate': 0}):
-        if doc['nft_id']:
-            c2.insert_one(doc)
 
 
 def save_30_level_zerp():
     zerpmon_collection = db['MoveSets2']
+    print(zerpmon_collection.count_documents({}))
     c2 = db['MoveSets3']
     c2.drop()
     for document in zerpmon_collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
@@ -449,12 +450,12 @@ def save_30_level_zerp():
                                                  'winrate': 0, 'ascended': 0}):
         if document['nft_id']:
             document['level'] = 30
-            print(document['name'])
+            # print(document['name'])
             miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
             percent_change = 10
             percent_change = percent_change if percent_change < miss_percent else miss_percent
             count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
-            print(document)
+            # print(document)
             for i, move in enumerate(document['moves']):
                 if move['color'] == 'miss':
                     move['percent'] = round(float(move['percent']) - percent_change, 2)
@@ -546,7 +547,7 @@ def update_all_zerp_moves():
 def get_issuer_nfts_data(issuer):
     try:
         print("get_collection_5kk")
-        url = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer={issuer}"
+        url = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer={issuer}&limit=400"
         response = requests.get(url)
         # print(response.text)
         response = response.json()
@@ -560,7 +561,7 @@ def get_issuer_nfts_data(issuer):
             markerVal = response['marker']
 
         while marker:
-            url2 = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer={issuer}&marker={markerVal}"
+            url2 = f"https://bithomp.com/api/cors/v2/nfts?list=nfts&issuer={issuer}&marker={markerVal}&limit=400"
             response2 = requests.get(url2)
             response2 = response2.json()
 
@@ -572,8 +573,39 @@ def get_issuer_nfts_data(issuer):
                 markerVal = response2['marker']
             else:
                 marker = False
+        print("Total XRPL NFTs: ", len(nfts))
 
-        print("Total NFTs: ", len(nfts))
+        # Grab Xahau nfts as well
+        print("get_collection_xahau")
+        url = f"https://xahauexplorer.com/api/cors/v2/uritokens?list=uritokens&issuer={issuer}&limit=400"
+        response = requests.get(url)
+        # print(response.text)
+        response = response.json()
+
+        x_nfts = response['uritokens']
+        marker = False
+        markerVal = ''
+        if 'marker' in response:
+            marker = True
+            markerVal = response['marker']
+
+        while marker:
+            url2 = f"https://xahauexplorer.com/api/cors/v2/uritokens?list=uritokens&issuer={issuer}&marker={markerVal}&limit=400"
+            response2 = requests.get(url2)
+            response2 = response2.json()
+
+            nfts2 = response2['uritokens']
+            x_nfts.extend(nfts2)
+
+            if 'marker' in response2:
+                marker = True
+                markerVal = response2['marker']
+            else:
+                marker = False
+        print("Total XAHAU NFTs: ", len(x_nfts))
+        for item in x_nfts:
+            item['nftokenID'] = item['uriTokenID']
+        nfts.extend(x_nfts)
         return nfts
     except Exception as e:
         print(traceback.format_exc())
@@ -603,7 +635,7 @@ def cache_data():
                 obj[key.lower()] = val
             db['trainers'].update_one({'nft_id': obj['nft_id']}, {'$setOnInsert': obj}, upsert=True)
             print(obj)
-        exit(0)
+        # exit(0)
         z_nfts.extend(nfts)
         z_nfts.extend(e_nfts)
         z_nfts.extend(c_nfts)
@@ -620,13 +652,13 @@ def cache_data():
                 }
         with open("./metadata.json", "w") as f:
             json.dump(tba, f)
-        db['nft-uri-cache'].drop()
-        db['nft-uri-cache'].insert_many([i for k, i in tba.items()])
+        for k, i in tba.items():
+            db['nft-uri-cache'].update_one({'nftid': i['nftid']},
+                                           {'$set': i}, upsert=True)
         collection = db['MoveSets']
         for nft in collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
                                         'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0,
                                         'ascended': 0}):
-            is_present = db['MoveSets2'].delete_one({'name': nft['name']})
             if True:
                 if nft.get('nft_id') is None:
                     found = db['nft-uri-cache'].find_one({'metadata.name': nft['name']})
@@ -638,11 +670,13 @@ def cache_data():
                         nft['image'] = image
                         db['MoveSets'].update_one({'name': nft['name']}, {
                             '$set': {'nft_id': found['nftid'], 'attributes': attrs, 'image': image}}, upsert=True)
+                        print('found:', nft['name'])
                     else:
                         continue
                     # collection.update_one({'name': nft['name']}, {'$set': {'nft_id': found['nftid']}})
 
                 db['MoveSets2'].update_one({'name': nft['name']}, {'$set': nft}, upsert=True)
+
     except Exception as e:
         print(traceback.format_exc(), ' error')
 
@@ -671,7 +705,7 @@ def reset_all_gyms():
 
 
 def import_equipments():
-    with open('Zerpmon_Moves_-_Equipment_180424.csv', 'r') as csvfile:
+    with open('Zerpmon_Moves_-_Equipment_060524.csv', 'r') as csvfile:
         collection = db['Equipment']
         # collection.drop()
         csvreader = csv.reader(csvfile)
@@ -717,7 +751,7 @@ def import_equipments():
                                 e_type = 'reroll-on-miss'
                             elif 'miss' in s:
                                 e_type = f'miss-{change}'
-                            elif 'damage' in s:
+                            elif 'damage' in s and '0 damage' not in s:
                                 color = ''
                                 if 'gold' in s:
                                     color = 'gold-'
@@ -732,7 +766,9 @@ def import_equipments():
                             elif 'blue chance' in s:
                                 e_type = f'blue-{change}'
                             elif '0 damage' in s:
-                                if 'gold' in s:
+                                if 'omni' in s:
+                                    e_type = f'omni-to-zero'
+                                elif 'gold' in s:
                                     e_type = f'gold-to-zero'
                                 else:
                                     e_type = f'white-to-zero'
@@ -874,9 +910,9 @@ def add_gym_trainers():
 
 # add_gym_level_buffs()
 # add_gym_trainers()
-import_moves('MoveList')
-import_moves('MoveList2')
-import_purple_star_ids()
+# import_moves('MoveList')
+# import_moves('MoveList2')
+# import_purple_star_ids()
 import_movesets()
 import_attrs_img()
 clean_attrs()
