@@ -5,7 +5,7 @@ from statistics import mean
 
 import pymongo
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
-from xrpl.models import IssuedCurrency, AccountLines, Transaction
+from xrpl.models import IssuedCurrency, AccountLines, Transaction, AccountObjects
 from xrpl.models.requests.account_nfts import AccountNFTs
 from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx, NFTSellOffers, request, AccountTx
 from xrpl.transaction import get_transaction_from_hash
@@ -27,6 +27,14 @@ def get_zerpmon_by_nftID(nftID):
     result = zerpmon_collection.find_one({"nft_id": nftID})
 
     return result
+
+
+def get_nft(nftID):
+    nft_collection = db['nft-uri-cache']
+    result = nft_collection.find_one({"nftid": nftID})
+    if result:
+        return result['metadata']
+    return None
 
 
 def get_zerpmon_by_name(name):
@@ -72,6 +80,45 @@ async def get_nfts(address):
             return True, all_nfts
     except Exception as e:
         print(e)
+        return False, []
+
+
+async def get_nfts_xahau(address, limit=1000):
+    try:
+        async with AsyncWebsocketClient('wss://xahau.network') as client:
+            all_nfts = []
+
+            acct_info = AccountObjects(
+                account=address,
+                limit=limit,
+            )
+            response = await client.request(acct_info)
+            result = response.result
+            while True:
+
+                print(result)
+                length = len(result["account_objects"])
+                print(length)
+                all_nfts.extend(result["account_objects"])
+                if "marker" not in result:
+                    break
+                acct_info = AccountNFTs(
+                    account=address,
+                    limit=400,
+                    marker=result['marker']
+                )
+                response = await client.request(acct_info)
+
+                result = response.result
+                # print(json.dumps(result["account_nfts"], indent=4, sort_keys=True))
+            # print(all_nfts)
+            # for nft in all_nfts:
+            #     print(nft['URI'], nft.get('Amount'))
+            for i in range(3):
+                print(all_nfts[i])
+            return True, all_nfts
+    except Exception as e:
+        print(traceback.format_exc())
         return False, []
 
 
@@ -182,6 +229,24 @@ async def get_zrp_price():
         return config.zrp_price
 
 
+async def get_zrp_amm_price():
+    # req = requests.post('https://api.xrpl.to/api/search', json={'search': 'zrp'})
+    try:
+        token = '76c6dd73-50e1-4b20-847f-75926ae48cef'
+        headers = {
+            'x-bithomp-token': token
+        }
+        res = requests.get(
+            'https://bithomp.com/api/v2/amm/149340AF3D5F5372CBAF7A0B5758AE6C8EF43679A4DD5E58E95DFACD83F088DB',
+            headers=headers)
+
+        d = res.json()
+        price = int(d['amount']) // 1000000 / float(d['amount2']['value'])
+        return price
+    except Exception as e:
+        print("Error occurred while fetching ZRP price:", e)
+        return config.zrp_price
+
 # asyncio.run(get_zrp_price_api())
 # res = asyncio.run(get_zrp_price())
 
@@ -201,7 +266,7 @@ def get_nft_metadata(uri, nft_id, multi=False):
             if multi:
                 return obj
         if not multi:
-            nft = get_zerpmon_by_nftID(nft_id)
+            nft = get_nft(nft_id)
             return nft
         return None
     except Exception as e:
