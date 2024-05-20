@@ -54,10 +54,12 @@ async def post_signin_callback(interaction: nextcord.Interaction, address: str, 
 
     for nft in nfts:
 
-        if nft["Issuer"] == config.ISSUER["Trainer"]:
-
-            metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
+        if nft["Issuer"] in [ISSUER["Trainer"], ISSUER["TrainerV2"], ISSUER['Legend']]:
             serial = nft["nft_serial"]
+            if nft["Issuer"] == ISSUER['Legend']:
+                serial = 'legends' + serial
+            metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
+
             if metadata and "Zerpmon Trainers" in metadata['description']:
                 # Add to MongoDB here
                 user_obj["trainer_cards"][serial] = {"name": metadata['name'],
@@ -141,81 +143,32 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
             return False
     user_obj = user_doc
     try:
-        if 'address' not in user_obj or len(user_obj['address']) < 5 or user_obj[
-            'address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':
+        if 'address' not in user_obj or len(user_obj['address']) < 5 or \
+                user_obj['address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':
             return False
         good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
+        good_status_xahau, nfts_xahau = await xrpl_functions.get_nfts_xahau(user_obj['address'])
         if not good_status:
             return False
         serials = []
         t_serial = []
         e_serial = []
 
-        for nft in nfts:
+        # Filter fn
+        await filter_nfts(user_obj, nfts, serials, t_serial, e_serial)
+        if not good_status_xahau:
+            for sr in user_obj['zerpmons']:
+                if str(sr).startswith('xahau-'):
+                    serials.append(sr)
+            for sr in user_obj['trainer_cards']:
+                if str(sr).startswith('xahau-'):
+                    serials.append(sr)
+            for sr in user_obj['equipments']:
+                if str(sr).startswith('xahau-'):
+                    serials.append(sr)
+        else:
+            await filter_nfts(user_obj, nfts_xahau, serials, t_serial, e_serial, xahau=True)
 
-            if nft["Issuer"] in [ISSUER["Trainer"], ISSUER["TrainerV2"]]:
-                serial = str(nft["nft_serial"])
-                if serial in list(user_obj['trainer_cards'].keys()):
-                    t_serial.append(serial)
-                    continue
-                print(serial, list(user_obj['trainer_cards'].keys()))
-                metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
-                if metadata is None:
-                    continue
-
-                if "Zerpmon" in metadata['description']:
-                    t_serial.append(serial)
-                    # Add to MongoDB here
-                    new_z = {"name": metadata['name'],
-                             "image": metadata['image'],
-                             "attributes": metadata['attributes'],
-                             "token_id": nft["NFTokenID"],
-                             "type": get_type(metadata['attributes'])
-                             }
-                    await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, True)
-                await asyncio.sleep(2)
-            if nft["Issuer"] == ISSUER["Zerpmon"]:
-                serial = str(nft["nft_serial"])
-                if serial in list(user_obj['zerpmons'].keys()):
-                    serials.append(serial)
-                    continue
-                metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
-
-                if "Zerpmon " in metadata['description']:
-                    serials.append(serial)
-                    try:
-                        active_t = user_obj["zerpmons"][serial]['active_t']
-                    except:
-                        active_t = 0
-                    # Add to MongoDB here
-                    new_z = {"name": metadata['name'],
-                             "image": metadata['image'],
-                             "attributes": metadata['attributes'],
-                             "token_id": nft["NFTokenID"],
-                             'active_t': active_t,
-                             "type": get_type(metadata['attributes'])
-                             }
-                    await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
-                await asyncio.sleep(2)
-            if nft["Issuer"] == ISSUER["Equipment"]:
-                serial = str(nft["nft_serial"])
-                if serial in list(user_obj['equipments'].keys()):
-                    e_serial.append(serial)
-                    continue
-                print(serial, list(user_obj['equipments'].keys()))
-                metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft["NFTokenID"])
-
-                if "Zerpmon Equipment" in metadata['description']:
-                    e_serial.append(serial)
-                    # Add to MongoDB here
-                    new_z = {"name": metadata['name'],
-                             "image": metadata['image'],
-                             "attributes": metadata['attributes'],
-                             "token_id": nft["NFTokenID"],
-                             "type": get_type(metadata['attributes'])
-                             }
-                    await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
-                await asyncio.sleep(2)
         for serial in list(user_obj['zerpmons'].keys()):
             if serial not in serials:
                 loaned = user_obj['zerpmons'][serial].get('loaned', False)
@@ -272,3 +225,79 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
     except Exception as e:
         logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
         return False
+
+
+async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, xahau=False):
+    if xahau:
+        serial_key = "index"
+        token_id_key = "index"
+    else:
+        serial_key = "nft_serial"
+        token_id_key = "NFTokenID"
+    for nft in nfts:
+
+        if nft["Issuer"] in [ISSUER["Trainer"], ISSUER["TrainerV2"], ISSUER['Legend']]:
+            serial = ('xahau-' if xahau else '') + str(nft[serial_key])
+            if nft["Issuer"] == ISSUER['Legend']:
+                serial = 'legends' + serial
+            if serial in list(user_obj['trainer_cards'].keys()):
+                t_serial.append(serial)
+                continue
+            print(serial, list(user_obj['trainer_cards'].keys()))
+            metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft[token_id_key])
+            if metadata is None:
+                continue
+
+            # if "Zerpmon" in metadata['description']:
+            t_serial.append(serial)
+            # Add to MongoDB here
+            new_z = {"name": metadata['name'],
+                     "image": metadata['image'],
+                     "attributes": metadata['attributes'],
+                     "token_id": nft[token_id_key],
+                     "type": get_type(metadata['attributes'])
+                     }
+            await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, True)
+            await asyncio.sleep(1)
+        if nft["Issuer"] == ISSUER["Zerpmon"]:
+            serial = ('xahau-' if xahau else '') + str(nft[serial_key])
+            if serial in list(user_obj['zerpmons'].keys()):
+                serials.append(serial)
+                continue
+            metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft[token_id_key])
+
+            if "Zerpmon " in metadata['description']:
+                serials.append(serial)
+                try:
+                    active_t = user_obj["zerpmons"][serial]['active_t']
+                except:
+                    active_t = 0
+                # Add to MongoDB here
+                new_z = {"name": metadata['name'],
+                         "image": metadata['image'],
+                         "attributes": metadata['attributes'],
+                         "token_id": nft[token_id_key],
+                         'active_t': active_t,
+                         "type": get_type(metadata['attributes'])
+                         }
+                await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, False)
+            await asyncio.sleep(1)
+        if nft["Issuer"] == ISSUER["Equipment"]:
+            serial = ('xahau-' if xahau else '') + str(nft[serial_key])
+            if serial in list(user_obj['equipments'].keys()):
+                e_serial.append(serial)
+                continue
+            print(serial, list(user_obj['equipments'].keys()))
+            metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft[token_id_key])
+
+            if "Zerpmon Equipment" in metadata['description']:
+                e_serial.append(serial)
+                # Add to MongoDB here
+                new_z = {"name": metadata['name'],
+                         "image": metadata['image'],
+                         "attributes": metadata['attributes'],
+                         "token_id": nft[token_id_key],
+                         "type": get_type(metadata['attributes'])
+                         }
+                await db_query.add_user_nft(user_obj['discord_id'], serial, new_z, equipment=True)
+            await asyncio.sleep(1)
