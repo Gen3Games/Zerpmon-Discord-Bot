@@ -34,6 +34,12 @@ async def update_nft_holdings(client: nextcord.Client):
                         user_obj['address'] in ['rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM']:
                     continue
                 good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
+                if user_obj.get('address_config'):
+                    if user_obj['address_config'].get('xrpl'):
+                        good_status2, nfts2 = await xrpl_functions.get_nfts(user_obj['address_config'].get('xrpl'))
+                        if not good_status2:
+                            continue
+                        nfts.extend(nfts2)
                 good_status_xahau, nfts_xahau = await xrpl_functions.get_nfts_xahau(user_obj['address'])
                 if not good_status:
                     continue
