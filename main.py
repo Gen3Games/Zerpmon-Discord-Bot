@@ -601,7 +601,7 @@ async def gift(interaction: nextcord.Interaction):
 
 
 @gift.subcommand(name="mission_refill", description="Gift mission refill potion")
-async def mission_refill(interaction: nextcord.Interaction, qty: int,
+async def mission_refill(interaction: nextcord.Interaction, qty: int = SlashOption(required=True, min_value=1),
                          user: Optional[nextcord.Member] = SlashOption(required=True)):
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
@@ -610,7 +610,7 @@ async def mission_refill(interaction: nextcord.Interaction, qty: int,
 
 
 @gift.subcommand(name='revive_potion', description="Gift revive all potion")
-async def revive_potion(interaction: nextcord.Interaction, qty: int,
+async def revive_potion(interaction: nextcord.Interaction, qty: int = SlashOption(required=True, min_value=1),
                         user: Optional[nextcord.Member] = SlashOption(required=True)):
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
@@ -631,7 +631,7 @@ async def xp_potion(interaction: nextcord.Interaction,
 
 
 @gift.subcommand(name='white_candy', description="Gift White Power Candy")
-async def revive_potion(interaction: nextcord.Interaction, qty: int,
+async def gift_white_candy(interaction: nextcord.Interaction, qty: int = SlashOption(required=True, min_value=1),
                         user: Optional[nextcord.Member] = SlashOption(required=True)):
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
@@ -640,7 +640,7 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
 
 
 @gift.subcommand(name='gold_candy', description="Gift Gold Power Candy")
-async def revive_potion(interaction: nextcord.Interaction, qty: int,
+async def gift_gold_candy(interaction: nextcord.Interaction, qty: int = SlashOption(required=True, min_value=1),
                         user: Optional[nextcord.Member] = SlashOption(required=True)):
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
@@ -648,8 +648,17 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
                                  db_query.add_gold_candy)
 
 
+@gift.subcommand(name='purple_candy', description="Gift Purple Power Candy")
+async def gift_purple_candy(interaction: nextcord.Interaction, qty: int = SlashOption(required=True, min_value=1),
+                        user: Optional[nextcord.Member] = SlashOption(required=True)):
+    # msg = await interaction.send(f"Searching...")
+    execute_before_command(interaction)
+    await callback.gift_callback(interaction, qty, user, 'purple_candy', 'Power Candy (Purple)',
+                                 db_query.add_purple_candy)
+
+
 @gift.subcommand(name='liquorice', description="Gift Golden Liquorice")
-async def revive_potion(interaction: nextcord.Interaction, qty: int,
+async def revive_potion(interaction: nextcord.Interaction, qty: int = SlashOption(required=True, min_value=1),
                         user: Optional[nextcord.Member] = SlashOption(required=True)):
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
@@ -658,7 +667,7 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int,
 
 
 @gift.subcommand(name='gym_refill', description="Gift Gym Refill")
-async def revive_potion(interaction: nextcord.Interaction, qty: int,
+async def revive_potion(interaction: nextcord.Interaction, qty: int = SlashOption(required=True, min_value=1),
                         user: Optional[nextcord.Member] = SlashOption(required=True)):
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
@@ -684,6 +693,56 @@ async def gift_name_flair(interaction: nextcord.Interaction,
     execute_before_command(interaction)
     await callback.gift_callback(interaction, 1, user, 'flair', 'Name Flair',
                                  db_query.add_flair, item=flair)
+
+
+@gift.subcommand(name='overcharge_candy', description="Gift Overcharge Candy")
+async def gift_overcharge_candy(interaction: nextcord.Interaction,
+                          qty: int = SlashOption(required=True, min_value=1),
+                          user: Optional[nextcord.Member] = SlashOption(required=True),
+                          ):
+    execute_before_command(interaction)
+    await callback.gift_callback(interaction, qty, user, 'overcharge_candy', 'Overcharge Candy',
+                                 db_query.add_overcharge_candy)
+
+
+@gift.subcommand(name='gummy_candy', description="Gift Gummy Candy")
+async def gift_gummy_candy(interaction: nextcord.Interaction,
+                          qty: int = SlashOption(required=True, min_value=1),
+                          user: Optional[nextcord.Member] = SlashOption(required=True),
+                          ):
+    execute_before_command(interaction)
+    await callback.gift_callback(interaction, qty, user, 'gummy_candy', 'Gummy Candy',
+                                 db_query.add_gummy_candy)
+
+
+@gift.subcommand(name='sour_candy', description="Gift Sour Candy")
+async def gift_sour_candy(interaction: nextcord.Interaction,
+                          qty: int = SlashOption(required=True, min_value=1),
+                          user: Optional[nextcord.Member] = SlashOption(required=True),
+                          ):
+    execute_before_command(interaction)
+    await callback.gift_callback(interaction, qty, user, 'sour_candy', 'Sour Candy',
+                                 db_query.add_sour_candy)
+
+
+@gift.subcommand(name='star_candy', description="Gift Star Candy")
+async def gift_star_candy(interaction: nextcord.Interaction,
+                          qty: int = SlashOption(required=True, min_value=1),
+                          user: Optional[nextcord.Member] = SlashOption(required=True),
+                          ):
+    execute_before_command(interaction)
+    await callback.gift_callback(interaction, qty, user, 'star_candy', 'Star Candy',
+                                 db_query.add_star_candy)
+
+
+@gift.subcommand(name='jawbreaker', description="Gift Jawbreaker")
+async def gift_jawbreaker(interaction: nextcord.Interaction,
+                          qty: int = SlashOption(required=True, min_value=1),
+                          user: Optional[nextcord.Member] = SlashOption(required=True),
+                          ):
+    execute_before_command(interaction)
+    await callback.gift_callback(interaction, qty, user, 'jawbreaker', 'Jawbreaker',
+                                 db_query.add_jawbreaker)
 
 
 @client.slash_command(name="add",
@@ -1417,6 +1476,17 @@ async def use_power_candy_gold(interaction: nextcord.Interaction,
     res = await callback.use_candy_callback(interaction, label='gold_candy', amt=qty)
 
 
+@use.subcommand(name="power_candy_purple",
+                description="Use Power Candy (Purple) to ⬆ star  (10 Candy -> +1 star)")
+async def use_power_candy_purple(interaction: nextcord.Interaction,
+                               qty: int = SlashOption(name='quantity', min_value=1, max_value=5)):
+    execute_before_command(interaction)
+    """
+            Deal with Power Candy (Purple)
+            """
+    res = await callback.use_candy_callback(interaction, label='purple_candy', amt=qty)
+
+
 @use.subcommand(name="golden_liquorice",
                 description="Use Golden Liquorice ⬆ the level of the Zerpmon that it is used on by 1")
 async def use_golden_liquorice(interaction: nextcord.Interaction):
@@ -1481,7 +1551,8 @@ async def use_jawbreaker(interaction: nextcord.Interaction):
                 description="Combine 7 Candy fragments into 1 White/Gold Candy")
 async def use_candy_fragment(interaction: nextcord.Interaction,
                              get: str = SlashOption(choices={'White Candy': 'white_candy',
-                                                             'Gold Candy': 'gold_candy'})):
+                                                             'Gold Candy': 'gold_candy',
+                                                             'Purple Candy': 'purple_candy'})):
     execute_before_command(interaction)
     """
             Deal with candy_fragment
@@ -2727,7 +2798,7 @@ async def trade(interaction: nextcord.Interaction):
 @trade.subcommand(name="potion",
                   description="Trade potions (Mission Refill potion <-> Revive All potion)",
                   )
-async def potion(interaction: nextcord.Interaction, amount: int,
+async def potion(interaction: nextcord.Interaction, amount: int = SlashOption(min_value=1),
                  trade_type: int = SlashOption(
                      name="picker",
                      choices={"Give Mission Refill Potion get Revive All Potion": 1,
@@ -4120,6 +4191,7 @@ async def recycle(interaction: nextcord.Interaction,
             await interaction.edit_original_message(
                 content=f"**Failed**, you don't have enough items in your Inventory", )
             return
+
         zerp_name = user_doc['zerpmons'][zerpmon_sr]['name']
         zerp_doc = await db_query.get_zerpmon(zerp_name, )
         if zerp_doc.get('level', 0) == 60:
@@ -4466,6 +4538,7 @@ async def admin_cmd(interaction: nextcord.Interaction):
 @admin_cmd.subcommand(name='ban', description="Ban a player.")
 async def ban_player(interaction: nextcord.Interaction,
                      address: str = SlashOption(required=False, default='')):
+    await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in config_extra.ADMINS:
         await interaction.edit_original_message(content="Only admins can use this command.")
         return
@@ -4474,20 +4547,23 @@ async def ban_player(interaction: nextcord.Interaction,
 
 
 @admin_cmd.subcommand(name='unban', description="Unban a player.")
-async def unban_player(interaction: nextcord.Interaction):
+async def unban_player(interaction: nextcord.Interaction,
+                       address: str = SlashOption(required=False, default='')
+                       ):
+    await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in config_extra.ADMINS:
         await interaction.edit_original_message(content="Only admins can use this command.")
         return
 
-    await callback.unban_player(interaction)
+    await callback.unban_player(interaction, address if address != '' else None)
 
 
 @admin_cmd.subcommand(name='unban_nft', description="Unban a specific zerpmon.")
 async def unban_nft(interaction: nextcord.Interaction, nft_id: str):
+    await interaction.response.defer(ephemeral=True)
     if interaction.user.id not in config_extra.ADMINS:
         await interaction.edit_original_message(content="Only admins can use this command.")
         return
-
     await callback.unban_nft(interaction, nft_id)
 
 

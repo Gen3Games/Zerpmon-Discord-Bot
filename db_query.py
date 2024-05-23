@@ -1011,7 +1011,7 @@ async def add_candy_fragment(addr, qty=1):
 
 async def combine_candy_frag(addr, combine_to_key):
     users_collection = db['users']
-    res = await users_collection.update_one({'address': addr}, {'$inc': {'candy_frag': -7, combine_to_key: 1}})
+    res = await users_collection.update_one({'address': addr, 'candy_frag': {'$gte': 7}}, {'$inc': {'candy_frag': -7, combine_to_key: 1}})
     return res.acknowledged
 
 
@@ -1513,6 +1513,18 @@ async def add_gold_candy(address, inc_by, purchased=False, amount=0):
     return True
 
 
+async def add_purple_candy(address, inc_by, purchased=False, amount=0):
+    users_collection = db['users']
+    query = {'purple_candy': inc_by}
+    if purchased:
+        query['zrp_spent'] = amount
+    r = await users_collection.update_one({'address': str(address)},
+                                      {'$inc': query},
+                                      upsert=True)
+
+    return r.acknowledged
+
+
 async def add_lvl_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'lvl_candy': inc_by}
@@ -1629,17 +1641,41 @@ async def apply_gold_candy(user_id, zerp_name, amt=1):
     return True
 
 
+async def apply_purple_candy(user_id, zerp_name, amt=1):
+    z_collection = db['MoveSets']
+    users_collection = db['users']
+    user = await users_collection.find_one({'discord_id': str(user_id)})
+    zerp = await z_collection.find_one({'name': zerp_name})
+    limit = 10
+    cnt = zerp.get('purple_candy', 0)
+    if cnt >= limit or int(user.get('purple_candy', 0)) < amt:
+        return False
+    amt = min(amt, limit - cnt)
+    purple_candy_usage = cnt
+    zerp['purple_candy'] = purple_candy_usage + amt
+    if zerp['purple_candy'] >= limit:
+        # Apply candy effect
+        for i, move in enumerate(zerp['moves']):
+            if move['color'].lower() == 'purple':
+                zerp['moves'][i]['stars'] += '*'
+    del zerp['_id']
+    await save_new_zerpmon(zerp)
+    await add_purple_candy(user['address'], -amt)
+    return True
+
+
 async def update_moves(document, save_z=True, effective=False):
     if 'level' in document and document['level'] / 10 >= 1:
-        if document['level'] > 30:
+        if document['level'] >= 40:
             if int(document.get('number', 0)) < 100000:
                 if 'Dragon' in [i['value'] for i in document['attributes'] if
                                 i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']:
                     pass
                 else:
+                    percent_change = 6
                     for i, move in enumerate(document['moves']):
                         if move['color'] == 'blue':
-                            move['percent'] = move['percent'] + 6
+                            move['percent'] = move['percent'] + percent_change
                             document['moves'][i] = move
         else:
             miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
@@ -1665,27 +1701,55 @@ async def update_moves(document, save_z=True, effective=False):
     return document
 
 
-# async def update_all_zerp_moves():
-#     for document in db['MoveSets'].find():
-#         if 'level' in document and document['level'] / 10 >= 1:
-#             miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
-#             percent_change = 3.33 * (document['level'] // 10)
-#             percent_change = percent_change if percent_change < miss_percent else miss_percent
-#             count = len([i for i in document['moves'] if i['name'] != ""]) - 1
-#             print(document)
-#             for i, move in enumerate(document['moves']):
-#                 if move['color'] == 'miss':
-#                     move['percent'] = str(round(float(move['percent']) - percent_change, 2))
-#                     document['moves'][i] = move
-#                 elif move['name'] != "" and float(move['percent']) > 0:
-#                     move['percent'] = str(round(float(move['percent']) + (percent_change / count), 2))
-#                     document['moves'][i] = move
-#             del document['_id']
-#             save_new_zerpmon(document)
-#
-# update_all_zerp_moves()
-# print(get_rand_zerpmon(level=1))
-# print(len(get_ranked_players(0)))
+async def update_zerp_moves_effective(document):
+    if 'level' in document and document['level'] / 10 >= 1:
+        if document['level'] > 30:
+            if int(document.get('number', 0)) < 100000:
+                if 'Dragon' in [i['value'] for i in document['attributes'] if
+                                i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']:
+                    pass
+                else:
+                    lvl = document['level'] - 30
+                    percent_change = 6 * (lvl // 10)
+                    for i, move in enumerate(document['moves']):
+                        if move['color'] == 'blue':
+                            move['percent'] = move['percent'] + percent_change
+                            document['moves'][i] = move
+        if document['level'] >= 10:
+            document['level'] = min(30, document['level'])
+            miss_percent = float([i for i in document['moves'] if i['color'] == 'miss'][0]['percent'])
+            percent_change = 3.33 * (document['level'] // 10)
+            if percent_change == 9.99:
+                percent_change = 10
+            percent_change = percent_change if percent_change < miss_percent else miss_percent
+            count = len([i for i in document['moves'] if i['name'] != "" and i['color'] != "blue"]) - 1
+            print(document)
+            for i, move in enumerate(document['moves']):
+                if move['color'] == 'miss':
+                    move['percent'] = round(float(move['percent']) - percent_change, 2)
+                    document['moves'][i] = move
+                elif move['name'] != "" and float(move['percent']) > 0 and move['color'] != "blue":
+                    move['percent'] = round(float(move['percent']) + (percent_change / count), 2)
+                    document['moves'][i] = move
+    w_candy = document.get('white_candy', 0)
+    g_candy = document.get('gold_candy', 0)
+    if w_candy > 0:
+
+        original_zerp = await db['MoveSets2'].find_one({'name': document['name']})
+
+        for i, move in enumerate(document['moves']):
+            if move['color'].lower() == 'white':
+                document['moves'][i]['dmg'] = round(
+                    document['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * 0.02 * w_candy),
+                    1)
+    if g_candy > 0:
+        original_zerp = await db['MoveSets2'].find_one({'name': document['name']})
+        for i, move in enumerate(document['moves']):
+            if move['color'].lower() == 'gold':
+                document['moves'][i]['dmg'] = round(
+                    document['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * 0.02 * g_candy,
+                    1)
+    return document
 
 
 async def get_trainer_buff_dmg(zerp_name):
@@ -1874,7 +1938,7 @@ async def get_all_eqs(limit=None, substr=None):
 async def list_for_loan(zerp, sr, offer, user_id, username, addr, price, active_for, max_days=99999, min_days=3,
                         xrp=True):
     loan_col = db['loan']
-    found_in_listing = await loan_col.find_one({'zerpmon_name': zerp['name'], 'offer': {'$ne': None}})
+    found_in_listing = await loan_col.find_one({'token_id': zerp['token_id'], 'offer': {'$ne': None}})
     if found_in_listing is not None:
         return False
     listing_obj = {
@@ -1899,7 +1963,7 @@ async def list_for_loan(zerp, sr, offer, user_id, username, addr, price, active_
         'loan_expires_at': None
     }
 
-    res = await loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': listing_obj}, upsert=True)
+    res = await loan_col.update_one({'token_id': zerp['token_id']}, {'$set': listing_obj}, upsert=True)
     return res.acknowledged
 
 
@@ -1924,7 +1988,7 @@ async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, 
     }
     if loan_ended:
         query['offer'] = None
-    res = await loan_col.update_one({'zerpmon_name': zerp['name']}, {'$set': query}, upsert=True)
+    res = await loan_col.update_one({'token_id': zerp['token_id']}, {'$set': query}, upsert=True)
     if loan_ended:
         await remove_user_nft(discord_id, sr, )
     else:
@@ -1933,15 +1997,15 @@ async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, 
     return res.acknowledged
 
 
-async def decrease_loan_pending(zerp_name, dec):
+async def decrease_loan_pending(nft_id, dec):
     loan_col = db['loan']
-    res = await loan_col.update_one({'zerpmon_name': zerp_name}, {'$inc': {'amount_pending': -dec}})
+    res = await loan_col.update_one({'token_id': nft_id}, {'$inc': {'amount_pending': -dec}})
     return res.acknowledged
 
 
-async def cancel_loan(zerp_name):
+async def cancel_loan(token_id):
     loan_col = db['loan']
-    res = await loan_col.update_one({'zerpmon_name': zerp_name}, {'$set': {'loan_expires_at': 0}})
+    res = await loan_col.update_one({'token_id': token_id}, {'$set': {'loan_expires_at': 0}})
     return res.acknowledged
 
 
@@ -2837,74 +2901,100 @@ async def get_events(substr):
 async def ban_user_and_nfts(user_addr, is_id=False):
     users_collection = db['users']
     q = {'discord_id': user_addr} if is_id else {'address': user_addr}
-    user = await users_collection.find_one_and_update(q, {'$set': {'banned': True}},
+    ts = int(time.time())
+    user = await users_collection.find_one_and_update(q, {'$set': {'punished': True, 'punished_at': ts}},
                                                       return_document=ReturnDocument.AFTER)
     # Ban all nfts
-    ts = int(time.time())
+
     # Zerpmon
     zerpmon_list = [i['name'] for k, i in user['zerpmons'].items()]
-    await db['MoveSets'].update_many({
+    update_query = {f'moves.{i}.percent': (0 if i < 7 else 100) for i in range(8)}
+    update_query['punished'] = True
+    update_query['punished_at'] = ts
+    res = await db['MoveSets'].update_many({
         'name': {'$in': zerpmon_list},
     },
         {
-            'banned': True
+            '$set': update_query
         }
     )
-    # Trainer & Equipment
-    trainer_list = [i['token_id'] for k, i in user['trainer_cards'].items()]
-    eq_list = [i['token_id'] for k, i in user['equipments'].items()]
-    await db['banned_nfts'].insert_many([{
-        'address': user['address'],
-        'nft_id': i,
-        'ban_ts': ts,
-        'category': 'trainer'
-    } for i in trainer_list])
-    await db['banned_nfts'].insert_many([{
-        'address': user['address'],
-        'nft_id': i,
-        'ban_ts': ts,
-        'category': 'equipment'
-    } for i in eq_list])
-    return user.acknowledged
+    # Trainer & Equipment (not active rn)
+    # trainer_list = [i['token_id'] for k, i in user['trainer_cards'].items()]
+    # eq_list = [i['token_id'] for k, i in user['equipments'].items()]
+    # await db['punished_nfts'].insert_many([{
+    #     'address': user['address'],
+    #     'nft_id': i,
+    #     'ban_ts': ts,
+    #     'category': 'trainer'
+    # } for i in trainer_list])
+    # await db['punished_nfts'].insert_many([{
+    #     'address': user['address'],
+    #     'nft_id': i,
+    #     'ban_ts': ts,
+    #     'category': 'equipment'
+    # } for i in eq_list])
+    return res.acknowledged
 
 
 async def unban_user_and_nfts(user_addr, is_id=False):
     users_collection = db['users']
     q = {'discord_id': user_addr} if is_id else {'address': user_addr}
-    user = await users_collection.find_one_and_update(q, {'$unset': {'banned': ''}},
+    user = await users_collection.find_one_and_update(q, {'$set': {'punished': False}},
                                                       return_document=ReturnDocument.AFTER)
-    # Ban all nfts
-    ts = int(time.time())
+    # Unban all nfts
     # Zerpmon
+    zerpmon_collection = db['MoveSets']
     zerpmon_list = [i['name'] for k, i in user['zerpmons'].items()]
-    await db['MoveSets'].update_many({
-        'name': {'$in': zerpmon_list},
-        },
-        {
-            'banned': False
-        }
-    )
+    zerpmon_name_lvl = await zerpmon_collection.find({'name': {'$in': zerpmon_list}},
+                                                     projection={
+                                                         '_id': 0,
+                                                         'level': 1,
+                                                         'name': 1,
+                                                         'white_candy': 1,
+                                                         'gold_candy': 1,
+                                                     }).to_list(None)
+    for zerpmon in zerpmon_name_lvl:
+        zerpmon_base = await get_zerpmon(zerpmon['name'], mission=True)
+        zerpmon_base['level'] = zerpmon['level']
+        zerpmon_base['white_candy'] = zerpmon.get('white_candy', 0)
+        zerpmon_base['gold_candy'] = zerpmon.get('gold_candy', 0)
+        zerpmon_updated = await update_zerp_moves_effective(zerpmon_base)
+        await zerpmon_collection.update_one({'name': zerpmon['name']},
+                                            {'$set': {'moves': zerpmon_updated['moves'], 'punished': False}})
+
     # Trainer & Equipment
-    trainer_list = [i['token_id'] for k, i in user['trainer_cards'].items()]
-    eq_list = [i['token_id'] for k, i in user['equipments'].items()]
-    await db['banned_nfts'].delete_many({
-        'nft_id': {'$in': trainer_list}
-    })
-    await db['banned_nfts'].delete_many({
-        'nft_id': {'$in': eq_list}
-    })
-    return user.acknowledged
+    # trainer_list = [i['token_id'] for k, i in user['trainer_cards'].items()]
+    # eq_list = [i['token_id'] for k, i in user['equipments'].items()]
+    # await db['punished_nfts'].delete_many({
+    #     'nft_id': {'$in': trainer_list}
+    # })
+    # await db['punished_nfts'].delete_many({
+    #     'nft_id': {'$in': eq_list}
+    # })
+    return True
 
 
 async def unban_nft(nft_id):
-    r1 = await db['MoveSets'].update_one({
-        'nft_id': nft_id
-        },
-        {
-            'banned': False
-        }
-    )
-    r2 = await db['banned_nfts'].delete_one({
-        'nft_id': nft_id
-    })
-    return r1.acknowledged or r2.acknowledged
+    zerpmon_collection = db['MoveSets']
+    zerpmon = await zerpmon_collection.find_one({'nft_id': nft_id},
+                                            projection={
+                                                '_id': 0,
+                                                'level': 1,
+                                                'white_candy':1,
+                                                'gold_candy': 1,
+                                            })
+    zerpmon_base = await db['MoveSets2'].find_one({'nft_id': nft_id})
+    zerpmon_base['level'] = zerpmon['level']
+    zerpmon_base['white_candy'] = zerpmon.get('white_candy', 0)
+    zerpmon_base['gold_candy'] = zerpmon.get('gold_candy', 0)
+    zerpmon_updated = await update_zerp_moves_effective(zerpmon_base)
+    r = await zerpmon_collection.update_one({'nft_id': nft_id},
+                                            {'$set': {'moves': zerpmon_updated['moves'], 'punished': False}})
+    return r.acknowledged
+
+
+async def check_banned(user_addr, is_id=False):
+    users_collection = db['users']
+    q = {'discord_id': user_addr, 'punished': True} if is_id else {'address': user_addr, 'punished': True}
+    user = await users_collection.find_one(q, projection={'_id': 0, 'address': 1})
+    return user is not None

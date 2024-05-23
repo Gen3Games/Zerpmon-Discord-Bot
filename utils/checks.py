@@ -423,6 +423,7 @@ def get_temp_candy(zerp_doc):
 
 async def get_show_zerp_embed(zerpmon, interaction, omni=False):
     lvl, xp, w_candy, g_candy, l_candy = await db_query.get_lvl_xp(zerpmon['name'], get_candies=True)
+    p_candy = zerpmon.get('purple_candy', 0)
     overcharge_c, temP_candy = get_temp_candy(zerpmon)
     ascended = zerpmon.get("ascended", False)
     embed = CustomEmbed(
@@ -445,6 +446,9 @@ async def get_show_zerp_embed(zerpmon, interaction, omni=False):
         value=f"\u200B", inline=True)
     embed.add_field(
         name=f"**Gold Candy 🍭: {g_candy}**",
+        value=f"\u200B", inline=False)
+    embed.add_field(
+        name=f"**Purple Candy 🟣: {p_candy}**",
         value=f"\u200B", inline=False)
     embed.add_field(
         name=f"**Overcharge Candy: {config.TEMP_CANDIES['overcharge_candy'] + 'active' if overcharge_c else 'inactive'}**",
