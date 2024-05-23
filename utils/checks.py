@@ -15,7 +15,7 @@ from utils import battle_function, callback
 from globals import CustomEmbed
 from nextcord import ButtonStyle
 from nextcord.ui import Button, View
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 
 def convert_timestamp_to_hours_minutes(timestamp):
@@ -580,7 +580,8 @@ async def get_battle_results(global_dict):
         config.stale_results = []
 
 
-async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None, ascend=False, zerp_ascension=None):
+async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None, ascend=False, zerp_ascension=None,
+                    lvls=None):
     if gym_bg and gym_bg is not None:
         bg_img = Image.open(gym_bg)
     elif ascend:
@@ -602,7 +603,6 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
 
     img1 = img1.resize((1200, 1200))
     img3 = img3.resize((1200, 1200))
-
     if eq1:
         extra_img1 = Image.open(f"./static/images/_eq/{eq1}.png")
         extra_img1 = extra_img1.resize((400, 400))
@@ -632,6 +632,13 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
         combined_img.paste(img2, (1150, 200), mask=img2)
     combined_img.paste(img3, (1350, 100), mask=img3)
 
+    if lvls:
+        font = ImageFont.truetype(r'./static/Lato-Black.ttf', 80)
+        draw = ImageDraw.Draw(combined_img)
+        print('addingfont')
+        draw.text((550, 1250), f"{lvls[0]}", font=font, fill=(255, 255, 255))
+
+        draw.text((1850, 1250), f"{lvls[1]}", font=font, fill=(255, 255, 255))
     # Resize the combined image to be 50% of its original size
     new_width = int(combined_img.width * 0.5)
     new_height = int(combined_img.height * 0.5)

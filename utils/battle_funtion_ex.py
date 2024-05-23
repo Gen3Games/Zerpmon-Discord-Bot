@@ -45,7 +45,8 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
             inline=False)
 
     for i, move in enumerate(z1_moves):
-        notes = f"{(await db_query.get_move(move['name'], move.get('stars', 0)))['notes']}" if move['color'] == 'purple' else ''
+        notes = f"{(await db_query.get_move(move['name'], move.get('stars', 0)))['notes']}" if move[
+                                                                                                   'color'] == 'purple' else ''
         main_embed.add_field(
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
             value=f"> **{move['name']}** \n" + \
@@ -79,7 +80,8 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
                 value=f"**{eq2_note2['name']}**:\n" + '\n'.join([f"`{i}`" for i in eq2_note2['notes']]),
                 inline=False)
     for i, move in enumerate(z2_moves):
-        notes = f"{(await db_query.get_move(move['name'], stars=move.get('stars', 0)))['notes']}" if move['color'] == 'purple' else ''
+        notes = f"{(await db_query.get_move(move['name'], stars=move.get('stars', 0)))['notes']}" if move[
+                                                                                                         'color'] == 'purple' else ''
         main_embed.add_field(
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
             value=f"> **{move['name']}** \n" + \
@@ -103,8 +105,12 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
     return main_embed, file
 
 
-async def generate_image_ex(_id, z1_equipped, z2_equipped, gym_bg):
+async def generate_image_ex(_id, z1_equipped, z2_equipped, gym_bg, show_lvls=False):
     z1_obj, z2_obj = z1_equipped['zerpmon'], z2_equipped['zerpmon']
+    if show_lvls:
+        lvls = [z1_obj.get('level', 0), z2_obj.get('level', 0)]
+    else:
+        lvls = None
     z1_eq, z2_eq = z1_equipped['equipment']['name'] if z1_equipped['equipment'] else {}, \
                    z2_equipped['equipment']['name'] if z2_equipped['equipment'] else {}
     path1 = f"./static/images/{z1_obj['name']}.png"
@@ -118,4 +124,4 @@ async def generate_image_ex(_id, z1_equipped, z2_equipped, gym_bg):
     url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
     url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
     await gen_image(_id, url1, url2, path1, path2, path3, gym_bg=gym_bg, eq1=z1_eq,
-                    eq2=z2_eq, zerp_ascension=[z1_asc, z2_asc] if z1_asc or z2_asc else None)
+                    eq2=z2_eq, zerp_ascension=[z1_asc, z2_asc] if z1_asc or z2_asc else None, lvls=lvls)

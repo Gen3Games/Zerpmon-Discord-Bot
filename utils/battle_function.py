@@ -1101,7 +1101,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         _data2['equipment_decks']['battle_deck']['0'] = eq2_deck.copy()
     user1_zerpmons = _data1['zerpmons']
     user2_zerpmons = _data2['zerpmons']
-
+    lvls = None
     if battle_instance['type'] != 'free_br':
         trainer_embed = CustomEmbed(title=f"Trainers Battle",
                                     description=f"({battle_instance['username1']} VS {battle_instance['username2']})",
@@ -1246,6 +1246,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
     free_br = False
     if battle_instance['type'] == 'free_br':
         free_br = True
+    is_br = 'Battle Royale' in battle_name
 
     uid = await db_query.make_battle_req(user1_zerpmons,
                                          user2_zerpmons,
@@ -1266,7 +1267,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             z1_obj, z2_obj = result['playerAZerpmons'][idx1], result['playerBZerpmons'][idx2]
 
             await battle_funtion_ex.generate_image_ex(message.id, z1_obj, z2_obj,
-                                                      bg_img)
+                                                      bg_img, show_lvls=is_br)
             main_embed, file = await battle_funtion_ex.get_zerp_battle_embed_ex(message,
                                                                                 z1_obj,
                                                                                 z2_obj,
@@ -1275,13 +1276,14 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                                                                                 z2_obj['zerpmon']['trainer_buff'],
                                                                                 {},
                                                                                 result['roundLogs'][log_idx],
-                                                                                None, )
+                                                                                None,
+                                                                                )
             if msg_hook is None:
                 if hidden:
                     msg_hook = message
                 else:
                     msg_hook = message.channel
-                if 'Battle Royale' in battle_name:
+                if is_br:
                     main_embed.clear_fields()
                     show_view = await get_battle_view(msg_hook, z1_obj['zerpmon']['name'], z2_obj['zerpmon']['name'])
                 else:
