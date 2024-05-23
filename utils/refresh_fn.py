@@ -147,6 +147,12 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                 user_obj['address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':
             return False
         good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
+        if user_obj.get('address_config'):
+            if user_obj['address_config'].get('xrpl'):
+                good_status2, nfts2 = await xrpl_functions.get_nfts(user_obj['address_config'].get('xrpl'))
+                if not good_status2:
+                    return False
+                nfts.extend(nfts2)
         good_status_xahau, nfts_xahau = await xrpl_functions.get_nfts_xahau(user_obj['address'])
         if not good_status:
             return False
