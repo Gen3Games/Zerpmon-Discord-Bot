@@ -7,7 +7,8 @@ from xrpl.models.requests import AccountInfo, tx
 from xrpl.asyncio.transaction import safe_sign_and_submit_transaction, safe_sign_and_autofill_transaction, \
     send_reliable_submission
 from xrpl.asyncio.clients import AsyncWebsocketClient
-from xrpl.models import Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag, AccountLines, NFTokenAcceptOffer
+from xrpl.models import Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag, AccountLines, NFTokenAcceptOffer, \
+    IssuedCurrencyAmount
 from xrpl.wallet import Wallet
 from pymongo import MongoClient
 import config
@@ -42,7 +43,9 @@ def timeout_wrapper(timeout):
             except asyncio.TimeoutError:
                 logging.error(f"{func.__name__} timed out after {timeout} seconds")
                 return False, '', False
+
         return wrapper
+
     return decorator
 
 
@@ -189,7 +192,7 @@ async def send_nft(from_, to_address, token_id, memo=None):
             meta = response.result['meta']
             try:
                 if meta['TransactionResult'] in ["tesSUCCESS", "terQUEUED"]:
-                    update_seq(response, from_)
+                    # update_seq(response, from_)
                     # msg = await get_tx(client, response.result['tx_json']['hash'])
                     # nodes = msg['meta']['AffectedNodes']
                     # node = [i for i in nodes if
@@ -201,7 +204,80 @@ async def send_nft(from_, to_address, token_id, memo=None):
                     return True, offer, response.result['hash']
 
                 elif meta['TransactionResult'] in ["tefPAST_SEQ"]:
-                    update_seq(response, from_)
+                    # update_seq(response, from_)
+                    await asyncio.sleep(1)
+                else:
+                    await asyncio.sleep(1)
+            except Exception as e:
+                logging.error(f"Something went wrong while sending NFT: {traceback.format_exc()}")
+                break
+    except Exception as e:
+        logging.error(f"Something went wrong while sending NFT outside loop: {traceback.format_exc()}")
+    return False, None, None
+
+
+@timeout_wrapper(20)
+async def create_nft_offer(from_: str, token_id: str, price: int, to_address: str, currency='XRP', memo=None):
+    client = await get_ws_client()
+    try:
+        for i in range(5):
+            sequence, sending_address, sending_wallet = await get_seq(from_)
+            memos = []
+            if memo:
+                memos = [
+                    {'memo': {
+                        'memo_data': bytes(memo, 'utf-8').hex().upper(),
+                        'memo_format': bytes('loan-for', 'utf-8').hex().upper()
+                    }}]
+            print("------------------")
+            print("Creating offer!")
+            if currency == 'XRP':
+                tx = NFTokenCreateOffer(
+                    account=sending_address,
+                    amount=str(round(price * 10 ** 6)),
+                    sequence=sequence,  # set the next sequence number for your account
+                    nftoken_id=token_id,  # set to 0 for a new offer
+                    flags=NFTokenCreateOfferFlag.TF_SELL_NFTOKEN,  # set to 0 for a new offer
+                    destination=to_address,  # set to the address of the user you want to sell to
+                    source_tag=13888813,
+                    memos=memos
+                )
+            else:
+                tx = NFTokenCreateOffer(
+                    account=sending_address,
+                    sequence=sequence,  # set the next sequence number for your account
+                    nftoken_id=token_id,  # set to 0 for a new offer
+                    flags=NFTokenCreateOfferFlag.TF_SELL_NFTOKEN,  # set to 0 for a new offer
+                    destination=to_address,  # set to the address of the user you want to sell to
+                    amount=IssuedCurrencyAmount(
+                        currency=currency,
+                        issuer="rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe",
+                        value=str(price)
+                    ),
+                    source_tag=13888813,
+                    memos=memos
+                )
+            signed = await safe_sign_and_autofill_transaction(tx, sending_wallet, client)
+            response = await send_reliable_submission(signed, client)
+
+            # Print the response
+            print(response.result)
+            meta = response.result['meta']
+            try:
+                if meta['TransactionResult'] in ["tesSUCCESS", "terQUEUED"]:
+                    # update_seq(response, from_)
+                    # msg = await get_tx(client, response.result['tx_json']['hash'])
+                    # nodes = msg['meta']['AffectedNodes']
+                    # node = [i for i in nodes if
+                    #         'CreatedNode' in i and i['CreatedNode']['LedgerEntryType'] == 'NFTokenOffer']
+                    # offer = node[0]['CreatedNode']['LedgerIndex']
+                    logging.error(response.result)
+                    offer = meta['offer_id']
+                    logging.error(f'Created NFT offer with offerID: {offer}')
+                    return True, offer, response.result['hash']
+
+                elif meta['TransactionResult'] in ["tefPAST_SEQ"]:
+                    # update_seq(response, from_)
                     await asyncio.sleep(1)
                 else:
                     await asyncio.sleep(1)
@@ -373,6 +449,15 @@ async def get_seq(from_, amount=None):
             sequence = account_info.result["account_data"]["Sequence"] if gym_seq is None else gym_seq
             sending_wallet = Wallet(seed=active_zrp_seed, sequence=sequence)
             sending_address = active_zrp_addr
+            return sequence, sending_address, sending_wallet
+        case 'auction':
+            acc_info = AccountInfo(
+                account=config.AUCTION_ADDR
+            )
+            account_info = await client.request(acc_info)
+            sequence = account_info.result["account_data"]["Sequence"]
+            sending_wallet = Wallet(seed=config.AUCTION_SEED, sequence=sequence)
+            sending_address = config.AUCTION_ADDR
             return sequence, sending_address, sending_wallet
         case _:
             return None, None, None
@@ -552,6 +637,7 @@ async def main():
     while True:
         try:
             queued_txns = get_txn_log()
+            await asyncio.sleep(15)
             if len(queued_txns) == 0:
                 if int(time.time()) % 10 == 0:
                     logging.error(f'No Txn found')
@@ -564,8 +650,14 @@ async def main():
                         if _id not in sent:
                             del txn['_id']
                             if txn['type'] == 'NFTokenCreateOffer':
-                                success, offerID, hash_ = await send_nft(txn['from'], txn['destination'],
-                                                                         txn['nftokenID'], txn.get('memo'))
+                                if txn['amount'] > 0:
+                                    success, offerID, hash_ = await create_nft_offer(txn['from'], txn['nftokenID'],
+                                                                                     txn['amount'], txn['destination'],
+                                                                                     txn['nftokenID'], txn['currency'],
+                                                                                     txn.get('memo'))
+                                else:
+                                    success, offerID, hash_ = await send_nft(txn['from'], txn['destination'],
+                                                                             txn['nftokenID'], txn.get('memo'))
                                 if success:
                                     sent.append(_id)
                                     txn['status'] = 'fulfilled'
@@ -600,10 +692,10 @@ async def main():
                                         continue
                                     if txn['currency'] == 'XRP':
                                         success, hash_, _ = await send_txn(txn['destination'], amt, txn['from'],
-                                                                        txn.get('memo'))
+                                                                           txn.get('memo'))
                                     else:
                                         success, hash_, _ = await send_zrp(txn['destination'], amt, txn['from'],
-                                                                        memo=txn.get('memo'))
+                                                                           memo=txn.get('memo'))
                                         if txn.get('gp'):
                                             inc_user_gp(txn['destination'], txn.get('gp'))
                                         elif txn.get('trp'):
