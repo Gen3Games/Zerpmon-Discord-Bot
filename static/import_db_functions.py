@@ -524,6 +524,7 @@ def update_all_zerp_moves():
             save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
         w_candy = document.get('white_candy', 0)
         g_candy = document.get('gold_candy', 0)
+        p_candy = document.get('purple_candy', 0)
         if w_candy > 0:
 
             original_zerp = db['MoveSets2'].find_one({'name': document['name']})
@@ -541,6 +542,10 @@ def update_all_zerp_moves():
                     document['moves'][i]['dmg'] = round(
                         document['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * 0.02 * g_candy,
                         1)
+        if p_candy >= 10:
+            for i, move in enumerate(document['moves']):
+                if move['color'].lower() == 'purple':
+                    document['moves'][i]['stars'] += '*'
             save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
 
 
