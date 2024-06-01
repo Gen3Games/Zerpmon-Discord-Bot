@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import traceback
 from statistics import mean
@@ -20,6 +21,21 @@ last_checked_price = 0
 
 client = pymongo.MongoClient(config.MONGO_URL)
 db = client['Zerpmon']
+
+
+def timeout_wrapper(timeout):
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            try:
+                res = await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
+                return res
+            except asyncio.TimeoutError:
+                logging.error(f"{func.__name__} timed out after {timeout} seconds")
+                return False, '', False
+
+        return wrapper
+
+    return decorator
 
 
 def get_zerpmon_by_nftID(nftID):
@@ -114,8 +130,8 @@ async def get_nfts_xahau(address, limit=1000):
             # print(all_nfts)
             # for nft in all_nfts:
             #     print(nft['URI'], nft.get('Amount'))
-            for i in range(3):
-                print(all_nfts[i])
+            # for i in range(3):
+            #     print(all_nfts[i])
             return True, all_nfts
     except Exception as e:
         print(traceback.format_exc())
@@ -323,6 +339,7 @@ async def get_xrp_balance(address):
         return 0
 
 
+@timeout_wrapper(20)
 async def get_zrp_balance(address, issuer=False):
     try:
         async with AsyncWebsocketClient(config.NODE_URL) as client:
