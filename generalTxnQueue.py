@@ -10,7 +10,7 @@ from xrpl.asyncio.clients import AsyncWebsocketClient
 from xrpl.models import Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag, AccountLines, NFTokenAcceptOffer, \
     IssuedCurrencyAmount
 from xrpl.wallet import Wallet
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 import config
 
 logging.basicConfig(filename='generalTxnQueue.log', level=logging.ERROR,
@@ -28,6 +28,7 @@ loan_seq = None
 wager_seq = None
 gym_seq = None
 tower_seq = None
+auction_seq = None
 gym_bal = None
 active_zrp_addr = config.B1_ADDR
 active_zrp_seed = config.B1_SEED
@@ -156,8 +157,10 @@ def update_seq(response, from_):
         gym_seq = response.result['account_sequence_next']
     elif from_ == 'tower':
         tower_seq = response.result['account_sequence_next']
-    else:
+    elif from_ == 'wager':
         wager_seq = response.result['account_sequence_next']
+    else:
+        auction_seq = response.result['account_sequence_next']
 
 
 @timeout_wrapper(20)
@@ -452,12 +455,12 @@ async def get_seq(from_, amount=None):
             return sequence, sending_address, sending_wallet
         case 'auction':
             acc_info = AccountInfo(
-                account=config.AUCTION_ADDR
+                account=config.AUCTION_ADDR_W
             )
             account_info = await client.request(acc_info)
             sequence = account_info.result["account_data"]["Sequence"]
-            sending_wallet = Wallet(seed=config.AUCTION_SEED, sequence=sequence)
-            sending_address = config.AUCTION_ADDR
+            sending_wallet = Wallet(seed=config.AUCTION_SEED_W, sequence=sequence)
+            sending_address = config.AUCTION_ADDR_W
             return sequence, sending_address, sending_wallet
         case _:
             return None, None, None
@@ -520,20 +523,29 @@ async def get_zrp_balance(address, issuer=False):
         return None
 
 
-async def set_boss_hp(addr, dmg_done, cur_hp) -> None:
-    users_col = db['users']
-    users_col.update_one({'address': addr},
-                         {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done,
-                                   'boss_battle_stats.total_dmg': dmg_done},
-                          '$max': {'boss_battle_stats.max_dmg': dmg_done}},
-                         )
+async def set_boss_hp(addr, dmg_done, cur_hp) -> dict:
     stats_col = db['stats_log']
+    users_col = db['users']
     new_hp = cur_hp - dmg_done
+
     if new_hp > 0:
-        stats_col.update_one({'name': 'world_boss'},
-                             {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}})
+        doc = stats_col.find_one_and_update({'name': 'world_boss', 'boss_active': True},
+                             {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}},
+                                      return_document=ReturnDocument.AFTER)
     else:
-        stats_col.update_one({'name': 'world_boss'}, {'$set': {'boss_hp': 0, 'boss_active': False}})
+        doc = stats_col.find_one_and_update({'name': 'world_boss', 'boss_active': True},
+                                      {
+                                          '$inc': {'total_weekly_dmg': cur_hp},
+                                          '$set': {'boss_hp': 0, 'boss_active': False}
+                                       },
+                                      return_document=ReturnDocument.AFTER)
+    if doc:
+        users_col.update_one({'address': addr},
+                             {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done,
+                                       'boss_battle_stats.total_dmg': dmg_done},
+                              '$max': {'boss_battle_stats.max_dmg': dmg_done}},
+                             )
+    return doc
 
 
 async def get_boss_stats():
@@ -557,7 +569,7 @@ async def reset_weekly_dmg() -> None:
     users_col.update_many({'boss_battle_stats': {'$exists': True}},
                           {'$set': {'boss_battle_stats.weekly_dmg': 0}})
     stats_col = db['stats_log']
-    stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_active': False}})
+    stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_hp': 0, 'boss_active': False}})
 
 
 async def save_boss_rewards(defeated_by, winners, description, channel_id):
@@ -586,18 +598,17 @@ async def handle_boss_txn(_id, txn):
     dmgDealt = txn.get('dmgDealt', 0)
     startHp = txn.get('startHp', 0)
     addr = txn['destination']
-    if txn['amount'] == 0:
-        await set_boss_hp(addr, dmgDealt, startHp)
-    else:
+    updated_doc = await set_boss_hp(addr, dmgDealt, startHp)
+    print('Invalid_boss_req', updated_doc)
+    if updated_doc and updated_doc['boss_hp'] <= 0:
         reward_dict = {}
-        await set_boss_hp(addr, startHp, startHp)
         new_boss_stats = await get_boss_stats()
         total_dmg = new_boss_stats['total_weekly_dmg']
         winners = await boss_reward_winners()
         for i in range(10):
             try:
                 t_reward = new_boss_stats['reward']
-                description = f"Starting to distribute **`{t_reward} ZRP` Boss reward!\n\n"
+                description = f"Starting to distribute `{t_reward} ZRP` Boss reward!\n\n"
                 for player in winners:
                     p_dmg = player['boss_battle_stats']['weekly_dmg']
                     if p_dmg > 0:

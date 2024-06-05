@@ -271,7 +271,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
                 if 'dmg' in move:
                     move['dmg'] = round(move['dmg'] * dmg_f1)
                 elif 'stars' in move:
-                    move['stars'] = (len(move['stars']) + extra_star1)
+                    move['stars'] = (move['stars'] + extra_star1)
         notes = f"{(await db_query.get_move(move['name']))['notes']}" if move['color'] == 'purple' else ''
         _p = move['percent'] if move['color'] != 'blue' else blue_dict['new_b1']
         main_embed.add_field(
@@ -310,7 +310,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
                 if 'dmg' in move:
                     move['dmg'] = round(move['dmg'] * dmg_f2)
                 elif 'stars' in move:
-                    move['stars'] = (len(move['stars']) + extra_star2)
+                    move['stars'] = (move['stars'] + extra_star2)
         notes = f"{(await db_query.get_move(move['name']))['notes']}" if move['color'] == 'purple' else ''
         _p = move['percent'] if move['color'] != 'blue' else blue_dict['new_b2']
         main_embed.add_field(
@@ -1735,15 +1735,17 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                     embed.set_image(
                         z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
                             'image'].replace("ipfs://", ""))
-                    content = f'🔥 🔥 Congratulations {user_mention} has defeated **{z2["name"]}**!! 🔥 🔥\n@everyone'
+                    content = f'🔥 🔥 Congratulations **{z2["name"]}** has been defeated!! 🔥 🔥\n@everyone'
                     t_reward = boss_info['reward']
-                    description = f"Starting to distribute **`{t_reward} ZRP` Boss reward!\n\n"
+                    description = f"Starting to distribute `{t_reward} ZRP` Boss reward!\n\n"
                     for player in winners:
+                        if len(reward_dict) >= 30:
+                            break
                         p_dmg = player['boss_battle_stats']['weekly_dmg']
                         if p_dmg > 0:
                             amt = round(p_dmg * t_reward / total_dmg, 2)
                             reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
-                            description += f"<@{player['discord_id']}>\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
+                            description += f"<@{player['discord_id']}>\t**DMG dealt**: `{p_dmg:.2f}`\t**Reward**:`{amt:.2f}`\n"
                     embed.description = description
                     await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
                                               channel_id=config.BOSS_CHANNEL)
