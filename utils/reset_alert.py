@@ -9,7 +9,7 @@ import db_query
 from utils import battle_function
 from utils.checks import get_next_ts, get_time_left_utc, get_days_left
 from utils.xrpl_ws import get_balance, send_zrp, send_txn, send_nft
-from xrpl_functions import get_zrp_balance, get_zrp_price
+from xrpl_functions import get_zrp_balance, get_zrp_amm_price
 
 
 class CustomEmbed(nextcord.Embed):
@@ -87,8 +87,8 @@ async def send_reset_message(client: nextcord.Client):
         # print(reset_time)
         config_extra.reset_last_run = cur_ts
         if reset_time < 300:
-            # Skip checks for 600s (10 min)
-            config_extra.reset_last_run = cur_ts + 600
+            # Skip checks for 900s (15 min)
+            config_extra.reset_last_run = cur_ts + 900
             await asyncio.sleep(abs(reset_time))
             config.store_24_hr_buyers = []
             await db_query.choose_gym_zerp()
@@ -117,9 +117,11 @@ async def send_reset_message(client: nextcord.Client):
                         won_gyms = user['gym'].get('won', {})
                         for gym, obj in won_gyms.items():
                             if obj['next_battle_t'] < time.time() - 86300:
-                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True, reset=is_gym_reset)
+                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True,
+                                                         reset=is_gym_reset)
                             else:
-                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, reset=is_gym_reset)
+                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False,
+                                                         reset=is_gym_reset)
                     for r_key in ['rank', 'rank1', 'rank5']:
                         if r_key in user:
                             rnk = user[r_key]['tier']
@@ -136,27 +138,37 @@ async def send_reset_message(client: nextcord.Client):
                 for loan in active_loans:
                     """less than 5 seconds left to loan end"""
                     if loan['loan_expires_at'] <= time.time():
-                        await db_query.remove_user_nft(loan['accepted_by']['id'], loan['serial'], )
+                        await db_query.remove_user_nft(loan['accepted_by']['id'], loan['serial'],
+                                                       trainer=loan['zerp_data'].get('category') == 'trainer',
+                                                       equipment=loan['zerp_data'].get('category') == 'equipment', )
                         ack = await db_query.update_loanee(loan['zerp_data'], loan['serial'],
-                                                     {'id': None, 'username': None, 'address': None}, days=0,
-                                                     amount_total=0, loan_ended=True,
-                                                     discord_id=loan['accepted_by']['id'])
+                                                           {'id': None, 'username': None, 'address': None}, days=0,
+                                                           amount_total=0, loan_ended=True,
+                                                           discord_id=loan['accepted_by']['id'])
                         if ack:
                             if loan['loan_expires_at'] != 0:
-                                await send_nft('loan', loan['listed_by']['address'], loan['token_id'])
+                                await db_query.add_loan_nft_txn_to_queue(loan['listed_by']['address'], loan['token_id'],
+                                                                         memo=f'{loan["zerpmon_name"]} offer')
+                                # await send_nft('loan', loan['listed_by']['address'], loan['token_id'])
                             if loan['expires_at'] <= time.time() or loan['loan_expires_at'] == 0:
-                                await db_query.remove_listed_loan(loan['zerpmon_name'], loan['listed_by']['id'])
+                                await db_query.remove_listed_loan(loan['token_id'], loan['listed_by']['id'], is_id=True)
                             else:
                                 offer_expired.append(
                                     f"<@{loan['listed_by']['id']}> your loan listing for {loan['zerpmon_name']} has been deactivated\n")
                     elif loan['expires_at'] <= time.time() and loan['accepted_by']['id'] is None:
-                        await db_query.remove_listed_loan(loan['zerpmon_name'], loan['listed_by']['id'])
+                        await db_query.remove_listed_loan(loan['token_id'], loan['listed_by']['id'], is_id=True)
                     else:
                         if loan['xrp']:
-                            await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
+                            await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'XRP',
+                                                                 loan['per_day_cost'],
+                                                                 memo=f'{loan["zerpmon_name"]} loan payment')
+                            # await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
                         else:
-                            await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
-                        await db_query.decrease_loan_pending(loan['zerpmon_name'], loan['per_day_cost'])
+                            await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'ZRP',
+                                                                 loan['per_day_cost'],
+                                                                 memo=f'{loan["zerpmon_name"]} loan payment')
+                            # await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
+                        await db_query.decrease_loan_pending(loan['token_id'], loan['per_day_cost'])
                 logging.error(f"offer_expired: {offer_expired}")
                 if len(offer_expired) > 0:
                     expiry_msg = f'{", ".join(offer_expired)}Please use: `/loan relist` command to reactivate your Loan listing'
@@ -177,7 +189,7 @@ async def send_reset_message(client: nextcord.Client):
                         config_extra.MAIN_GUILD = guild
                         zrp_p_channel = nextcord.utils.get(guild.channels, id=config_extra.ZRP_PRICE_CHANNEL_ID)
                         if zrp_p_channel:
-                            zp = await get_zrp_price()
+                            zp = await get_zrp_amm_price()
                             if zp != config_extra.zrp_price:
                                 await zrp_p_channel.edit(
                                     name=f"{'🟢 ↗' if zp >= config_extra.zrp_price else '🔴 ⇲'} ZRP: {zp:.4f} XRP")
@@ -187,9 +199,12 @@ async def send_reset_message(client: nextcord.Client):
                                             title=f"TOWER RUSH LEADERBOARD")
 
                         for i, user in users:
-                            msg = '#{0:<4} {1:<25} TRP : {3:>2}      Highest level reached: {2:<20}'.format(i, user['username'],
-                                                                                                 user.get('max_level', 1),
-                                                                                                 user['tp'])
+                            msg = '#{0:<4} {1:<25} TRP : {3:>2}      Highest level reached: {2:<20}'.format(i, user[
+                                'username'],
+                                                                                                            user.get(
+                                                                                                                'max_level',
+                                                                                                                1),
+                                                                                                            user['tp'])
                             embed.add_field(name=f'`{msg}`', value=f"\u200B", inline=False)
                         tower_channel = nextcord.utils.get(guild.channels, id=config.TOWER_CHANNEL)
                         if config.TOWER_MSG_ID:
@@ -350,6 +365,17 @@ async def send_reset_message(client: nextcord.Client):
                 except Exception as e:
                     logging.error(f'ERROR: {traceback.format_exc()}')
             try:
+                boss_defeated, boss_message = await db_query.get_world_boss_reward_message()
+                if boss_defeated:
+                    boss_channel = nextcord.utils.get(config_extra.MAIN_GUILD.channels, id=config.BOSS_CHANNEL)
+                    b_embed= CustomEmbed(
+                        title=f"🔥 🔥 World Boss Defeated! 🔥 🔥",
+                        color=0x680747,
+                        description=boss_message['description'] + '\n@everyone'
+                    )
+                    b_embed.set_image(boss_message['image'] if "https:/" in boss_message['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
+                            'image'].replace("ipfs://", ""))
+                    await boss_channel.send(embed=b_embed)
                 store_bal = await get_zrp_balance(config.STORE_ADDR, )
                 store_bal = int(float(store_bal))
                 if store_bal > 500:

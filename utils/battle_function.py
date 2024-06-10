@@ -1165,7 +1165,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
         file2 = nextcord.File(f"{message.id}0.png", filename="image0.png")
         trainer_embed.set_image(url=f'attachment://image0.png')
-
+        print('imageformed')
         low_z = max(len(user1_zerpmons), len(user2_zerpmons))
         if b_type <= low_z:
             low_z = b_type
@@ -1725,35 +1725,35 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             reward_dict = {}
             await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'],
                                             1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
-            total_dmg = boss_info['total_weekly_dmg'] + boss_hp
-            winners = await db_query.boss_reward_winners()
-            for i in range(10):
-                try:
-                    embed = CustomEmbed(title=f"🏆 World Boss Defeated! 🏆",
-                                        color=0x680747)
-
-                    embed.set_image(
-                        z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
-                            'image'].replace("ipfs://", ""))
-                    content = f'🔥 🔥 Congratulations **{z2["name"]}** has been defeated!! 🔥 🔥\n@everyone'
-                    t_reward = boss_info['reward']
-                    description = f"Starting to distribute `{t_reward} ZRP` Boss reward!\n\n"
-                    for player in winners:
-                        if len(reward_dict) >= 30:
-                            break
-                        p_dmg = player['boss_battle_stats']['weekly_dmg']
-                        if p_dmg > 0:
-                            amt = round(p_dmg * t_reward / total_dmg, 2)
-                            reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
-                            description += f"<@{player['discord_id']}>\t**DMG dealt**: `{p_dmg:.2f}`\t**Reward**:`{amt:.2f}`\n"
-                    embed.description = description
-                    await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
-                                              channel_id=config.BOSS_CHANNEL)
-                    break
-                except:
-                    logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
-                    await asyncio.sleep(10)
-            logging.error(f'BossRewards: {reward_dict}')
+            # total_dmg = boss_info['total_weekly_dmg'] + boss_hp
+            # winners = await db_query.boss_reward_winners()
+            # for i in range(10):
+            #     try:
+            #         embed = CustomEmbed(title=f"🏆 World Boss Defeated! 🏆",
+            #                             color=0x680747)
+            #
+            #         embed.set_image(
+            #             z2['image'] if "https:/" in z2['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
+            #                 'image'].replace("ipfs://", ""))
+            #         content = f'🔥 🔥 Congratulations **{z2["name"]}** has been defeated!! 🔥 🔥\n@everyone'
+            #         t_reward = boss_info['reward']
+            #         description = f"Starting to distribute `{t_reward} ZRP` Boss reward!\n\n"
+            #         for player in winners:
+            #             if len(reward_dict) >= 30:
+            #                 break
+            #             p_dmg = player['boss_battle_stats']['weekly_dmg']
+            #             if p_dmg > 0:
+            #                 amt = round(p_dmg * t_reward / total_dmg, 2)
+            #                 reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
+            #                 description += f"<@{player['discord_id']}>\t**DMG dealt**: `{p_dmg:.2f}`\t**Reward**:`{amt:.2f}`\n"
+            #         embed.description = description
+            #         await send_global_message(guild=interaction.guild, text=content, image='', embed=embed,
+            #                                   channel_id=config.BOSS_CHANNEL)
+            #         break
+            #     except:
+            #         logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
+            #         await asyncio.sleep(10)
+            # logging.error(f'BossRewards: {reward_dict}')
             total_txn = len(reward_dict)
             success_txn = 0
             failed_str = ''

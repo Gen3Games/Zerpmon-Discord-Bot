@@ -574,13 +574,14 @@ async def reset_weekly_dmg() -> None:
     stats_col.update_one({'name': 'world_boss'}, {'$set': {'total_weekly_dmg': 0, 'boss_hp': 0, 'boss_active': False}})
 
 
-async def save_boss_rewards(defeated_by, winners, description, channel_id):
+async def save_boss_rewards(defeated_by, winners, description, channel_id, image):
     stats_col = db['stats_log']
     obj = {
         'name': 'world_boss_reward_log',
         'defeated_by_address': defeated_by,
         'rewards': winners,
         'description': description,
+        'image': image,
         'channel_id': channel_id,
         'ts': int(time.time())
     }
@@ -637,16 +638,17 @@ async def handle_boss_txn(_id, txn):
         winners = await boss_reward_winners()
         for i in range(10):
             try:
-                description = f"Starting to distribute `{t_reward} ZRP` Boss reward!\n\n"
+                description = f"Distributed `{t_reward} ZRP` Boss reward!\n\n"
                 for player in winners:
                     p_dmg = player['boss_battle_stats'].get('weekly_dmg', 0)
                     if p_dmg > 0:
                         print(total_dmg, t_reward, p_dmg)
                         amt = round(p_dmg * t_reward / total_dmg, 2)
                         reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
-                        description += f"<@{player['discord_id']}>\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
+                        if len(reward_dict) < 30:
+                            description += f"<@{player['discord_id']}>\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
                 await save_boss_rewards(defeated_by=addr, winners=reward_dict, description=description,
-                                        channel_id=config.BOSS_CHANNEL)
+                                        channel_id=config.BOSS_CHANNEL, image=new_boss_stats.get('boss_zerpmon', {}).get('image'))
                 break
             except:
                 logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')
