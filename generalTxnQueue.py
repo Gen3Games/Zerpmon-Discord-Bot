@@ -163,12 +163,12 @@ def update_seq(response, from_):
         auction_seq = response.result['account_sequence_next']
 
 
-@timeout_wrapper(20)
+@timeout_wrapper(30)
 async def send_nft(from_, to_address, token_id, memo=None):
     client = await get_ws_client()
     global gym_seq, loan_seq, wager_seq, tower_seq
     try:
-        for i in range(5):
+        for i in range(3):
             sequence, sending_address, sending_wallet = await get_seq(from_)
             memos = []
             if memo:
@@ -219,7 +219,7 @@ async def send_nft(from_, to_address, token_id, memo=None):
     return False, None, None
 
 
-@timeout_wrapper(20)
+@timeout_wrapper(30)
 async def create_nft_offer(from_: str, token_id: str, price: int, to_address: str, currency='XRP', memo=None):
     client = await get_ws_client()
     try:
@@ -610,7 +610,7 @@ async def handle_boss_txn(_id, txn):
                 t_reward = new_boss_stats['reward']
                 description = f"Starting to distribute `{t_reward} ZRP` Boss reward!\n\n"
                 for player in winners:
-                    p_dmg = player['boss_battle_stats']['weekly_dmg']
+                    p_dmg = player['boss_battle_stats'].get('weekly_dmg', 0)
                     if p_dmg > 0:
                         print(total_dmg, t_reward, p_dmg)
                         amt = round(p_dmg * t_reward / total_dmg, 2)
@@ -629,7 +629,7 @@ async def handle_boss_txn(_id, txn):
         failed_list = []
         saved = False
         for addr, obj in reward_dict.items():
-            saved = await send_zrp(addr, obj['amt'], 'wager')
+            saved, hash_, _ = await send_zrp(addr, obj['amt'], 'wager')
             if saved:
                 success_txn += 1
             else:
@@ -640,6 +640,75 @@ async def handle_boss_txn(_id, txn):
     txn['status'] = 'fulfilled'
     txn['hash'] = ''
     update_txn_log(_id, txn)
+
+
+async def complete_txns(queued_txns):
+    sent_txns = []
+    for txn in queued_txns:
+        _id = txn['_id']
+        if _id not in sent:
+            del txn['_id']
+            if txn['type'] == 'NFTokenCreateOffer':
+                if txn.get('amount', 0) > 0:
+                    success, offerID, hash_ = await create_nft_offer(txn['from'], txn['nftokenID'],
+                                                                     txn['amount'], txn['destination'],
+                                                                     txn['nftokenID'], txn['currency'],
+                                                                     txn.get('memo'))
+                else:
+                    success, offerID, hash_ = await send_nft(txn['from'], txn['destination'],
+                                                             txn['nftokenID'], txn.get('memo'))
+                if success:
+                    sent_txns.append(_id)
+                    txn['status'] = 'fulfilled'
+                    txn['offerID'] = offerID
+                    txn['hash'] = hash_
+                    update_txn_log(_id, txn)
+                    sent_txns.pop()
+                else:
+                    inc_retry_cnt(_id)
+            elif txn['type'] == 'NFTokenAcceptOffer':
+                success, offerID, hash_ = await accept_nft(txn['from'], txn.get('offer'),
+                                                           txn['destination'],
+                                                           txn['nftokenID'])
+                if success:
+                    sent_txns.append(_id)
+                    txn['status'] = 'fulfilled'
+                    txn['offerID'] = offerID
+                    txn['hash'] = hash_
+                    update_txn_log(_id, txn)
+                    sent_txns.pop()
+                else:
+                    inc_retry_cnt(_id)
+            elif txn['type'] == 'Payment':
+                amt = txn['amount']
+                if txn['from'] == 'boss':
+                    await handle_boss_txn(_id, txn)
+                else:
+                    if amt == 0:
+                        txn['status'] = 'fulfilled'
+                        txn['hash'] = ''
+                        update_txn_log(_id, txn)
+                        continue
+                    if txn['currency'] == 'XRP':
+                        success, hash_, _ = await send_txn(txn['destination'], amt, txn['from'],
+                                                           txn.get('memo'))
+                    else:
+                        success, hash_, _ = await send_zrp(txn['destination'], amt, txn['from'],
+                                                           memo=txn.get('memo'))
+                        if txn.get('gp'):
+                            inc_user_gp(txn['destination'], txn.get('gp'))
+                        elif txn.get('trp'):
+                            inc_user_trp(txn['destination'], amt, txn.get('trp'))
+                    # success, hash_ = True, 'x'
+                    if success:
+                        sent_txns.append(_id)
+                        txn['status'] = 'fulfilled'
+                        txn['hash'] = hash_
+                        update_txn_log(_id, txn)
+                        sent_txns.pop()
+                    else:
+                        inc_retry_cnt(_id)
+    sent.extend(sent_txns)
 
 
 async def main():
@@ -656,70 +725,19 @@ async def main():
             else:
                 async with AsyncWebsocketClient(URL) as client:
                     ws_client = client
+                    loan_log, gym_log, boss_wager_txn = [], [], []
                     for txn in queued_txns:
-                        _id = txn['_id']
-                        if _id not in sent:
-                            del txn['_id']
-                            if txn['type'] == 'NFTokenCreateOffer':
-                                if txn['amount'] > 0:
-                                    success, offerID, hash_ = await create_nft_offer(txn['from'], txn['nftokenID'],
-                                                                                     txn['amount'], txn['destination'],
-                                                                                     txn['nftokenID'], txn['currency'],
-                                                                                     txn.get('memo'))
-                                else:
-                                    success, offerID, hash_ = await send_nft(txn['from'], txn['destination'],
-                                                                             txn['nftokenID'], txn.get('memo'))
-                                if success:
-                                    sent.append(_id)
-                                    txn['status'] = 'fulfilled'
-                                    txn['offerID'] = offerID
-                                    txn['hash'] = hash_
-                                    update_txn_log(_id, txn)
-                                    sent.pop()
-                                else:
-                                    inc_retry_cnt(_id)
-                            elif txn['type'] == 'NFTokenAcceptOffer':
-                                success, offerID, hash_ = await accept_nft(txn['from'], txn.get('offer'),
-                                                                           txn['destination'],
-                                                                           txn['nftokenID'])
-                                if success:
-                                    sent.append(_id)
-                                    txn['status'] = 'fulfilled'
-                                    txn['offerID'] = offerID
-                                    txn['hash'] = hash_
-                                    update_txn_log(_id, txn)
-                                    sent.pop()
-                                else:
-                                    inc_retry_cnt(_id)
-                            elif txn['type'] == 'Payment':
-                                amt = txn['amount']
-                                if txn['from'] == 'boss':
-                                    await handle_boss_txn(_id, txn)
-                                else:
-                                    if amt == 0:
-                                        txn['status'] = 'fulfilled'
-                                        txn['hash'] = ''
-                                        update_txn_log(_id, txn)
-                                        continue
-                                    if txn['currency'] == 'XRP':
-                                        success, hash_, _ = await send_txn(txn['destination'], amt, txn['from'],
-                                                                           txn.get('memo'))
-                                    else:
-                                        success, hash_, _ = await send_zrp(txn['destination'], amt, txn['from'],
-                                                                           memo=txn.get('memo'))
-                                        if txn.get('gp'):
-                                            inc_user_gp(txn['destination'], txn.get('gp'))
-                                        elif txn.get('trp'):
-                                            inc_user_trp(txn['destination'], amt, txn.get('trp'))
-                                    # success, hash_ = True, 'x'
-                                    if success:
-                                        sent.append(_id)
-                                        txn['status'] = 'fulfilled'
-                                        txn['hash'] = hash_
-                                        update_txn_log(_id, txn)
-                                        sent.pop()
-                                    else:
-                                        inc_retry_cnt(_id)
+                        if txn['from'] == 'gym':
+                            gym_log.append(txn)
+                        elif txn['from'] == 'loan':
+                            loan_log.append(txn)
+                        else:
+                            boss_wager_txn.append(txn)
+                    print(len(queued_txns), len(gym_log), len(loan_log), len(boss_wager_txn))
+                    gym_task = asyncio.create_task(complete_txns(gym_log))
+                    loan_task = asyncio.create_task(complete_txns(loan_log))
+                    boss_task = asyncio.create_task(complete_txns(boss_wager_txn))
+                    await asyncio.gather(gym_task, loan_task, boss_task)
         except Exception as e:
             logging.error(f'EXECPTION in WS: {traceback.format_exc()}')
 
