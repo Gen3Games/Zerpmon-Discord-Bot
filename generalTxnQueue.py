@@ -3,6 +3,8 @@ import logging
 import random
 import time
 import traceback
+import uuid
+
 from xrpl.models.requests import AccountInfo, tx
 from xrpl.asyncio.transaction import safe_sign_and_submit_transaction, safe_sign_and_autofill_transaction, \
     send_reliable_submission
@@ -594,6 +596,33 @@ async def mark_failed_boss_txns(failed_address_list, failed_str):
                          {'$set': obj})
 
 
+async def send_boss_notification(title, body, url=''):
+
+    category = "general"
+    send_on = int(time.time() * 1000)  # send_on timestamp in ms
+
+    # Create global notification dictionary
+    global_notification = {
+        "readUsers": {},
+        "uniqueId": str(uuid.uuid4()),
+        "notification": {
+            "icon": '',
+            "title": title,
+            "body": body,
+            "url": url,
+        },
+        "category": category,
+        "timestamp": send_on,
+        "sendOn": send_on,
+    }
+
+    # Insert into global-notifications-queue collection
+    db['global-notifications-queue'].insert_one(global_notification)
+
+    # Insert into global-notifications collection
+    db['global-notifications'].insert_one(global_notification)
+
+
 async def handle_boss_txn(_id, txn):
     dmgDealt = txn.get('dmgDealt', 0)
     startHp = txn.get('startHp', 0)
@@ -604,10 +633,10 @@ async def handle_boss_txn(_id, txn):
         reward_dict = {}
         new_boss_stats = await get_boss_stats()
         total_dmg = new_boss_stats['total_weekly_dmg']
+        t_reward = new_boss_stats['reward']
         winners = await boss_reward_winners()
         for i in range(10):
             try:
-                t_reward = new_boss_stats['reward']
                 description = f"Starting to distribute `{t_reward} ZRP` Boss reward!\n\n"
                 for player in winners:
                     p_dmg = player['boss_battle_stats'].get('weekly_dmg', 0)
@@ -637,6 +666,7 @@ async def handle_boss_txn(_id, txn):
                 failed_list.append(addr)
         await mark_failed_boss_txns(failed_list, failed_str)
         await reset_weekly_dmg()
+        await send_boss_notification('World Boss defeated', f'Starting to distribute {t_reward} ZRP Boss reward!')
     txn['status'] = 'fulfilled'
     txn['hash'] = ''
     update_txn_log(_id, txn)
