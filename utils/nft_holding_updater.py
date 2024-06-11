@@ -28,8 +28,9 @@ async def update_nft_holdings(client: nextcord.Client):
 
         for old_user in all_users:
             user_obj = old_user
-            print(user_obj['username'])
+
             try:
+                print(user_obj['username'])
                 if 'address' not in user_obj or len(user_obj['address']) < 5 or \
                         user_obj['address'] in ['rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM']:
                     continue
@@ -113,7 +114,7 @@ async def update_nft_holdings(client: nextcord.Client):
                                 print(f"USER already has the required role {e}")
                             await asyncio.sleep(2)
 
-                await db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial,
+                await db_query.update_user_decks(user_obj, user_obj['discord_id'], serials, t_serial,
                                                  e_serial)
             except Exception as e:
                 logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")

@@ -373,7 +373,7 @@ async def send_reset_message(client: nextcord.Client):
                         color=0x680747,
                         description=boss_message['description'] + '\n@everyone'
                     )
-                    b_embed.set_image(boss_message['image'] if "https:/" in boss_message['image'] else 'https://cloudflare-ipfs.com/ipfs/' + z2[
+                    b_embed.set_image(boss_message['image'] if "https:/" in boss_message['image'] else 'https://cloudflare-ipfs.com/ipfs/' + boss_message[
                             'image'].replace("ipfs://", ""))
                     await boss_channel.send(embed=b_embed)
                 store_bal = await get_zrp_balance(config.STORE_ADDR, )

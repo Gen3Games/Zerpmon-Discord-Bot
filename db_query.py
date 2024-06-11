@@ -68,22 +68,27 @@ async def save_user(user):
         print(f"Updated user")
 
 
-async def update_user_decks(address, discord_id, serials, t_serial, e_serial):
-    user_obj = await get_owned(discord_id)
-
-    mission_trainer = user_obj["mission_trainer"] if 'mission_trainer' in user_obj else ""
+async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial):
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
     battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {},
                                                                              '4': {}}
     br_deck = user_obj["br_champion_decks"] if 'br_champion_decks' in user_obj else {}
     gym_deck = user_obj["gym_deck"] if 'gym_deck' in user_obj else {}
 
+    kickedCards = {
+        'battle': set(),
+        'gym': set(),
+        'mission': set(),
+        'br': set(),
+    }
+
     new_mission_deck = {i: None for i in range(20)}
     for k, v in mission_deck.items():
         if v in serials:
             new_mission_deck[k] = v
-    if mission_trainer not in t_serial:
-        mission_trainer = ""
+        else:
+            kickedCards['mission'].add(user_obj['zerpmons'].get(v, {}).get('name'))
+
     new_battle_deck = {k: {} for k, v in battle_deck.items()}
 
     for k, v in battle_deck.items():
@@ -91,8 +96,12 @@ async def update_user_decks(address, discord_id, serials, t_serial, e_serial):
             if serial == "trainer":
                 if v[serial] in t_serial:
                     new_battle_deck[k][serial] = v[serial]
+                else:
+                    kickedCards['battle'].add(user_obj['trainer_cards'].get(v[serial], {}).get('name'))
             elif v[serial] in serials:
                 new_battle_deck[k][serial] = v[serial]
+            else:
+                kickedCards['battle'].add(user_obj['zerpmons'].get(v[serial], {}).get('name'))
 
     new_gym_deck = {k: {} for k, v in gym_deck.items()}
     for k, v in gym_deck.items():
@@ -100,22 +109,49 @@ async def update_user_decks(address, discord_id, serials, t_serial, e_serial):
             if serial == "trainer":
                 if v[serial] in t_serial:
                     new_gym_deck[k][serial] = v[serial]
+                else:
+                    kickedCards['gym'].add(user_obj['trainer_cards'].get(v[serial], {}).get('name'))
             elif v[serial] in serials:
                 new_gym_deck[k][serial] = v[serial]
+            else:
+                kickedCards['gym'].add(user_obj['zerpmons'].get(v[serial], {}).get('name'))
     if br_deck.get('0'):
         b_deck = br_deck.get('0')
-        if b_deck.get('trainer') not in t_serial:
+        br_t, br_z, br_e = b_deck.get('trainer'), b_deck.get('zerpmon'), b_deck.get('equipment')
+        if br_t not in t_serial:
             b_deck['trainer'] = None
-        if b_deck.get('equipment') not in e_serial:
+            kickedCards['br'].add(user_obj['trainer_cards'].get(br_t, {}).get('name'))
+        if br_e not in e_serial:
             b_deck['equipment'] = None
-        if b_deck.get('zerpmon') not in serials:
+            kickedCards['br'].add(user_obj['equipments'].get(br_e, {}).get('name'))
+        if br_z not in serials:
             b_deck['zerpmon'] = None
+            kickedCards['br'].add(user_obj['zerpmons'].get(br_z, {}).get('name'))
 
     logging.error(f'Serials {serials} \nnew deck: {new_battle_deck}')
-    await save_user({'mission_trainer': mission_trainer, 'mission_deck': new_mission_deck,
+    # Send push notification here
+    await save_user({'mission_deck': new_mission_deck,
                      'battle_deck': new_battle_deck, 'gym_deck': new_gym_deck,
                      'br_champion_decks': br_deck,
-                     'discord_id': user_obj["discord_id"], 'address': address})
+                     'discord_id': user_obj["discord_id"], 'address': user_obj['address']})
+    notifications = []
+    for k, v in kickedCards.items():
+        values = [i for i in v if i]
+        if len(values) > 0:
+            notifications.append(
+                {
+                    'title': f"Cards removed from {k.upper()} deck",
+                    'body': ', '.join(values),
+                    'url': '',
+                }
+            )
+    # print(notifications)
+    if len(notifications) > 0:
+        await send_user_notification(
+            notifications,
+            user_obj['address'],
+            str(user_obj['_id'])
+        )
 
 
 async def remove_user_nft(discord_id, serial, trainer=False, equipment=False, db_sep=None):
@@ -1701,7 +1737,7 @@ async def apply_purple_candy(user_id, zerp_name, amt=1):
         # Apply candy effect
         for i, move in enumerate(zerp['moves']):
             if move['color'].lower() == 'purple':
-                zerp['moves'][i]['stars'] +=1
+                zerp['moves'][i]['stars'] += 1
     del zerp['_id']
     await save_new_zerpmon(zerp)
     await add_purple_candy(user['address'], -amt)
@@ -2035,10 +2071,12 @@ async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, 
     res = await loan_col.update_one({'token_id': zerp['token_id']}, {'$set': query}, upsert=True)
     category = zerp.get('category')
     if loan_ended:
-        await remove_user_nft(discord_id, sr, trainer=category == 'trainer', equipment=category == 'equipment', db_sep=db_sep)
+        await remove_user_nft(discord_id, sr, trainer=category == 'trainer', equipment=category == 'equipment',
+                              db_sep=db_sep)
     else:
         zerp['loaned'] = True
-        await add_user_nft(loanee['id'], sr, zerp, trainer=category == 'trainer', equipment=category == 'equipment', db_sep=db_sep)
+        await add_user_nft(loanee['id'], sr, zerp, trainer=category == 'trainer', equipment=category == 'equipment',
+                           db_sep=db_sep)
     return res.acknowledged
 
 
@@ -3062,7 +3100,8 @@ async def change_stream_listener():
                         addr = doc['payerAddress']
                         data = {
                             'uid': str(doc['_id']),
-                            'XRP': {'amount': round(doc['XRPAmount'], 2), 'paid': True if doc['XRPAmount'] == 0 else False},
+                            'XRP': {'amount': round(doc['XRPAmount'], 2),
+                                    'paid': True if doc['XRPAmount'] == 0 else False},
                             'ZRP': {'amount': round(doc['ZRPAmount'], 2), 'paid': False},
                             'checked': False,
                         }
@@ -3079,9 +3118,37 @@ async def change_stream_listener():
 
 async def get_world_boss_reward_message():
     stats_col = db['stats_log']
-    res = stats_col.find_one_and_update({'name': 'world_boss_reward_log'},
+    res = await stats_col.find_one_and_update({'name': 'world_boss_reward_log'},
                                         {'$set': {'name': 'world_boss_reward_log_old'}})
     if res:
         return True, res
     else:
         return False, res
+
+
+async def send_user_notification(content_list, addr, _id,):
+    notification_list = []
+    for content in content_list:
+        user_notification = {
+            'userId': _id,
+            'userAddress': addr,
+            'read': False,
+            'uniqueId': str(uuid.uuid4()),
+            'notification': {
+                'icon': '',
+                'title': content['title'],
+                'body': content['body'],
+                'url': content['url'],
+            },
+            'category': 'general',
+            'timestamp': int(time.time() * 1000),
+            'sendOn': int(time.time() * 1000)
+        }
+        notification_list.append(user_notification)
+
+    add_to_user_notification_queue_promise = db['user-notifications-queue'].insert_many(notification_list)
+    add_to_in_app_user_notifications_promise = db['user-notifications'].insert_many(notification_list)
+
+    await asyncio.gather(add_to_user_notification_queue_promise, add_to_in_app_user_notifications_promise)
+
+

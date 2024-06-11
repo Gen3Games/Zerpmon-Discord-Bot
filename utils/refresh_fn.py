@@ -226,11 +226,13 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     print(f"USER already has the required role {e}")
                 await asyncio.sleep(2)
 
-        await db_query.update_user_decks(user_obj['address'], user_obj['discord_id'], serials, t_serial, e_serial)
+        await db_query.update_user_decks(user_obj, user_obj['discord_id'], serials, t_serial, e_serial)
         return True
     except Exception as e:
         logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
         return False
+
+GRYLL_ISSUER = "rGRLwjCy5JvvVHuWQNQm6mxovotPLMhuP6"
 
 
 async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, xahau=False):
@@ -241,11 +243,14 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, xahau=False):
         serial_key = "nft_serial"
         token_id_key = "NFTokenID"
     for nft in nfts:
-
-        if nft["Issuer"] in [ISSUER["Trainer"], ISSUER["TrainerV2"], ISSUER['Legend']]:
+        if "Issuer" not in nft:
+            continue
+        if nft["Issuer"] in [ISSUER["Trainer"], ISSUER["TrainerV2"], ISSUER['Legend'], GRYLL_ISSUER]:
             serial = ('xahau-' if xahau else '') + str(nft[serial_key])
             if nft["Issuer"] == ISSUER['Legend']:
-                serial = 'legends' + serial
+                serial = 'legends-' + serial
+            elif nft["Issuer"] == GRYLL_ISSUER:
+                serial = 'gryll-' + serial
             if serial in list(user_obj['trainer_cards'].keys()):
                 t_serial.append(serial)
                 continue
