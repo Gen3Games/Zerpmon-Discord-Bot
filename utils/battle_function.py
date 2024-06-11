@@ -973,7 +973,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         gym_buff_obj['trainerBuff'] = stage > 12
     msg_hook = None
 
-    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['name'], None, 'gym', gym_buff_obj)
+    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['token_id'], None, 'gym', gym_buff_obj)
     result = {}
     for cnt in range(120):
         if config.battle_results[uid]:
@@ -1250,8 +1250,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
     uid = await db_query.make_battle_req(user1_zerpmons,
                                          user2_zerpmons,
-                                         tc1['name'] if tc1 else None,
-                                         tc2['name'] if tc2 else None,
+                                         tc1['token_id'] if tc1 else None,
+                                         tc2['token_id'] if tc2 else None,
                                          'free' if free_br else 'battle')
     result = {}
     for cnt in range(120):
@@ -1396,13 +1396,13 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
     print(z1_type)
     for key, tc1 in _data1['trainer_cards'].items():
         if tc1.get('nft_id', '') in OMNI_TRAINERS:
-            trainer = tc1.get('name')
+            trainer = tc1.get('token_id')
             has_buff = 'Omni'
             break
         trainer_type = get_type(tc1)
         if 'Omni' in z1_type or (len(trainer_type) > 0 and trainer_type[0] in z1_type):
             print('tbuff')
-            trainer = tc1.get('name')
+            trainer = tc1.get('token_id')
             has_buff = trainer_type[0]
             # print(trainer, trainer_type)
             break
@@ -1619,7 +1619,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
         user1_zerpmons = user1_z if len(user1_z) <= low_z else user1_z[-low_z:]
     user2_zerpmons[0]['buff_eq'] = boss_info.get('boss_eq', None)
     msg_hook = None
-    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['name'], tc2['name'], 'boss',
+    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['token_id'], tc2['token_id'], 'boss',
                                          startHp=boss_hp)
     result = {}
     for cnt in range(120):
@@ -1858,7 +1858,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
         gym_buff_obj['trainerBuff'] = stage > 12
     msg_hook = None
 
-    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['name'], None, 'tower', gym_buff_obj)
+    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['token_id'], None, 'tower', gym_buff_obj)
     result = {}
     for cnt in range(120):
         if config.battle_results[uid]:

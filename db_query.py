@@ -15,7 +15,7 @@ import pytz
 from pymongo import MongoClient, ReturnDocument, DESCENDING, UpdateOne
 import config
 import config_extra
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorChangeStream
 
 client = AsyncIOMotorClient(config.MONGO_URL)
 db = client['Zerpmon']
@@ -118,8 +118,8 @@ async def update_user_decks(address, discord_id, serials, t_serial, e_serial):
                      'discord_id': user_obj["discord_id"], 'address': address})
 
 
-async def remove_user_nft(discord_id, serial, trainer=False, equipment=False):
-    users_collection = db['users']
+async def remove_user_nft(discord_id, serial, trainer=False, equipment=False, db_sep=None):
+    users_collection = db['users'] if db_sep is None else db_sep['users']
     # Upsert user
     # print(user)
     user_obj = await get_owned(str(discord_id))
@@ -136,8 +136,8 @@ async def remove_user_nft(discord_id, serial, trainer=False, equipment=False):
     )
 
 
-async def add_user_nft(discord_id, serial, zerpmon, trainer=False, equipment=False):
-    users_collection = db['users']
+async def add_user_nft(discord_id, serial, zerpmon, trainer=False, equipment=False, db_sep=None):
+    users_collection = db['users'] if db_sep is None else db_sep['users']
     # Upsert user
     # print(user)
 
@@ -1011,7 +1011,8 @@ async def add_candy_fragment(addr, qty=1):
 
 async def combine_candy_frag(addr, combine_to_key):
     users_collection = db['users']
-    res = await users_collection.update_one({'address': addr, 'candy_frag': {'$gte': 7}}, {'$inc': {'candy_frag': -7, combine_to_key: 1}})
+    res = await users_collection.update_one({'address': addr, 'candy_frag': {'$gte': 7}},
+                                            {'$inc': {'candy_frag': -7, combine_to_key: 1}})
     return res.acknowledged
 
 
@@ -1028,11 +1029,14 @@ async def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=No
     lvl_up, rewards = False, {}
     if old:
         level = old.get('level', 0)
+        if level == 0:
+            level = 1
         xp = old.get('xp', 0)
+        cur_lvl = await level_collection.find_one({'level': level}) if (level < 30 or ascended) else None
         next_lvl = await level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
 
-        if next_lvl and xp + xp_add >= next_lvl['xp_required']:
-            left_xp = (xp + xp_add) - next_lvl['xp_required']
+        if next_lvl and xp + xp_add >= cur_lvl['xp_required']:
+            left_xp = (xp + xp_add) - cur_lvl['xp_required']
             if (next_lvl['level'] == 30 and not ascended) or (next_lvl['level'] == 60 and ascended):
                 left_xp = 0
             query = {'$set': {'level': next_lvl['level'], 'xp': left_xp}}
@@ -1093,26 +1097,26 @@ async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_x
     zerpmon_collection = db['MoveSets']
 
     old = await zerpmon_collection.find_one({'name': zerpmon_name})
-    level = old['level'] + 1 if 'level' in old else 1
+    level = old['level'] if 'level' in old else 1
     # maxed = old.get('maxed_out', 0)
     # if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (
     #         old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
     #     update_moves(old)
     if level > 60:
         level = 60
-    last_lvl = await level_collection.find_one({'level': (level - 1) if level > 1 else 1})
+    # last_lvl = await level_collection.find_one({'level': (level - 1) if level > 1 else 1})
     next_lvl = await level_collection.find_one({'level': level})
     if 'level' in old and 'xp' in old:
 
         vals = old['level'], old['xp'], next_lvl['xp_required'] if not get_candies else (
             next_lvl['xp_required'], old.get('white_candy', 0)), \
-               last_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
-               last_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
+               next_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
+               next_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
     else:
         vals = 0, 0, next_lvl['xp_required'] if not get_candies else (
             next_lvl['xp_required'], old.get('white_candy', 0)), \
-               last_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
-               last_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
+               next_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
+               next_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
     if ret_doc:
         vals = vals, old
     return vals
@@ -1271,6 +1275,46 @@ async def add_gp_queue(address, match_cnt, gp):
         upsert=True
     )
     return amt
+
+
+async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None):
+    uid = f'{str(uuid.uuid4())}'
+    amt = round(paymentAmount, 3)
+    queue_query = {
+        'uniqueId': uid,
+        'type': 'Payment',
+        'destination': address,
+        'from': 'loan',
+        'status': 'pending',
+        'amount': amt,
+        'currency': paymentType,
+        'ts': int(time.time())
+    }
+    if memo:
+        queue_query['memo'] = memo
+    await db['general-txn-queue'].insert_one(
+        queue_query
+    )
+    return amt
+
+
+async def add_loan_nft_txn_to_queue(address, nft_id, memo=None):
+    uid = f'{str(uuid.uuid4())}'
+    queue_query = {
+        'uniqueId': uid,
+        'type': 'NFTokenCreateOffer',
+        'destination': address,
+        'from': 'loan',
+        'status': 'pending',
+        'nftokenID': nft_id,
+        'amount': 0,
+        'ts': int(time.time())
+    }
+    if memo:
+        queue_query['memo'] = memo
+    await db['general-txn-queue'].insert_one(
+        queue_query
+    )
 
 
 async def update_gym_won(discord_id, gym_obj, gym_type, stage, lost=False):
@@ -1464,7 +1508,7 @@ async def apply_lvl_candy(user_id, zerpmon_name):
     level = old.get('level', 0)
     ascended = old.get('ascended', False)
 
-    next_lvl = await level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
+    next_lvl = await level_collection.find_one({'level': level}) if (level < 30 or ascended) else None
     user_address = user['address']
     if next_lvl:
         await add_xp(zerpmon_name, user_address, next_lvl['xp_required'], ascended=ascended, zerp_obj=old)
@@ -1519,8 +1563,8 @@ async def add_purple_candy(address, inc_by, purchased=False, amount=0):
     if purchased:
         query['zrp_spent'] = amount
     r = await users_collection.update_one({'address': str(address)},
-                                      {'$inc': query},
-                                      upsert=True)
+                                          {'$inc': query},
+                                          upsert=True)
 
     return r.acknowledged
 
@@ -1657,7 +1701,7 @@ async def apply_purple_candy(user_id, zerp_name, amt=1):
         # Apply candy effect
         for i, move in enumerate(zerp['moves']):
             if move['color'].lower() == 'purple':
-                zerp['moves'][i]['stars'] += '*'
+                zerp['moves'][i]['stars'] +=1
     del zerp['_id']
     await save_new_zerpmon(zerp)
     await add_purple_candy(user['address'], -amt)
@@ -1977,8 +2021,8 @@ async def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False, d
     return r.acknowledged
 
 
-async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, discord_id=''):
-    loan_col = db['loan']
+async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, discord_id='', db_sep=None):
+    loan_col = db['loan'] if db_sep is None else db_sep['loan']
     query = {
         'accepted_by': loanee,
         'accepted_on': time.time() // 1 if not loan_ended else None,
@@ -1989,11 +2033,12 @@ async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, 
     if loan_ended:
         query['offer'] = None
     res = await loan_col.update_one({'token_id': zerp['token_id']}, {'$set': query}, upsert=True)
+    category = zerp.get('category')
     if loan_ended:
-        await remove_user_nft(discord_id, sr, )
+        await remove_user_nft(discord_id, sr, trainer=category == 'trainer', equipment=category == 'equipment', db_sep=db_sep)
     else:
         zerp['loaned'] = True
-        await add_user_nft(loanee['id'], sr, zerp)
+        await add_user_nft(loanee['id'], sr, zerp, trainer=category == 'trainer', equipment=category == 'equipment', db_sep=db_sep)
     return res.acknowledged
 
 
@@ -2451,8 +2496,9 @@ async def ascend_zerpmon(addr, zerp_name):
 
 
 async def get_higher_lvls(lvl=1):
-    res = await level_collection.find({'level': {'$gt': lvl}}).to_list(None)
-    return [i for i in res]
+    res = await level_collection.find({'level': {'$gte': lvl}}).sort('level', pymongo.ASCENDING).to_list(None)
+
+    return res
 
 
 async def remove_nft_from_safari_stat(nft_id) -> None:
@@ -2977,12 +3023,12 @@ async def unban_user_and_nfts(user_addr, is_id=False):
 async def unban_nft(nft_id):
     zerpmon_collection = db['MoveSets']
     zerpmon = await zerpmon_collection.find_one({'nft_id': nft_id},
-                                            projection={
-                                                '_id': 0,
-                                                'level': 1,
-                                                'white_candy':1,
-                                                'gold_candy': 1,
-                                            })
+                                                projection={
+                                                    '_id': 0,
+                                                    'level': 1,
+                                                    'white_candy': 1,
+                                                    'gold_candy': 1,
+                                                })
     zerpmon_base = await db['MoveSets2'].find_one({'nft_id': nft_id})
     zerpmon_base['level'] = zerpmon['level']
     zerpmon_base['white_candy'] = zerpmon.get('white_candy', 0)
@@ -2998,3 +3044,44 @@ async def check_banned(user_addr, is_id=False):
     q = {'discord_id': user_addr, 'punished': True} if is_id else {'address': user_addr, 'punished': True}
     user = await users_collection.find_one(q, projection={'_id': 0, 'address': 1})
     return user is not None
+
+
+async def change_stream_listener():
+    inner_client = AsyncIOMotorClient(config.MONGO_URL)
+    _db = inner_client['Zerpmon']
+    while True:
+        resume_token = None
+        try:
+            pipeline = [{'$match': {'operationType': 'insert'}}]
+            async with _db['loan-payments'].watch(pipeline) as stream:
+                stream: AsyncIOMotorChangeStream = stream
+                async for insert_change in stream:
+                    try:
+                        print(insert_change)
+                        doc = insert_change['fullDocument']
+                        addr = doc['payerAddress']
+                        data = {
+                            'uid': str(doc['_id']),
+                            'XRP': {'amount': round(doc['XRPAmount'], 2), 'paid': True if doc['XRPAmount'] == 0 else False},
+                            'ZRP': {'amount': round(doc['ZRPAmount'], 2), 'paid': False},
+                            'checked': False,
+                        }
+                        config_extra.loan_payments[addr] = data
+                        print(config_extra.loan_payments)
+                        resume_token = stream.resume_token
+                    except:
+                        print(traceback.format_exc())
+        except:
+            print(traceback.format_exc())
+            if resume_token is None:
+                print('...')
+
+
+async def get_world_boss_reward_message():
+    stats_col = db['stats_log']
+    res = stats_col.find_one_and_update({'name': 'world_boss_reward_log'},
+                                        {'$set': {'name': 'world_boss_reward_log_old'}})
+    if res:
+        return True, res
+    else:
+        return False, res
