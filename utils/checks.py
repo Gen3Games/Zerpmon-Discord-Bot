@@ -3,11 +3,12 @@ import os
 import random
 import time
 import csv
+
 import nextcord
 import datetime
 import pytz
 import requests
-
+import concurrent.futures
 import config
 import db_query
 from db_query import get_owned
@@ -63,6 +64,11 @@ def get_days_left(ts):
 def get_type_emoji(attrs, emoji=True):
     emj_list = [(config.TYPE_MAPPING[i['value']] if emoji else i['value']) for i in attrs if
                 i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
+    return ', '.join(emj_list)
+
+
+def get_type_emoji_without_attr(types, emoji=True):
+    emj_list = [config.TYPE_MAPPING[i.title()] for i in types]
     return ', '.join(emj_list)
 
 
@@ -467,14 +473,14 @@ async def get_show_zerp_embed(zerpmon, interaction, omni=False):
         value=f"**{xp}/{w_candy[0]}**", inline=True)
 
     for i, move in enumerate([i for i in zerpmon['moves'] if i['name'] != ""]):
-        notes = f"{(await db_query.get_move(move['name']))['notes']}"
+        notes = f"{(await db_query.get_move(move['name'], stars=move['stars']))['notes']}" if move['color'] == 'purple' else ''
 
         embed.add_field(
             name=f"**{config.COLOR_MAPPING[move['color']]} Move:**",
             value=f"> **{move['name']}** \n" + \
                   (f"> Status Affect: `{notes}`\n" if notes != '' else "") + \
                   (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") + \
-                  (f"> Stars: {(len(move['stars']) if type(move['stars']) is str else move['stars']) * '★'}\n" if 'stars' in move else "") + \
+                  (f"> Stars: {move['stars'] * '★'}\n" if 'stars' in move else "") + \
                   (
                       f"> Type: {'🌟' if omni else config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") + \
                   f"> Percentage: {move['percent']}%\n",
@@ -551,6 +557,46 @@ def populate_lvl_up_embed(zerp_doc, lvl_obj, is_lvl_up, reward_list):
     return embed
 
 
+def populate_trainer_lvl_up_embed(trainer_doc, trainerXP: db_query.AddXPTrainerResult, xp_gain):
+    embed = CustomEmbed(title=f"Level Up ⬆{trainerXP.new_level}" if trainerXP.is_level_up else f"\u200B",
+                        color=0xff5252,
+                        )
+    embed.add_field(name="XP gain:",
+                    value=f"**{xp_gain}**"
+                    ,
+                    inline=False)
+    my_button = f"https://xrp.cafe/nft/{trainer_doc.get('token_id')}"
+    nft_type = ', '.join([i for i in trainer_doc['type']])
+    embed.add_field(
+        name=f"**{trainer_doc['name']}** ({nft_type})",
+        value=f"> Level: **{trainerXP.new_level}/30**\n"
+              f"> XP: **{trainerXP.new_xp}/{trainerXP.xp_left + trainerXP.new_xp}**\n"
+              f'> [view]({my_button})', inline=False)
+    if trainerXP.is_level_up:
+        embed.add_field(name="Level Up Rewards: ",
+                        value=f"\u200B"
+                        ,
+                        inline=False)
+        if 'rp' in trainerXP.rewards:
+            embed.add_field(name="Revive All Potions: ",
+                            value=f"**{trainerXP.rewards['rp']}**"
+                                  + '\t🍶',
+                            inline=False)
+            embed.add_field(name="Mission Refill Potions: ",
+                            value=f"**{trainerXP.rewards['mp']}**"
+                                  + '\t🍶',
+                            inline=False)
+        if 'cf' in trainerXP.rewards:
+            embed.add_field(name="Candy Fragment: ",
+                            value=f"**{trainerXP.rewards['cf']}**"
+                                  + '\t🧩',
+                            inline=False)
+    embed.set_image(
+        url=trainer_doc['image'] if "https:/" in trainer_doc['image'] else 'https://cloudflare-ipfs.com/ipfs/' + trainer_doc[
+            'image'].replace("ipfs://", ""))
+    return embed
+
+
 async def verify_gym_tower(i: nextcord.Interaction, temp_user_d):
     battle_d = temp_user_d['battle_deck']['0']
     equipment_d = temp_user_d['equipment_decks']['0']
@@ -593,14 +639,28 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
     bg_img = bg_img.resize((2560, 1600))  # desired size
 
     # Load the three images
+    print(url1, url2)
     await download_image(url1, path1)
     await download_image(url2, path3)
 
     img1 = Image.open(path1)
+    if img1.mode != 'RGBA':
+        print('converting to rgba')
+        img1 = img1.convert("RGBA")
+        # Save rgba image for convenience
+        try:
+            img1.save(path1)
+        except:
+            print('failed to convert to rgba')
     if not ascend:
         img2 = Image.open(path2)
+        try:
+            img1.save(path1)
+        except:
+            print('failed to convert to rgba')
     img3 = Image.open(path3)
-
+    if img3.mode != 'RGBA':
+        img3 = img3.convert("RGBA")
     img1 = img1.resize((1200, 1200))
     img3 = img3.resize((1200, 1200))
     if eq1:
@@ -625,7 +685,7 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
 
     # Paste the background image onto the new image
     combined_img.paste(bg_img, (0, 0))
-
+    print('modes', combined_img.mode, img1.mode)
     # Paste the three images onto the new image
     combined_img.paste(img1, (50, 100), mask=img1)  # adjust the coordinates as needed
     if not ascend:
@@ -636,9 +696,9 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
         font = ImageFont.truetype(r'./static/Lato-Black.ttf', 80)
         draw = ImageDraw.Draw(combined_img)
         print('addingfont')
-        draw.text((550, 1250), f"{lvls[0]}", font=font, fill=(255, 255, 255))
+        draw.text((560, 1250), f"{lvls[0]}", font=font, fill=(255, 255, 255))
 
-        draw.text((1850, 1250), f"{lvls[1]}", font=font, fill=(255, 255, 255))
+        draw.text((1860, 1250), f"{lvls[1]}", font=font, fill=(255, 255, 255))
     # Resize the combined image to be 50% of its original size
     new_width = int(combined_img.width * 0.5)
     new_height = int(combined_img.height * 0.5)
@@ -648,12 +708,19 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
     smaller_img.save(f'{_id}.png', quality=50)
 
 
+def fetch_url(url,):
+    response = requests.get(url)
+    return response.content
+
+
 async def download_image(url, path_to_file):
     if os.path.isfile(path_to_file):
         # print(f"{path_to_file} already exists, skipping download.")
         pass
     else:
-        response = requests.get(url)
-        with open(path_to_file, 'wb') as f:
-            f.write(response.content)
-        print(f"Downloaded {path_to_file}.")
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            content = await loop.run_in_executor(pool, fetch_url, url)
+            with open(path_to_file, 'wb') as f:
+                f.write(content)
+            print(f"Downloaded {path_to_file}.")

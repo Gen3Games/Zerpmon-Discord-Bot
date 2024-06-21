@@ -979,7 +979,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         if config.battle_results[uid]:
             result = config.battle_results[uid]
             break
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.3)
     del config.battle_results[uid]
     if result:
         # DB state changes comes first
@@ -989,6 +989,8 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         loser = 2 if result['winner'] == 'A' else 1
         total_gp = 0 if "gym" not in _data1 else _data1["gym"].get("gp", 0) + stage
         zrp_reward = 0
+        trainer_rewards: db_query.AddXPTrainerResult | None = None
+        xp_gain = 10 + (stage - 1) * 5
         if loser == 1:
             await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1,
                                         0)
@@ -999,6 +1001,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
             await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=True)
         elif loser == 2:
             # Add GP to user
+            trainer_rewards = await db_query.add_xp_trainer(tc1['token_id'], _data1['address'], xp_gain)
             zrp_reward = await db_query.add_gp_queue(_data1['address'],
                                                      _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1, stage)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
@@ -1036,7 +1039,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                     msg += i + '\n'
                 await interaction.send(content=msg, ephemeral=True)
                 log_idx += 1
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.4)
                 if round_messages['KOd']:
                     if round_messages['roundResult'] == 'zerpmonAWin':
                         idx2 += 1
@@ -1049,9 +1052,10 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
             await interaction.send(
                 f"Sorry you **LOST** 💀 \nYou can try battling **{leader_name}** again tomorrow",
                 ephemeral=True)
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
             return 2
         elif loser == 2:
+            embeds = []
             embed = CustomEmbed(title="Match Result", colour=0xa4fbe3,
                                 description=f"{user_mention} vs {leader_name} {config.TYPE_MAPPING[gym_type]}")
 
@@ -1068,8 +1072,11 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
             # response, qty, reward = await xrpl_ws.reward_gym(_data1['discord_id'], stage)
             # if reward == "ZRP":
             embed.add_field(name='ZRP Won', value=zrp_reward, inline=True)
+            embeds.append(embed)
+            if trainer_rewards:
+                embeds.append(checks.populate_trainer_lvl_up_embed(tc1, trainer_rewards, xp_gain))
             await msg_hook.send(
-                f"**WINNER**   👑**{user_mention}**👑", embed=embed, ephemeral=True)
+                f"**WINNER**   👑**{user_mention}**👑", embeds=embeds, ephemeral=True)
             await asyncio.sleep(1)
             # if not response:
             #
@@ -1258,7 +1265,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         if config.battle_results[uid]:
             result = config.battle_results[uid]
             break
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.3)
     del config.battle_results[uid]
 
     if result:
@@ -1303,7 +1310,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
                     msg += i + '\n'
                 await send_message(msg_hook, hidden, content=msg, embeds=[], files=[], )
                 log_idx += 1
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.4)
                 if round_messages['KOd']:
                     if round_messages['roundResult'] == 'zerpmonAWin':
                         idx2 += 1
@@ -1431,7 +1438,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
         if config.battle_results[uid]:
             result = config.battle_results[uid]
             break
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.3)
     del config.battle_results[uid]
     if result:
         z1_obj, z2_obj = result['playerAZerpmons'][0], result['playerBZerpmons'][0]
@@ -1454,7 +1461,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             for i in msgs:
                 msg += i + '\n'
             await interaction.send(content=msg, ephemeral=True)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.4)
         battle_log = {'teamA': {'trainer': None, 'zerpmons': result['roundStatsA']},
                       'teamB': {'trainer': None, 'zerpmons': result['roundStatsB']}, 'battle_type': 'Mission Battle'}
         loser = 2 if result['winner'] == 'A' else 1
@@ -1464,7 +1471,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
         if not lure_active:
             await db_query.save_zerpmon_winrate([*result['roundStatsA']])
         if loser == 2:
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
             await interaction.send(
                 f"**WINNER**   👑**{user_mention}**👑",
                 ephemeral=True)
@@ -1626,7 +1633,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
         if config.battle_results[uid]:
             result = config.battle_results[uid]
             break
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.3)
     del config.battle_results[uid]
     if result:
         idx1, idx2, log_idx = 0, 0, 0
@@ -1660,7 +1667,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                     msg += i + '\n'
                 await interaction.send(content=msg, ephemeral=True)
                 log_idx += 1
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.4)
                 if round_messages['KOd']:
                     if round_messages['roundResult'] == 'zerpmonAWin':
                         idx2 += 1
@@ -1775,6 +1782,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             # await db_query.reset_weekly_dmg()
             config.boss_active = False
             return 1
+    return 0
 
 
 async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
@@ -1864,7 +1872,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
         if config.battle_results[uid]:
             result = config.battle_results[uid]
             break
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.3)
     del config.battle_results[uid]
     if result:
         idx1, idx2, log_idx = 0, 0, 0
@@ -1896,7 +1904,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                     msg += i + '\n'
                 await interaction.send(content=msg, ephemeral=True)
                 log_idx += 1
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.4)
                 if round_messages['KOd']:
                     if round_messages['roundResult'] == 'zerpmonAWin':
                         idx2 += 1
