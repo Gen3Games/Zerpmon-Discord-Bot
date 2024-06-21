@@ -69,6 +69,7 @@ async def save_user(user):
 
 
 async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial):
+    user_obj = await get_owned(discord_id)
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
     battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {},
                                                                              '4': {}}
@@ -115,18 +116,22 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial):
                 new_gym_deck[k][serial] = v[serial]
             else:
                 kickedCards['gym'].add(user_obj['zerpmons'].get(v[serial], {}).get('name'))
-    if br_deck.get('0'):
-        b_deck = br_deck.get('0')
-        br_t, br_z, br_e = b_deck.get('trainer'), b_deck.get('zerpmon'), b_deck.get('equipment')
-        if br_t not in t_serial:
-            b_deck['trainer'] = None
-            kickedCards['br'].add(user_obj['trainer_cards'].get(br_t, {}).get('name'))
-        if br_e not in e_serial:
-            b_deck['equipment'] = None
-            kickedCards['br'].add(user_obj['equipments'].get(br_e, {}).get('name'))
-        if br_z not in serials:
-            b_deck['zerpmon'] = None
-            kickedCards['br'].add(user_obj['zerpmons'].get(br_z, {}).get('name'))
+    for i in range(20):
+        sr = str(i)
+        if br_deck.get(sr):
+            b_deck = br_deck.get(sr)
+            br_t, br_z, br_e = b_deck.get('trainer'), b_deck.get('zerpmon'), b_deck.get('equipment')
+            if br_t not in t_serial:
+                b_deck['trainer'] = None
+                kickedCards['br'].add(user_obj['trainer_cards'].get(br_t, {}).get('name'))
+            if br_e not in e_serial:
+                b_deck['equipment'] = None
+                kickedCards['br'].add(user_obj['equipments'].get(br_e, {}).get('name'))
+            if br_z not in serials:
+                b_deck['zerpmon'] = None
+                kickedCards['br'].add(user_obj['zerpmons'].get(br_z, {}).get('name'))
+        else:
+            break
 
     logging.error(f'Serials {serials} \nnew deck: {new_battle_deck}')
     # Send push notification here
@@ -207,6 +212,14 @@ async def save_new_zerpmon(zerpmon):
     else:
         print(f"Updated Zerpmon with name {zerpmon['name']}")
         return f"Successfully updated Zerpmon {zerpmon['name']}"
+
+
+async def get_all_users_cursor():
+    users_collection = db['users']
+
+    result = users_collection.find()
+
+    return result
 
 
 async def get_all_users():
@@ -692,11 +705,14 @@ async def add_revive_potion(address, inc_by, purchased=False, amount=0, db_sep=N
     if purchased:
         query['xrp_spent'] = amount
         query['revive_purchase'] = inc_by
-    await users_collection.update_one({'address': str(address)},
-                                      {'$inc': query},
-                                      upsert=True)
+    filter_ = {'address': address}
+    if amount < 0:
+        filter_['revive_potion'] = {'gte': amount}
+    res = await users_collection.update_one(filter_,
+                                            {'$inc': query},
+                                            upsert=True)
 
-    return True
+    return res.modified_count != 0
 
 
 async def add_mission_potion(address, inc_by, purchased=False, amount=0, db_sep=None):
@@ -706,11 +722,14 @@ async def add_mission_potion(address, inc_by, purchased=False, amount=0, db_sep=
     if purchased:
         query['xrp_spent'] = amount
         query['mission_purchase'] = inc_by
-    res = await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': address}
+    if amount < 0:
+        filter_['mission_potion'] = {'gte': amount}
+    res = await users_collection.update_one(filter_,
                                             {'$inc': query},
                                             upsert=True)
     # print(r)
-    return res.acknowledged
+    return res.modified_count != 0
 
 
 async def add_gym_refill_potion(address, inc_by, purchased=False, amount=0):
@@ -985,12 +1004,12 @@ async def revive_zerpmon(user_id, old):
 
     for k, z in old['zerpmons'].items():
         old['zerpmons'][k]['active_t'] = 0
-
-    r = await users_collection.update_one({'discord_id': str(user_id)},
-                                          {'$set': {'zerpmons': old['zerpmons']}}, )
-    await add_revive_potion(addr, -1)
-
-    return r.acknowledged
+    success = await add_revive_potion(addr, -1)
+    if success:
+        r = await users_collection.update_one({'discord_id': str(user_id)},
+                                              {'$set': {'zerpmons': old['zerpmons']}}, )
+        return r.acknowledged
+    return False
 
 
 async def mission_refill(user_id, addr):
@@ -1003,11 +1022,12 @@ async def mission_refill(user_id, addr):
             'reset_t': -1
         }
     }
-
-    r = await users_collection.update_one({'discord_id': str(user_id)},
-                                          {'$set': q}, )
-    await add_mission_potion(addr, -1)
-    return r.acknowledged
+    success = await add_mission_potion(addr, -1)
+    if success:
+        r = await users_collection.update_one({'discord_id': str(user_id)},
+                                              {'$set': q}, )
+        return r.acknowledged
+    return False
 
 
 async def gym_refill(user_id):
@@ -1071,8 +1091,8 @@ async def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=No
         cur_lvl = await level_collection.find_one({'level': level}) if (level < 30 or ascended) else None
         next_lvl = await level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
 
-        if next_lvl and xp + xp_add >= cur_lvl['xp_required']:
-            left_xp = (xp + xp_add) - cur_lvl['xp_required']
+        if next_lvl and xp + xp_add >= next_lvl['xp_required']:
+            left_xp = (xp + xp_add) - next_lvl['xp_required']
             if (next_lvl['level'] == 30 and not ascended) or (next_lvl['level'] == 60 and ascended):
                 left_xp = 0
             query = {'$set': {'level': next_lvl['level'], 'xp': left_xp}}
@@ -1129,6 +1149,93 @@ async def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=No
     return True, lvl_up, rewards, xp
 
 
+class AddXPTrainerResult:
+    def __init__(self, is_level_up: bool, rewards: dict | None, new_level: int, xp_left: int, new_xp: int):
+        self.is_level_up = is_level_up
+        self.rewards = rewards
+        self.new_level = new_level
+        self.xp_left = xp_left
+        self.new_xp = new_xp
+
+
+async def add_xp_trainer(nft_id: str, address: str, xp: int):
+    trainer_col = db['trainers']
+    level_col = db['levels_trainer']
+
+    trainer = await trainer_col.find_one({'nft_id': nft_id, 'isCollab': {'$exists': False}})
+    max_level = 30
+
+    if not trainer or trainer.get('level') == max_level:
+        return None
+
+    cur_level = trainer.get('trainer_level', 0)
+
+    levels = await level_col.find({}, projection={'_id': 0}).sort('level', 1).to_list(None)
+    max_level_obj = levels[max_level - 1]
+    cur_level_obj = levels[cur_level - 1] if cur_level > 0 else None
+    final_xp = (cur_level_obj['total_xp'] if cur_level_obj else 0) + trainer.get('trainer_xp', 0) + xp
+
+    print(max_level_obj['total_xp'], cur_level_obj, final_xp, trainer.get('trainer_xp', 0), xp)
+    new_xp = 0
+    if final_xp > max_level_obj['total_xp']:
+        next_level_obj = max_level_obj
+    else:
+        next_level_obj = next((val for idx, val in enumerate(levels) if
+                               val['total_xp'] <= final_xp < levels[idx + 1]['total_xp']), None)
+        new_xp = final_xp - next_level_obj['total_xp']
+
+    if not next_level_obj:
+        raise Exception(f'No new level (args: {nft_id} {address} {xp})')
+
+    is_level_up = next_level_obj['level'] > cur_level
+    if is_level_up:
+        trainer['level'] = next_level_obj['level']
+        rewards = {}
+        r_potion = 0
+        m_potion = 0
+        candy_frags = 0
+        lvl_up = True
+        for idx in range(cur_level, next_level_obj['level']):
+            next_lvl = levels[idx]
+            r_potion += next_lvl['revive_potion_reward']
+            m_potion += next_lvl['mission_potion_reward']
+            candy_frags += next_lvl.get('candy_frags', 0)
+        if candy_frags > 0:
+            await add_candy_fragment(address)
+            rewards['cf'] = 1
+        if r_potion > 0:
+            await add_revive_potion(address, r_potion)
+            rewards['rp'] = r_potion
+        if m_potion > 0:
+            await add_mission_potion(address, m_potion)
+            rewards['mp'] = m_potion
+        await trainer_col.update_one(
+            {'nft_id': nft_id},
+            {
+                '$set': {
+                    'trainer_xp': new_xp,
+                    'trainer_level': next_level_obj['level'],
+                },
+            },
+        )
+        return AddXPTrainerResult(
+            is_level_up=is_level_up,
+            rewards=rewards,
+            new_level=next_level_obj['level'],
+            xp_left=levels[min(next_level_obj['level'], 30 - 1)]['xp_required'] - new_xp,
+            new_xp=new_xp
+        )
+    else:
+        await trainer_col.update_one({'nft_id': nft_id}, {'$set': {'trainer_xp': new_xp}})
+        return AddXPTrainerResult(
+            is_level_up=is_level_up,
+            rewards=None,
+            new_level=cur_level,
+            xp_left=levels[min(next_level_obj['level'], 30 - 1)]['xp_required'] - new_xp,
+            new_xp=new_xp
+        )
+
+
 async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_xp=False, ret_doc=False) -> tuple:
     zerpmon_collection = db['MoveSets']
 
@@ -1141,7 +1248,7 @@ async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_x
     if level > 60:
         level = 60
     # last_lvl = await level_collection.find_one({'level': (level - 1) if level > 1 else 1})
-    next_lvl = await level_collection.find_one({'level': level})
+    next_lvl = await level_collection.find_one({'level': level + 1})
     if 'level' in old and 'xp' in old:
 
         vals = old['level'], old['xp'], next_lvl['xp_required'] if not get_candies else (
@@ -1544,13 +1651,13 @@ async def apply_lvl_candy(user_id, zerpmon_name):
     level = old.get('level', 0)
     ascended = old.get('ascended', False)
 
-    next_lvl = await level_collection.find_one({'level': level}) if (level < 30 or ascended) else None
+    next_lvl = await level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
     user_address = user['address']
     if next_lvl:
-        await add_xp(zerpmon_name, user_address, next_lvl['xp_required'], ascended=ascended, zerp_obj=old)
-
-        await add_lvl_candy(user_address, -1)
-        return True
+        success = await add_lvl_candy(user_address, -1)
+        if success:
+            await add_xp(zerpmon_name, user_address, next_lvl['xp_required'], ascended=ascended, zerp_obj=old)
+            return True
     return False
 
 
@@ -1610,11 +1717,10 @@ async def add_lvl_candy(address, inc_by, purchased=False, amount=0):
     query = {'lvl_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    await users_collection.update_one({'address': str(address)},
-                                      {'$inc': query},
-                                      upsert=True)
+    r = await users_collection.update_one({'address': str(address), 'lvl_candy': {'$gte': abs(inc_by)}},
+                                          {'$inc': query})
 
-    return True
+    return r.modified_count != 0
 
 
 async def add_overcharge_candy(address, inc_by, purchased=False, amount=0):
@@ -2534,7 +2640,7 @@ async def ascend_zerpmon(addr, zerp_name):
 
 
 async def get_higher_lvls(lvl=1):
-    res = await level_collection.find({'level': {'$gte': lvl}}).sort('level', pymongo.ASCENDING).to_list(None)
+    res = await level_collection.find({'level': {'$gt': lvl}}).sort('level', pymongo.ASCENDING).to_list(None)
 
     return res
 
@@ -2621,7 +2727,7 @@ async def get_random_trainers(limit=5):
     collection = db['trainers']
 
     random_documents = await collection.aggregate([
-        {'$match': {}},
+        {'$match': {'legend_gryll': {'$exists': False}}},
         {'$sample': {'size': limit}},
         {'$project': {'_id': 0, 'image': 1, 'name': 1, 'type': 1, 'nft_id': 1, 'trainer number': 1, 'affinity': 1}}
     ]).to_list(None)
@@ -3119,14 +3225,14 @@ async def change_stream_listener():
 async def get_world_boss_reward_message():
     stats_col = db['stats_log']
     res = await stats_col.find_one_and_update({'name': 'world_boss_reward_log'},
-                                        {'$set': {'name': 'world_boss_reward_log_old'}})
+                                              {'$set': {'name': 'world_boss_reward_log_old'}})
     if res:
         return True, res
     else:
         return False, res
 
 
-async def send_user_notification(content_list, addr, _id,):
+async def send_user_notification(content_list, addr, _id, ):
     notification_list = []
     for content in content_list:
         user_notification = {
@@ -3150,5 +3256,3 @@ async def send_user_notification(content_list, addr, _id,):
     add_to_in_app_user_notifications_promise = db['user-notifications'].insert_many(notification_list)
 
     await asyncio.gather(add_to_user_notification_queue_promise, add_to_in_app_user_notifications_promise)
-
-
