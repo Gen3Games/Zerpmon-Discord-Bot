@@ -158,19 +158,25 @@ async def send_reset_message(client: nextcord.Client):
                     elif loan['expires_at'] <= time.time() and loan['accepted_by']['id'] is None:
                         await db_query.remove_listed_loan(loan['token_id'], loan['listed_by']['id'], is_id=True)
                     else:
+                        if loan['amount_pending'] < 0:
+                            continue
                         if loan['xrp']:
                             await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'XRP',
                                                                  loan['per_day_cost'],
-                                                                 memo=f'{loan["zerpmon_name"]} loan payment')
+                                                                 memo=f'{loan["zerpmon_name"]} loan payment',
+                                                                 ts=next_day_ts)
                             # await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
                         else:
                             await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'ZRP',
                                                                  loan['per_day_cost'],
-                                                                 memo=f'{loan["zerpmon_name"]} loan payment')
+                                                                 memo=f'{loan["zerpmon_name"]} loan payment',
+                                                                 ts=next_day_ts)
                             # await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
                         await db_query.decrease_loan_pending(loan['token_id'], loan['per_day_cost'])
                 logging.error(f"offer_expired: {offer_expired}")
                 if len(offer_expired) > 0:
+                    if len(offer_expired) > 20:
+                        offer_expired = offer_expired[:20]
                     expiry_msg = f'{", ".join(offer_expired)}Please use: `/loan relist` command to reactivate your Loan listing'
                     await main_channel.send(
                         content=f'**📢 Loan Announcement (Sell offer not active) 📢**\n{expiry_msg}', )
@@ -253,21 +259,23 @@ async def send_reset_message(client: nextcord.Client):
                                             f'> \n') if len(battle_deck) > 0 else '> Battle Zerpmons:\n'
                                 for index, v in shorted_deck.items():
                                     if index == "trainer":
-                                        attrs = user['trainer_cards'][v]['attributes']
-                                        emj = '🧙'
-                                        for attr in attrs:
-                                            if 'Trainer Number' in attr['trait_type']:
-                                                emj = '⭐'
-                                                break
-                                            if attr['value'] == 'Legendary':
-                                                emj = '🌟'
-                                                break
-                                        zerp_msg = f'> Main Trainer:\n' \
-                                                   f'> \n' \
-                                                   f'> {emj} {user["trainer_cards"][v]["name"]} {emj}\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
-                                                   f'> \n' + zerp_msg
+                                        if v in user["trainer_cards"]:
+                                            attrs = user['trainer_cards'][v]['attributes']
+                                            emj = '🧙'
+                                            for attr in attrs:
+                                                if 'Trainer Number' in attr['trait_type']:
+                                                    emj = '⭐'
+                                                    break
+                                                if attr['value'] == 'Legendary':
+                                                    emj = '🌟'
+                                                    break
+                                            zerp_msg = f'> Main Trainer:\n' \
+                                                       f'> \n' \
+                                                       f'> {emj} {user["trainer_cards"][v]["name"]} {emj}\t[view](https://xrp.cafe/nft/{user["trainer_cards"][v]["token_id"]})\n' \
+                                                       f'> \n' + zerp_msg
                                     else:
-                                        zerp_msg += f'> ⭐ {user["zerpmons"][v]["name"]} ⭐\t[view](https://xrp.cafe/nft/{user["zerpmons"][v]["token_id"]})\n'
+                                        if v in user["zerpmons"]:
+                                            zerp_msg += f'> ⭐ {user["zerpmons"][v]["name"]} ⭐\t[view](https://xrp.cafe/nft/{user["zerpmons"][v]["token_id"]})\n'
                                 msg = '#{0:<4} {1:<25}'.format(user['ranked'], user['username'])
 
                                 embed.add_field(name=f'{msg}', value=f"{zerp_msg}", inline=True)
@@ -341,29 +349,38 @@ async def send_reset_message(client: nextcord.Client):
                             else:
                                 r_msg = await channel.send(embed=embed)
                                 config.GYM_MSG_ID = r_msg.id
-
-                    channel = [i for i in guild.channels if 'Restore' in i.name]
-                    h, m, s = await get_time_left_utc()
-                    # print(channel, time.time()//1)
-                    if len(channel) > 0:
-                        channel = channel[0]
-                        await channel.edit(name=f"⏰ Restore: {str(h).zfill(2)}:{str(m).zfill(2)}")
-
-                    channel = [i for i in guild.channels if 'Mission XRP' in i.name]
-                    bal = await get_balance(config.REWARDS_ADDR)
-                    amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
-                    # print(channel, time.time()//1)
-                    if len(channel) > 0:
-                        channel = channel[0]
-                        await channel.edit(name=f"💰 Mission XRP: {amount_to_send:.4f}")
-                        # await asyncio.sleep(5)
-                    channel = [i for i in guild.channels if 'Season Ends' in i.name]
-                    if len(channel) > 0:
-                        channel = channel[0]
-                        await channel.edit(name=f"Season Ends in {get_days_left(config.SEASON_END_TS)} days")
-                        # await asyncio.sleep(5)
+                except asyncio.exceptions.CancelledError:
+                    print(f"Task-{task_id} was cancelled")
+                    return
                 except Exception as e:
-                    logging.error(f'ERROR: {traceback.format_exc()}')
+                    logging.error(f'ERROR during message updates: {traceback.format_exc()}')
+                try:
+                    if guild.id in config.MAIN_GUILD:
+                        channel = [i for i in guild.channels if 'Restore' in i.name]
+                        h, m, s = await get_time_left_utc()
+                        # print(channel, time.time()//1)
+                        if len(channel) > 0:
+                            channel = channel[0]
+                            await channel.edit(name=f"⏰ Restore: {str(h).zfill(2)}:{str(m).zfill(2)}")
+
+                        channel = [i for i in guild.channels if 'Mission XRP' in i.name]
+                        bal = await get_balance(config.REWARDS_ADDR)
+                        amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
+                        # print(channel, time.time()//1)
+                        if len(channel) > 0:
+                            channel = channel[0]
+                            await channel.edit(name=f"💰 Mission XRP: {amount_to_send:.4f}")
+                            # await asyncio.sleep(5)
+                        channel = [i for i in guild.channels if 'Season Ends' in i.name]
+                        if len(channel) > 0:
+                            channel = channel[0]
+                            await channel.edit(name=f"Season Ends in {get_days_left(config.SEASON_END_TS)} days")
+                            # await asyncio.sleep(5)
+                except asyncio.exceptions.CancelledError:
+                    print(f"Task-{task_id} was cancelled")
+                    return
+                except:
+                    logging.error(f'ERROR during channel updates: {traceback.format_exc()}')
             try:
                 boss_defeated, boss_message = await db_query.get_world_boss_reward_message()
                 if boss_defeated:
@@ -386,6 +403,9 @@ async def send_reset_message(client: nextcord.Client):
                     sent_z = await send_zrp(config.ISSUER['ZRP'], loan_bal, 'loan')
                     if sent_z:
                         await db_query.inc_loan_burn(-loan_bal)
+            except asyncio.exceptions.CancelledError:
+                print(f"Task-{task_id} was cancelled")
+                return
             except Exception as e:
                 logging.error(f'ERROR while burning ZRP: {traceback.format_exc()}')
             next_run = time.time() + 300

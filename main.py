@@ -121,8 +121,9 @@ new_loop = asyncio.new_event_loop()
 t = threading.Thread(target=start_loop, args=(new_loop,))
 t.start()
 task1, task2, task3 = None, None, None
-
+changeStreamTask = None
 new_loop.call_soon_threadsafe(new_loop.create_task, xrpl_ws.main())
+new_loop.create_task(db_query.change_stream_listener())
 
 
 def check_and_restart(task_handle: asyncio.Task, fn, arg):
@@ -139,8 +140,9 @@ async def setup_tasks():
     task1 = check_and_restart(task1, nft_holding_updater.update_nft_holdings, client)
     if task2 is not None and config_extra.reset_last_run < time.time() - 100:
         logging.error(f'Task2 is stuck, restarting...')
-        task2.cancel()
-        task2 = None
+        cancelled = task2.cancel()
+        if cancelled:
+            task2 = None
     task2 = check_and_restart(task2, reset_alert.send_reset_message, client)
     task3 = check_and_restart(task3, checks.get_battle_results, config.battle_results)
 
@@ -556,7 +558,7 @@ async def mission(interaction: nextcord.Interaction):
             )
             return
 
-    await callback.button_callback(user_id, interaction, )
+    await callback.button_callback(user_owned_nfts, interaction, )
 
 
 @client.slash_command(name="revive",
@@ -3710,11 +3712,11 @@ async def view_gyms(interaction: nextcord.Interaction):
         zerps = sorted(zerps, key=lambda i: i['name'])
         embed.add_field(
             name=f'__{emj} {gym[0]} Gym {emj} (Stage {gym[1]})__{f" - Reset <t:{gym[2]}:R>" if gym[2] > time.time() else ""}',
-            value=f'> {zerps[0]["name"]}\t({checks.get_type_emoji(zerps[0]["attributes"])})\n'
-                  f'> {zerps[1]["name"]}\t({checks.get_type_emoji(zerps[1]["attributes"])})\n'
-                  f'> {zerps[2]["name"]}\t({checks.get_type_emoji(zerps[2]["attributes"])})\n'
-                  f'> {zerps[3]["name"]}\t({checks.get_type_emoji(zerps[3]["attributes"])})\n'
-                  f'> {zerps[4]["name"]}\t({checks.get_type_emoji(zerps[4]["attributes"])})\n',
+            value=f'> {zerps[0]["name"]}\t({checks.get_type_emoji_without_attr(zerps[0]["zerpmonType"])})\n'
+                  f'> {zerps[1]["name"]}\t({checks.get_type_emoji_without_attr(zerps[1]["zerpmonType"])})\n'
+                  f'> {zerps[2]["name"]}\t({checks.get_type_emoji_without_attr(zerps[2]["zerpmonType"])})\n'
+                  f'> {zerps[3]["name"]}\t({checks.get_type_emoji_without_attr(zerps[3]["zerpmonType"])})\n'
+                  f'> {zerps[4]["name"]}\t({checks.get_type_emoji_without_attr(zerps[4]["zerpmonType"])})\n',
             inline=False)
     h, m, s = await checks.get_time_left_utc(1)
     main_ts = await db_query.get_gym_reset()
@@ -4082,6 +4084,7 @@ async def loan_cancel(interaction: nextcord.Interaction,
 @commands.cooldown(rate=1, per=120, type=commands.BucketType.user)
 async def boss_battle(interaction: nextcord.Interaction):
     execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
     if await verify_cooldown('boss', interaction, 120):
         user = interaction.user
 
@@ -4096,6 +4099,7 @@ async def boss_battle(interaction: nextcord.Interaction):
                       description="Shows player’s total damage done to the boss, and remaining World Boss health")
 async def boss_stats(interaction: nextcord.Interaction):
     execute_before_command(interaction)
+    await interaction.response.defer(ephemeral=True)
     user = interaction.user
     user_d = await db_query.get_owned(str(user.id))
     boss_info = await db_query.get_boss_stats()
@@ -4654,8 +4658,8 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.Member):
     r_msg_id = reaction.message.id
     if reaction.emoji == "⚔":
         for _id, battle_instance in config.battle_dict.copy().items():
-            if user.id == battle_instance["challenged"] and _id == reaction.message.id and battle_instance[
-                "type"] in ['friendly', 'ranked']:
+            if user.id == battle_instance["challenged"] and _id == reaction.message.id and \
+                    battle_instance["type"] in ['friendly', 'ranked'] and not config.battle_dict[_id]['active']:
                 # Battle accepted
                 try:
                     config.battle_dict[_id]['active'] = True
