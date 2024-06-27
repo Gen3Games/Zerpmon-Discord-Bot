@@ -19,7 +19,7 @@ async def gen_signIn_url():
         "txjson": {"TransactionType": "SignIn"},
         "options": {
             "pathfinding_fallback": False,
-            "force_network": "N/A"
+            # "force_network": "N/A"
         }
     }
 
@@ -78,7 +78,7 @@ async def gen_txn_url(to_address, from_address, amount):
         "txjson": tjson,
         "options": {
             "pathfinding_fallback": False,
-            "force_network": "N/A"
+            # "force_network": "N/A"
         }
     }
 
@@ -111,7 +111,7 @@ async def gen_nft_txn_url(from_address, nft_id, destination = config.WAGER_ADDR)
         "txjson": tjson,
         "options": {
             "pathfinding_fallback": False,
-            "force_network": "N/A"
+            # "force_network": "N/A"
         }
     }
 
@@ -141,7 +141,7 @@ async def gen_nft_accept_txn(from_address, offer, nft_id):
         "txjson": tjson,
         "options": {
             "pathfinding_fallback": False,
-            "force_network": "N/A"
+            # "force_network": "N/A"
         }
     }
 
@@ -177,7 +177,7 @@ async def gen_zrp_txn_url(to_address, from_address, amount):
         "txjson": tjson,
         "options": {
             "pathfinding_fallback": False,
-            "force_network": "N/A"
+            # "force_network": "N/A"
         }
     }
     print(amount)
