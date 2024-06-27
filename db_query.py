@@ -68,7 +68,10 @@ async def save_user(user):
         print(f"Updated user")
 
 
-async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial):
+async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, remove_serials):
+    if len(remove_serials['zerpmons']) + len(remove_serials['trainer_cards']) + len(remove_serials['equipments']) == 0:
+        logging.error(f"{user_obj['address']} \nNONE")
+        return
     user_obj = await get_owned(discord_id)
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
     battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {},
@@ -82,63 +85,76 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial):
         'mission': set(),
         'br': set(),
     }
+    unset_query = {
+        **{f"zerpmons.{i}": '' for i in remove_serials['zerpmons']},
+        **{f"trainer_cards.{i}": '' for i in remove_serials['trainer_cards']},
+        **{f"equipments.{i}": '' for i in remove_serials['equipments']},
+    }
+    set_query = {}
 
-    new_mission_deck = {i: None for i in range(20)}
     for k, v in mission_deck.items():
-        if v in serials:
-            new_mission_deck[k] = v
-        else:
+        if v in remove_serials['zerpmons']:
+            set_query[f'mission_deck.{k}'] = None
             kickedCards['mission'].add(user_obj['zerpmons'].get(v, {}).get('name'))
-
-    new_battle_deck = {k: {} for k, v in battle_deck.items()}
 
     for k, v in battle_deck.items():
         for serial in v:
             if serial == "trainer":
-                if v[serial] in t_serial:
-                    new_battle_deck[k][serial] = v[serial]
-                else:
+                if v[serial] in remove_serials['trainer_cards']:
+                    set_query[f'battle_deck.{k}.trainer'] = None
                     kickedCards['battle'].add(user_obj['trainer_cards'].get(v[serial], {}).get('name'))
-            elif v[serial] in serials:
-                new_battle_deck[k][serial] = v[serial]
-            else:
+            elif v[serial] in remove_serials['zerpmons']:
+                set_query[f'battle_deck.{k}.{serial}'] = None
                 kickedCards['battle'].add(user_obj['zerpmons'].get(v[serial], {}).get('name'))
 
-    new_gym_deck = {k: {} for k, v in gym_deck.items()}
     for k, v in gym_deck.items():
         for serial in v:
             if serial == "trainer":
-                if v[serial] in t_serial:
-                    new_gym_deck[k][serial] = v[serial]
-                else:
+                if v[serial] in remove_serials['trainer_cards']:
+                    set_query[f'gym_deck.{k}.{serial}'] = None
                     kickedCards['gym'].add(user_obj['trainer_cards'].get(v[serial], {}).get('name'))
-            elif v[serial] in serials:
-                new_gym_deck[k][serial] = v[serial]
-            else:
+            elif v[serial] in remove_serials['zerpmons']:
+                set_query[f'gym_deck.{k}.{serial}'] = None
                 kickedCards['gym'].add(user_obj['zerpmons'].get(v[serial], {}).get('name'))
     for i in range(20):
         sr = str(i)
         if br_deck.get(sr):
             b_deck = br_deck.get(sr)
             br_t, br_z, br_e = b_deck.get('trainer'), b_deck.get('zerpmon'), b_deck.get('equipment')
-            if br_t not in t_serial:
-                b_deck['trainer'] = None
+            if br_t and br_t in remove_serials['trainer_cards']:
+                set_query[f'br_champion_decks.{sr}.trainer'] = None
                 kickedCards['br'].add(user_obj['trainer_cards'].get(br_t, {}).get('name'))
-            if br_e not in e_serial:
-                b_deck['equipment'] = None
+            if br_e and br_e in remove_serials['equipments']:
+                set_query[f'br_champion_decks.{sr}.equipment'] = None
                 kickedCards['br'].add(user_obj['equipments'].get(br_e, {}).get('name'))
-            if br_z not in serials:
-                b_deck['zerpmon'] = None
+            if br_z and br_z in remove_serials['zerpmons']:
+                set_query[f'br_champion_decks.{sr}.zerpmon'] = None
                 kickedCards['br'].add(user_obj['zerpmons'].get(br_z, {}).get('name'))
         else:
             break
+    for deck in ['recent_deck', 'recent_deck1', 'recent_deck5']:
+        if user_obj.get(deck):
+            try:
+                for sr, val in user_obj.get(deck, {}):
+                    if sr == 'trainer' and val in remove_serials['trainer_cards']:
+                        unset_query[deck] = ""
+                        break
+                    elif val in remove_serials['zerpmons']:
+                        unset_query[deck] = ""
+                        break
+            except:
+                pass
 
-    logging.error(f'Serials {serials} \nnew deck: {new_battle_deck}')
+    logging.error(f"{user_obj['address']} \n"
+                  f"Set Query {set_query} \n"
+                  f"Unset Query: {unset_query}\n"
+                  f"Remove Serials: {remove_serials}")
     # Send push notification here
-    await save_user({'mission_deck': new_mission_deck,
-                     'battle_deck': new_battle_deck, 'gym_deck': new_gym_deck,
-                     'br_champion_decks': br_deck,
-                     'discord_id': user_obj["discord_id"], 'address': user_obj['address']})
+    await db['users'].update_one(
+        {'discord_id': user_obj["discord_id"], 'address': user_obj['address']},
+        {'$set': {**set_query}, '$unset': {**unset_query}},
+        upsert=True
+    )
     notifications = []
     for k, v in kickedCards.items():
         values = [i for i in v if i]
@@ -166,10 +182,10 @@ async def remove_user_nft(discord_id, serial, trainer=False, equipment=False, db
     user_obj = await get_owned(str(discord_id))
     update_query = {"$unset": {f"equipments.{serial}": ""}} if equipment else (
         {"$unset": {f"zerpmons.{serial}": ""}} if not trainer else {"$unset": {f"trainer_cards.{serial}": ""}})
-    if not trainer and not equipment:
-        for deck in ['recent_deck', 'recent_deck1', 'recent_deck5']:
-            if serial in list(user_obj.get(deck, {}).values()):
-                update_query["$unset"][deck] = ""
+    # if not trainer and not equipment:
+    #     for deck in ['recent_deck', 'recent_deck1', 'recent_deck5']:
+    #         if serial in list(user_obj.get(deck, {}).values()):
+    #             update_query["$unset"][deck] = ""
 
     result = await users_collection.update_one(
         {'discord_id': discord_id},
@@ -1182,12 +1198,15 @@ async def add_xp_trainer(nft_id: str, address: str, xp: int):
     else:
         next_level_obj = next((val for idx, val in enumerate(levels) if
                                val['total_xp'] <= final_xp < levels[idx + 1]['total_xp']), None)
-        new_xp = final_xp - next_level_obj['total_xp']
+        if next_level_obj:
+            new_xp = final_xp - next_level_obj['total_xp']
+        else:
+            new_xp = final_xp
 
-    if not next_level_obj:
-        raise Exception(f'No new level (args: {nft_id} {address} {xp})')
+    # if not next_level_obj:
+    #     raise Exception(f'No new level (args: {nft_id} {address} {xp})')
 
-    is_level_up = next_level_obj['level'] > cur_level
+    is_level_up = next_level_obj['level'] > cur_level if next_level_obj else False
     if is_level_up:
         trainer['level'] = next_level_obj['level']
         rewards = {}
@@ -1231,7 +1250,7 @@ async def add_xp_trainer(nft_id: str, address: str, xp: int):
             is_level_up=is_level_up,
             rewards=None,
             new_level=cur_level,
-            xp_left=levels[min(next_level_obj['level'], 30 - 1)]['xp_required'] - new_xp,
+            xp_left=levels[min(next_level_obj['level'] if next_level_obj else 0, 30 - 1)]['xp_required'] - new_xp,
             new_xp=new_xp
         )
 
@@ -1248,7 +1267,7 @@ async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_x
     if level > 60:
         level = 60
     # last_lvl = await level_collection.find_one({'level': (level - 1) if level > 1 else 1})
-    next_lvl = await level_collection.find_one({'level': level + 1})
+    next_lvl = await level_collection.find_one({'level': min(60, level + 1)})
     if 'level' in old and 'xp' in old:
 
         vals = old['level'], old['xp'], next_lvl['xp_required'] if not get_candies else (
@@ -1420,8 +1439,8 @@ async def add_gp_queue(address, match_cnt, gp):
     return amt
 
 
-async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None):
-    uid = f'{str(uuid.uuid4())}'
+async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None, ts=None):
+    uid = f'{memo}-{int(ts)}'
     amt = round(paymentAmount, 3)
     queue_query = {
         'uniqueId': uid,
@@ -1435,9 +1454,10 @@ async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None):
     }
     if memo:
         queue_query['memo'] = memo
-    await db['general-txn-queue'].insert_one(
-        queue_query
-    )
+    await db['general-txn-queue'].update_one({'uniqueId': uid},
+        {'$setOnInsert': queue_query},
+        upsert=True,
+        )
     return amt
 
 
@@ -1715,9 +1735,12 @@ async def add_purple_candy(address, inc_by, purchased=False, amount=0):
 async def add_lvl_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'lvl_candy': inc_by}
+    filter_ = {'address': str(address)}
+    if inc_by < 0:
+        filter_['lvl_candy'] = {'$gte': abs(inc_by)}
     if purchased:
         query['zrp_spent'] = amount
-    r = await users_collection.update_one({'address': str(address), 'lvl_candy': {'$gte': abs(inc_by)}},
+    r = await users_collection.update_one(filter_,
                                           {'$inc': query})
 
     return r.modified_count != 0
@@ -2545,9 +2568,12 @@ async def update_zerp_flair(discord_id, zerp_name, old_zerp_name, flair_name):
 
 async def add_zerp_lure(user_addr, qty=1):
     users_collection = db['users']
-    r = await users_collection.update_one({'address': user_addr},
+    filter_ = {'address': user_addr}
+    if qty < 0:
+        filter_['lure_cnt'] = {'$gte': qty}
+    r = await users_collection.update_one(filter_,
                                           {'$inc': {'lure_cnt': qty}})
-    return r.acknowledged
+    return r.modified_count > 0
 
 
 async def update_user_zerp_lure(user_id, lure_type):
