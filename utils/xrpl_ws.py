@@ -498,9 +498,9 @@ async def get_balance(address):
     return bal
 
 
-async def reward_user(total_matches, addr, zerpmon_name, double_xp=False, lvl=1, xp_mode=None, ascended=False):
+async def reward_user(total_matches, user_data, zerpmon_name, double_xp=False, lvl=1, xp_mode=None, ascended=False):
     reward = random.choices(list(config.MISSION_REWARD_CHANCES.keys()), list(config.MISSION_REWARD_CHANCES.values()))[0]
-    user_address = addr
+    user_address = user_data['address']
     xp_gain = 10
     responses = []
     if (lvl > 10 and xp_mode is None) or xp_mode:
@@ -536,12 +536,12 @@ async def reward_user(total_matches, addr, zerpmon_name, double_xp=False, lvl=1,
         amount_to_send = round(amount_to_send, 3)
         print(amount_to_send)
         # add xrp and xp
-        res1 = (await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_address, amount_to_send, xp_gain,
+        res1 = (await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_data, amount_to_send, xp_gain,
                                                candy=candy)), \
                "XRP", amount_to_send, 0
         responses.append(res1)
     else:
-        await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_address, 0, xp_gain,
+        await db_query.add_xrp_txn_log(str(total_matches), 'mission', user_data, 0, xp_gain,
                                        candy=candy)
     # return None, "XRP", amount_to_send, 0
     responses.append(res2)

@@ -20,3 +20,4 @@ config_extra.py
 /sim
 /static/zerpmon-translations/
 /static
+mintTxnQueue.py

@@ -1444,7 +1444,9 @@ async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, res
         )
 
 
-async def add_gp_queue(address, match_cnt, gp, block_number=1):
+async def add_gp_queue(user_data, gp, block_number=1):
+    address = user_data['address']
+    match_cnt = user_data['gym'].get('match_cnt', 0) if 'gym' in user_data else 1
     uid = f'gym-{address}-{match_cnt}'
     amt = round(gp / (2 ** block_number), 2)
     queue_query = {
@@ -1455,7 +1457,8 @@ async def add_gp_queue(address, match_cnt, gp, block_number=1):
         'status': 'pending',
         'amount': amt,
         'currency': 'ZRP',
-        'gp': gp
+        'gp': gp,
+        'destination_tag': user_data.get('destination_tag')
     }
     await db['general-txn-queue'].update_one(
         {'uniqueId': uid},
@@ -2744,8 +2747,9 @@ async def get_mission_nfts():
     return (await stats_col.find_one({'name': 'mission-nfts-bithomp'})).get('nfts', [])
 
 
-async def add_xrp_txn_log(uid: str, from_addr: str, to_addr: str, amount: float, xp: int, candy=None):
+async def add_xrp_txn_log(uid: str, from_addr: str, user_data: dict, amount: float, xp: int, candy=None):
     txn_log_col = db['mission-txn-queue']
+    to_addr = user_data['address']
     res = await txn_log_col.update_one({'uid': to_addr + uid},
                                        {'$setOnInsert': {
                                            'type': 'Payment',
@@ -2755,7 +2759,8 @@ async def add_xrp_txn_log(uid: str, from_addr: str, to_addr: str, amount: float,
                                            'currency': 'XRP',
                                            'status': 'pending' if (amount > 0 or candy) else 'fulfilled',
                                            'xp': xp,
-                                           'candy': candy
+                                           'candy': candy,
+                                           'destination_tag': user_data.get('destination_tag')
                                        }}, upsert=True)
     return res.acknowledged
 

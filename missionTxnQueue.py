@@ -175,12 +175,12 @@ async def send_txn(to: str, amount: float, sender):
             # Print the response
             print(response.result)
             if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
-                if sender == 'mission':
-                    mission_seq = response.result['account_sequence_next']
+                # if sender == 'mission':
+                #     mission_seq = response.result['account_sequence_next']
                 return True, response.result['tx_json']['hash']
             elif response.result['engine_result'] in ["tefPAST_SEQ"]:
-                if sender == 'mission':
-                    mission_seq = response.result['account_sequence_next']
+                # if sender == 'mission':
+                #     mission_seq = response.result['account_sequence_next']
                 await asyncio.sleep(random.randint(1, 4))
             else:
                 await asyncio.sleep(random.randint(1, 4))
@@ -209,7 +209,7 @@ async def get_seq(from_):
             account=config.REWARDS_ADDR
         )
         account_info = await client.request(acc_info)
-        sequence = account_info.result["account_data"]["Sequence"] if mission_seq is None else mission_seq
+        sequence = account_info.result["account_data"]["Sequence"]
         # Load the sending account's secret and address from a wallet
         sending_wallet = Wallet(seed=config.REWARDS_SEED, sequence=sequence)
         sending_address = config.REWARDS_ADDR

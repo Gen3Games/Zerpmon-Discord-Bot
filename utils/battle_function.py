@@ -988,8 +988,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         xp_gain = 10 + (stage - 1) * 5
         resetTs, block_number = await db_query.get_gym_reset()
         if loser == 1:
-            await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1,
-                                        0, block_number)
+            await db_query.add_gp_queue(_data1, 0, block_number)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
@@ -998,8 +997,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         elif loser == 2:
             # Add GP to user
             trainer_rewards = await db_query.add_xp_trainer(tc1['token_id'], _data1['address'], xp_gain)
-            zrp_reward = await db_query.add_gp_queue(_data1['address'],
-                                                     _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1, stage)
+            zrp_reward = await db_query.add_gp_queue(_data1, stage, block_number)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
@@ -1491,7 +1489,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             # await db_query.update_battle_count(user_id, old_num)
             # Reward user on a Win
             double_xp = 'double_xp' in _data1 and _data1['double_xp'] > time.time()
-            responses = await xrpl_ws.reward_user(t_matches, _data1['address'], z1['name'], double_xp=double_xp,
+            responses = await xrpl_ws.reward_user(t_matches, _data1, z1['name'], double_xp=double_xp,
                                                   lvl=z1_obj['zerpmon']['level'] if z1_obj['zerpmon']['level'] else 1,
                                                   xp_mode=xp_mode, ascended=z1_obj['zerpmon'].get('ascended', False))
             stats_arr = responses[0]
@@ -1537,7 +1535,7 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                                              battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'],
                                              address1=_data1['address'])
             z1['active_t'] = await checks.get_next_ts()
-            await db_query.add_xrp_txn_log(t_matches, 'mission', _data1['address'], 0, 0, )
+            await db_query.add_xrp_txn_log(t_matches, 'mission', _data1, 0, 0, )
             await db_query.update_zerpmon_alive(z1, serial, user_id)
             await db_query.update_user_wr(user_id, 0, int(t_matches), is_reset)
 
