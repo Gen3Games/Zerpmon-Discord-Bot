@@ -11,12 +11,14 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
     z1_eq, z2_eq = z1_equipped['equipment'] if z1_equipped['equipment'] else {}, \
                    z2_equipped['equipment'] if z2_equipped['equipment'] else {}
     z1_moves = moves['A']
+    critA = moves['critA']
     z2_moves = moves['B']
-
-    w_candy1, g_candy1, lvl_candy1 = z1_obj.get('white_candy') or 0, z1_obj.get('gold_candy') or 0, z1_obj.get(
-        'licorice') or 0
-    w_candy2, g_candy2, lvl_candy2 = z2_obj.get('white_candy') or 0, z2_obj.get('gold_candy') or 0, z2_obj.get(
-        'licorice') or 0
+    critB = moves['critB']
+    print(z1_obj)
+    w_candy1, g_candy1, lvl_candy1, purple1 = z1_obj.get('white_candy') or 0, z1_obj.get('gold_candy') or 0, z1_obj.get(
+        'licorice') or 0, z1_obj.get('purple_candy') or 0
+    w_candy2, g_candy2, lvl_candy2, purple2 = z2_obj.get('white_candy') or 0, z2_obj.get('gold_candy') or 0, z2_obj.get(
+        'licorice') or 0, z2_obj.get('purple_candy') or 0
     eq1_effect_list = z1_eq.get('notes', [])
     eq2_effect_list = z2_eq.get('notes', [])
     eq2_note2 = None
@@ -30,9 +32,10 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
     z2_asc = z2_obj.get("ascended", False)
 
     main_embed.add_field(
-        name=f"{z1_obj['displayName']} ({', '.join(z1_obj['zerpmonType'])})\t`{w_candy1}x🍬\t{g_candy1}x🍭`\t" + (
+        name=f"{z1_obj['displayName']} ({', '.join(z1_obj['zerpmonType'])})\t`{w_candy1}x🍬\t{g_candy1}x🍭\t{purple1}x🟣`\t" + (
             f' (**Ascended** ☄️)' if z1_asc else ''),
-        value=f"{config.TYPE_MAPPING[buffed_zerp1.title()]} **Trainer buff**" if buffed_zerp1 else "\u200B",
+        value=(f"{config.TYPE_MAPPING[buffed_zerp1.title()]} **Trainer buff**" if buffed_zerp1 else "\u200B") + (
+            f'\t(**Crit chance 🎯️\t{critA} %**)'),
         inline=False)
     if z1_eq != {}:
         if firstRoundLog['zerpmonAImmunitiesGranted']:
@@ -61,9 +64,10 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
     main_embed.add_field(name="\u200B", value="\u200B", inline=False)
 
     main_embed.add_field(
-        name=f"{z2_obj['displayName']} ({', '.join(z2_obj['zerpmonType'])})\t`{w_candy2}x🍬\t{g_candy2}x🍭`\t" + (
+        name=f"{z2_obj['displayName']} ({', '.join(z2_obj['zerpmonType'])})\t`{w_candy2}x🍬\t{g_candy2}x🍭\t{purple2}x🟣`\t" + (
             f' (**Ascended** ☄️)' if z2_asc else ''),
-        value=f"{config.TYPE_MAPPING[buffed_zerp2.title()]} **Trainer buff**" if buffed_zerp2 else "\u200B",
+        value=(f"{config.TYPE_MAPPING[buffed_zerp2.title()]} **Trainer buff**" if buffed_zerp2 else "\u200B") + (
+            f'\t(**Crit chance 🎯️\t{critB} %**)'),
         inline=False)
     if z2_eq != {}:
         if firstRoundLog['zerpmonBImmunitiesGranted']:

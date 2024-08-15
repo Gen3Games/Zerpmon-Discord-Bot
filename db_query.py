@@ -69,9 +69,9 @@ async def save_user(user):
 
 
 async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, remove_serials):
-    if len(remove_serials['zerpmons']) + len(remove_serials['trainer_cards']) + len(remove_serials['equipments']) == 0:
-        logging.error(f"{user_obj['address']} \nNONE")
-        return
+    # if len(remove_serials['zerpmons']) + len(remove_serials['trainer_cards']) + len(remove_serials['equipments']) == 0:
+    #     logging.error(f"{user_obj['address']} \nNONE")
+    #     return
     user_obj = await get_owned(discord_id)
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
     battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {},
@@ -93,27 +93,27 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, r
     set_query = {}
 
     for k, v in mission_deck.items():
-        if v in remove_serials['zerpmons']:
+        if v and v not in serials:
             set_query[f'mission_deck.{k}'] = None
             kickedCards['mission'].add(user_obj['zerpmons'].get(v, {}).get('name'))
 
     for k, v in battle_deck.items():
         for serial in v:
             if serial == "trainer":
-                if v[serial] in remove_serials['trainer_cards']:
+                if v[serial] and v[serial] not in t_serial:
                     set_query[f'battle_deck.{k}.trainer'] = None
                     kickedCards['battle'].add(user_obj['trainer_cards'].get(v[serial], {}).get('name'))
-            elif v[serial] in remove_serials['zerpmons']:
+            elif v[serial] and v[serial] not in serials:
                 set_query[f'battle_deck.{k}.{serial}'] = None
                 kickedCards['battle'].add(user_obj['zerpmons'].get(v[serial], {}).get('name'))
 
     for k, v in gym_deck.items():
         for serial in v:
             if serial == "trainer":
-                if v[serial] in remove_serials['trainer_cards']:
+                if v[serial] and v[serial] not in t_serial:
                     set_query[f'gym_deck.{k}.{serial}'] = None
                     kickedCards['gym'].add(user_obj['trainer_cards'].get(v[serial], {}).get('name'))
-            elif v[serial] in remove_serials['zerpmons']:
+            elif v[serial] and v[serial] not in serials:
                 set_query[f'gym_deck.{k}.{serial}'] = None
                 kickedCards['gym'].add(user_obj['zerpmons'].get(v[serial], {}).get('name'))
     for i in range(20):
@@ -121,13 +121,13 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, r
         if br_deck.get(sr):
             b_deck = br_deck.get(sr)
             br_t, br_z, br_e = b_deck.get('trainer'), b_deck.get('zerpmon'), b_deck.get('equipment')
-            if br_t and br_t in remove_serials['trainer_cards']:
+            if br_t and br_t not in t_serial:
                 set_query[f'br_champion_decks.{sr}.trainer'] = None
                 kickedCards['br'].add(user_obj['trainer_cards'].get(br_t, {}).get('name'))
-            if br_e and br_e in remove_serials['equipments']:
+            if br_e and br_e not in e_serial:
                 set_query[f'br_champion_decks.{sr}.equipment'] = None
                 kickedCards['br'].add(user_obj['equipments'].get(br_e, {}).get('name'))
-            if br_z and br_z in remove_serials['zerpmons']:
+            if br_z and br_z not in serials:
                 set_query[f'br_champion_decks.{sr}.zerpmon'] = None
                 kickedCards['br'].add(user_obj['zerpmons'].get(br_z, {}).get('name'))
         else:
@@ -136,19 +136,35 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, r
         if user_obj.get(deck):
             try:
                 for sr, val in user_obj.get(deck, {}):
-                    if sr == 'trainer' and val in remove_serials['trainer_cards']:
+                    if sr == 'trainer' and val not in t_serial:
                         unset_query[deck] = ""
                         break
-                    elif val in remove_serials['zerpmons']:
+                    elif val not in serials:
                         unset_query[deck] = ""
                         break
             except:
                 pass
+    # if user_obj.get('pvp_decks'):
+    #     for deck in ['1', '3', '5']:
+    #         if user_obj['pvp_decks'].get(deck, {}).get('z'):
+    #             try:
+    #                 for sr, val in user_obj['pvp_decks'][deck]['z']:
+    #                     if sr == 'trainer' and val not in t_serial:
+    #                         set_query[f'pvp_decks.{deck}.z'] = {}
+    #                         break
+    #                     elif val not in serials:
+    #                         set_query[f'pvp_decks.{deck}.z'] = {}
+    #                         break
+    #             except:
+    #                 pass
 
     logging.error(f"{user_obj['address']} \n"
                   f"Set Query {set_query} \n"
                   f"Unset Query: {unset_query}\n"
                   f"Remove Serials: {remove_serials}")
+    if len(set_query) + len(unset_query) == 0:
+        logging.error(f"{user_obj['address']} \nNONE")
+        return
     # Send push notification here
     await db['users'].update_one(
         {'discord_id': user_obj["discord_id"], 'address': user_obj['address']},
@@ -173,6 +189,16 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, r
             user_obj['address'],
             str(user_obj['_id'])
         )
+
+
+async def remove_user_nft_addr(address, serial, trainer=False, equipment=False, db_sep=None):
+    users_collection = db['users'] if db_sep is None else db_sep['users']
+    update_query = {"$unset": {f"equipments.{serial}": ""}} if equipment else (
+        {"$unset": {f"zerpmons.{serial}": ""}} if not trainer else {"$unset": {f"trainer_cards.{serial}": ""}})
+    result = await users_collection.update_one(
+        {'address': address},
+        update_query
+    )
 
 
 async def remove_user_nft(discord_id, serial, trainer=False, equipment=False, db_sep=None):
@@ -1220,8 +1246,8 @@ async def add_xp_trainer(nft_id: str, address: str, xp: int):
             m_potion += next_lvl['mission_potion_reward']
             candy_frags += next_lvl.get('candy_frags', 0)
         if candy_frags > 0:
-            await add_candy_fragment(address)
-            rewards['cf'] = 1
+            await add_candy_fragment(address, candy_frags)
+            rewards['cf'] = candy_frags
         if r_potion > 0:
             await add_revive_potion(address, r_potion)
             rewards['rp'] = r_potion
@@ -1418,9 +1444,9 @@ async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, res
         )
 
 
-async def add_gp_queue(address, match_cnt, gp):
+async def add_gp_queue(address, match_cnt, gp, block_number=1):
     uid = f'gym-{address}-{match_cnt}'
-    amt = round(gp / 2, 2)
+    amt = round(gp / (2 ** block_number), 2)
     queue_query = {
         'uniqueId': uid,
         'type': 'Payment',
@@ -1440,7 +1466,7 @@ async def add_gp_queue(address, match_cnt, gp):
 
 
 async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None, ts=None):
-    uid = f'{memo}-{int(ts)}'
+    uid = f'{address}-{memo}-{int(ts)}'
     amt = round(paymentAmount, 3)
     queue_query = {
         'uniqueId': uid,
@@ -1455,9 +1481,9 @@ async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None, 
     if memo:
         queue_query['memo'] = memo
     await db['general-txn-queue'].update_one({'uniqueId': uid},
-        {'$setOnInsert': queue_query},
-        upsert=True,
-        )
+                                             {'$setOnInsert': queue_query},
+                                             upsert=True,
+                                             )
     return amt
 
 
@@ -1480,7 +1506,7 @@ async def add_loan_nft_txn_to_queue(address, nft_id, memo=None):
     )
 
 
-async def update_gym_won(discord_id, gym_obj, gym_type, stage, lost=False):
+async def update_gym_won(discord_id, gym_obj, gym_type, stage, resetTs, lost=False):
     users_collection = db['users']
     next_day_ts = await get_next_ts(1)
     if lost:
@@ -1488,7 +1514,7 @@ async def update_gym_won(discord_id, gym_obj, gym_type, stage, lost=False):
         reset_t = next_day_ts
     else:
         n_stage = stage + 1
-        reset_t = config.gym_main_reset if config.gym_main_reset >= next_day_ts else (await get_gym_reset())
+        reset_t = config.gym_main_reset if config.gym_main_reset >= next_day_ts else resetTs
     if gym_obj == {}:
         gym_obj = {
             'won': {
@@ -1999,16 +2025,17 @@ async def get_loan_burn():
 
 async def get_gym_reset():
     stats_col = db['stats_log']
-    reset_t = (await stats_col.find_one({'name': 'zrp_stats'})).get('gym_reset_t', 0)
+    res = (await stats_col.find_one({'name': 'zrp_stats'}))
+    reset_t = res.get('gym_reset_t', 0)
     if reset_t < time.time() - 120:
         await stats_col.update_one({
             'name': 'zrp_stats'
         },
             {'$set': {'gym_reset_t': (await get_next_ts(3))}}, upsert=True
         )
-        return (await get_next_ts(3))
+        return (await get_next_ts(3)), res.get('block_number', 1)
     else:
-        return reset_t
+        return reset_t, res.get('block_number', 1)
 
 
 async def set_gym_reset():
@@ -2052,7 +2079,8 @@ async def set_burnt(burn_amount):
 """BATTLE LOGS"""
 
 
-async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, user2_team, winner, battle_type):
+async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_team, user2_team, winner, battle_type,
+                            address1=None):
     battle_log = db['battle_logs']
     bulk_operations = []
     print(f'Updating battle log : {user1_name, user2_name}')
@@ -2060,9 +2088,13 @@ async def update_battle_log(user1_id, user2_id, user1_name, user2_name, user1_te
         match = {'ts': int(time.time()), 'won': winner == 1, 'opponent': user2_name,
                  'battle_type': battle_type,
                  'data': {'teamA': user1_team, 'teamB': user2_team}}
+        extra_q = {}
+        if address1:
+            extra_q = {'address': address1}
         user1_update = UpdateOne(
             {'discord_id': str(user1_id)},
-            {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': 10}}},
+            {'$push': {'matches': {'$each': [match], '$position': 0, '$slice': 10}},
+             '$set': extra_q},
             upsert=True
         )
         bulk_operations.append(user1_update)
@@ -2131,9 +2163,26 @@ async def get_eq_by_name(name, gym=False):
         return await equipment_col.find_one({'name': name}, )
 
 
-async def get_all_eqs(limit=None, substr=None):
+async def get_all_eqs(limit=None, substr=None, remove_survive=False, remove_random_eq = True):
+    if remove_survive:
+        q = {
+            'effects': {
+                '$not': {
+                    '$elemMatch': {'type': 'survive-chance'}
+                }
+            }
+        }
+    elif remove_random_eq:
+        q = {
+            'pickRandomEq': {
+                '$ne': True
+            }
+        }
+    else:
+        q = {}
+
     if not substr:
-        return await equipment_col.find({}, {'_id': 0}).to_list(None)
+        return await equipment_col.find(q, {'_id': 0}).to_list(None)
     else:
         return await equipment_col.find(
             {'name': {'$regex': re.compile(f"^{substr}", re.IGNORECASE)}},
@@ -2179,9 +2228,11 @@ async def list_for_loan(zerp, sr, offer, user_id, username, addr, price, active_
 async def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False, db_sep=None):
     loan_col = db['loan'] if db_sep is None else db_sep['loan']
     if not is_id:
-        query = {'zerpmon_name': zerp_name_or_id}
+        query = {'zerpmon_name': zerp_name_or_id,
+                 'loan_expires_at': {'$ne': 0}}
     else:
-        query = {'token_id': zerp_name_or_id}
+        query = {'token_id': zerp_name_or_id,
+                 'loan_expires_at': {'$ne': 0}}
     r = await loan_col.delete_one(query)
     return r.acknowledged
 
@@ -2290,7 +2341,8 @@ async def get_active_loans():
             active.append(listing)
         elif listing['offer'] is None:
             if listing['expires_at'] < ts:
-                await remove_listed_loan(listing['token_id'], listing['listed_by']['id'], is_id=True)
+                # await remove_listed_loan(listing['token_id'], listing['listed_by']['id'], is_id=True)
+                pass
             else:
                 expired.append(listing)
     return active, expired
@@ -2404,7 +2456,7 @@ async def get_trainer(nft_id):
 
 async def get_rand_boss():
     zerpmon_collection = db['MoveSets2']
-    random_doc = await zerpmon_collection.find({'name': {'$regex': 'Experiment'}}).to_list(None)
+    random_doc = await zerpmon_collection.find({'name': {'$regex': 'Titan'}}).to_list(None)
     return random.choice([i for i in random_doc])
 
 
@@ -2432,7 +2484,8 @@ async def get_boss_reset(hp) -> [bool, int, int, int, bool]:
             'name': 'world_boss'
         },
             {'$set': {'boss_reset_t': n_t, 'boss_active': active, 'boss_hp': hp - penalty_hp, 'boss_zerpmon': boss,
-                      'boss_trainer': trainer, 'boss_eq': random.choice(await get_all_eqs()).get('name'),
+                      'boss_trainer': trainer,
+                      'boss_eq': random.choice(await get_all_eqs(remove_survive=True)).get('name'),
                       "reward": 500 if not boss_alive else obj['reward'] + 300,
                       'start_hp': hp, 'boss_msg_id': msg_id,
                       'total_weekly_dmg': 0 if not obj.get('boss_active', False) else obj['total_weekly_dmg'],
@@ -2817,7 +2870,7 @@ async def get_temp_user(user_id: str, autoc=False):
 
 # print(asyncio.run(get_owned('1017889758313197658', autoc=True)))
 
-async def add_temp_user(user_d, fee_paid=True, is_reset=False):
+async def add_temp_user(user_d, fee_paid=True, is_reset=False, is_free_mode=False):
     temp_users_col = db['temp_user_data']
     user_id, username, user_addr = user_d['discord_id'], user_d['username'], user_d['address']
 
@@ -2828,7 +2881,7 @@ async def add_temp_user(user_d, fee_paid=True, is_reset=False):
                 'address': user_addr,
                 'fee_paid': fee_paid,
                 'zerpmons': await get_random_doc_with_type(limit=10, level=30),
-                'equipments': random.sample(await get_all_eqs(), 10),
+                'equipments': random.sample(await get_all_eqs(remove_random_eq=True), 10),
                 'trainers': await get_random_trainers(10),
                 "battle_deck": {'0': {}},
                 "equipment_decks": eq_deck,
@@ -2845,6 +2898,7 @@ async def add_temp_user(user_d, fee_paid=True, is_reset=False):
         user_doc['lives'] = 1
         user_doc['gym_order'] = random.sample(config_extra.TOWER_SEQ[:-1], 19)
         user_doc['gym_order'].append('Dragon')
+        user_doc['is_free_mode'] = is_free_mode
     obj = await temp_users_col.find_one_and_update({'discord_id': user_id},
                                                    {'$set': user_doc, }, upsert=True,
                                                    return_document=ReturnDocument.AFTER)
@@ -2871,7 +2925,7 @@ async def update_gym_tower_deck(deck_no, new_deck, eqs, user_id):
         return False
 
 
-async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
+async def reset_gym_tower(user_id, zrp_earned=0, lvl=1, is_free_mode=False):
     users_collection = db['temp_user_data']
     eq_deck = {}
     for i in range(5):
@@ -2886,7 +2940,8 @@ async def reset_gym_tower(user_id, zrp_earned=0, lvl=1):
 
                                                       },
                                              '$max': {'max_level': lvl},
-                                             '$inc': {'total_zrp_earned': zrp_earned, 'tp': lvl - 1,
+                                             '$inc': {'total_zrp_earned': zrp_earned,
+                                                      'tp': 0 if is_free_mode else (lvl - 1),
                                                       'total_matches': 1}})
     return res.acknowledged
 
@@ -2911,7 +2966,7 @@ async def dec_life_gym_tower(user_id):
     return res.acknowledged
 
 
-async def update_gym_tower(user_id, new_level):
+async def update_gym_tower(user_id, new_level, zrp_earned=0, is_free_mode=False):
     users_collection = db['temp_user_data']
     eq_deck = {}
     for i in range(5):
@@ -2920,6 +2975,11 @@ async def update_gym_tower(user_id, new_level):
         q = {'tower_level': 1, 'fee_paid': False, 'zerpmons': [],
              'equipments': [],
              'trainers': [], }
+        inc_q = {
+            'total_matches': 1,
+            'total_zrp_earned': zrp_earned,
+            'tp': 0 if is_free_mode else (new_level - 1),
+        }
     else:
         q = {'tower_level': new_level, 'reset': True,
              "battle_deck": {'0': {}},
@@ -2928,7 +2988,13 @@ async def update_gym_tower(user_id, new_level):
              'equipments': [],
              'trainers': [],
              }
-    res = await users_collection.update_one({'discord_id': str(user_id)}, {'$set': q, '$inc': {'total_matches': 1}})
+        inc_q = {
+            'total_matches': 1
+        }
+    res = await users_collection.update_one({'discord_id': str(user_id)},
+                                            {'$set': q,
+                                             '$inc': inc_q
+                                             })
     return res.acknowledged
 
 

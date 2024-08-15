@@ -228,6 +228,7 @@ async def main():
     while True:
         try:
             queued_txns = get_txn_log()
+            await asyncio.sleep(15)
             if len(queued_txns) == 0:
                 if int(time.time()) % 10 == 0:
                     logging.info(f'No Txn found')

@@ -93,7 +93,8 @@ async def send_reset_message(client: nextcord.Client):
             config.store_24_hr_buyers = []
             await db_query.choose_gym_zerp()
             gym_str = '\nLost Gyms and Gym Zerpmon refreshed for each Leader!\n'
-            is_gym_reset = (await db_query.get_gym_reset()) - time.time() < 60
+            resetTs, _ = await db_query.get_gym_reset()
+            is_gym_reset = resetTs - time.time() < 60
             if is_gym_reset:
                 gym_str += '**Cleared Gyms** have been refreshed and progressed to next Stage as well!'
                 await db_query.set_gym_reset()
@@ -122,12 +123,12 @@ async def send_reset_message(client: nextcord.Client):
                             else:
                                 await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False,
                                                          reset=is_gym_reset)
-                    for r_key in ['rank', 'rank1', 'rank5']:
-                        if r_key in user:
-                            rnk = user[r_key]['tier']
-                            decay_tiers = config.TIERS[-2:]
-                            if user[r_key]['last_battle_t'] < time.time() - 86400 and rnk in decay_tiers:
-                                await db_query.update_rank(user['discord_id'], win=False, decay=True, field=r_key)
+                    # for r_key in ['rank', 'rank1', 'rank5']:
+                    #     if r_key in user:
+                    #         rnk = user[r_key]['tier']
+                    #         decay_tiers = config.TIERS[-2:]
+                    #         if user[r_key]['last_battle_t'] < time.time() - 86400 and rnk in decay_tiers:
+                    #             await db_query.update_rank(user['discord_id'], win=False, decay=True, field=r_key)
                 except:
                     logging.error(f'USER OBJ ERROR: {traceback.format_exc()}')
             active_loans, expired_loans = await db_query.get_active_loans()
@@ -138,9 +139,10 @@ async def send_reset_message(client: nextcord.Client):
                 for loan in active_loans:
                     """less than 5 seconds left to loan end"""
                     if loan['loan_expires_at'] <= time.time():
-                        await db_query.remove_user_nft(loan['accepted_by']['id'], loan['serial'],
-                                                       trainer=loan['zerp_data'].get('category') == 'trainer',
-                                                       equipment=loan['zerp_data'].get('category') == 'equipment', )
+                        await db_query.remove_user_nft_addr(loan['accepted_by']['address'], loan['serial'],
+                                                            trainer=loan['zerp_data'].get('category') == 'trainer',
+                                                            equipment=loan['zerp_data'].get(
+                                                                'category') == 'equipment', )
                         ack = await db_query.update_loanee(loan['zerp_data'], loan['serial'],
                                                            {'id': None, 'username': None, 'address': None}, days=0,
                                                            amount_total=0, loan_ended=True,
@@ -385,13 +387,14 @@ async def send_reset_message(client: nextcord.Client):
                 boss_defeated, boss_message = await db_query.get_world_boss_reward_message()
                 if boss_defeated:
                     boss_channel = nextcord.utils.get(config_extra.MAIN_GUILD.channels, id=config.BOSS_CHANNEL)
-                    b_embed= CustomEmbed(
+                    b_embed = CustomEmbed(
                         title=f"🔥 🔥 World Boss Defeated! 🔥 🔥",
                         color=0x680747,
                         description=boss_message['description'] + '\n@everyone'
                     )
-                    b_embed.set_image(boss_message['image'] if "https:/" in boss_message['image'] else 'https://cloudflare-ipfs.com/ipfs/' + boss_message[
-                            'image'].replace("ipfs://", ""))
+                    b_embed.set_image(boss_message['image'] if "https:/" in boss_message[
+                        'image'] else 'https://cloudflare-ipfs.com/ipfs/' + boss_message[
+                        'image'].replace("ipfs://", ""))
                     await boss_channel.send(embed=b_embed)
                 store_bal = await get_zrp_balance(config.STORE_ADDR, )
                 store_bal = int(float(store_bal))

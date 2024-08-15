@@ -3,6 +3,7 @@ __pycache__/
 
 logfile_wrapper.log
 safariTxnQueue.log
+mintTxnQueue.log
 config.py
 tests
 helpers
@@ -18,3 +19,4 @@ config_extra.py
 *.csv
 /sim
 /static/zerpmon-translations/
+/static

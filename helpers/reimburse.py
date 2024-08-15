@@ -25,7 +25,7 @@ for listing in col.find({'accepted_on': {'$ne': None}}):
             if listing['loan_expires_at'] != 0:
                 asyncio.run(xrpl_ws.send_nft('loan', listing['listed_by']['address'], listing['token_id']))
             if listing['expires_at'] <= time.time() or listing['loan_expires_at'] == 0:
-                db_query.remove_listed_loan(listing['zerpmon_name'], listing['listed_by']['id'])
+                db_query.remove_listed_loan(listing['token_id'], listing['listed_by']['id'], is_id=True)
     else:
         delta_t = listing['loan_expires_at']
         payment = listing['amount_pending']

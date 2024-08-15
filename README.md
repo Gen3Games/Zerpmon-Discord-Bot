@@ -370,7 +370,7 @@ for i, move in enumerate([i for i in zerpmon['moves'] if i['name'] != ""]):
     value=f"> **{move['name']}** \n" +
           (f"> Status Affect: `{notes}`\n" if notes != '' else "") +
           (f"> DMG: {move['dmg']}\n" if 'dmg' in move else "") +
-          (f"> Stars: {len(move['stars']) * '★'}\n" if 'stars' in move else "") +
+          (f"> Stars: {move['stars'] * '★'}\n" if 'stars' in move else "") +
           (f"> Type: {config.TYPE_MAPPING[move['type'].replace(' ', '')]}\n" if 'type' in move else "") +
           f"> Percentage: {move['percent']}%\n",
     inline=False)

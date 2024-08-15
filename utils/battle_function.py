@@ -921,11 +921,6 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         name=f"{leader_name} (Stage {stage})",
         value="\u200B", inline=True)
 
-    await gen_image(str(interaction.id) + '0', url1, '', path1, path2, path3, leader['bg'])
-
-    file2 = nextcord.File(f"{interaction.id}0.png", filename="image0.png")
-    trainer_embed.set_image(url=f'attachment://image0.png')
-
     low_z = max(len(user1_zerpmons), len(user2_zerpmons))
     b_type = 5
     if b_type <= low_z:
@@ -991,14 +986,15 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
         zrp_reward = 0
         trainer_rewards: db_query.AddXPTrainerResult | None = None
         xp_gain = 10 + (stage - 1) * 5
+        resetTs, block_number = await db_query.get_gym_reset()
         if loser == 1:
             await db_query.add_gp_queue(_data1['address'], _data1['gym'].get('match_cnt', 0) if 'gym' in _data1 else 1,
-                                        0)
+                                        0, block_number)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
             # Save user's match
-            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=True)
+            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, resetTs=resetTs, lost=True)
         elif loser == 2:
             # Add GP to user
             trainer_rewards = await db_query.add_xp_trainer(tc1['token_id'], _data1['address'], xp_gain)
@@ -1008,8 +1004,15 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
 
-            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, lost=False)
+            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, resetTs=resetTs, lost=False)
         # Now send messages
+        await gen_image(str(interaction.id) + '0', url1, '', path1, path2, path3, leader['bg'],
+                        trainer_buffs=[result['playerATrainer'].get('buff') if result['playerATrainer'] else None,
+                                       result['playerBTrainer'].get('buff') if result['playerBTrainer'] else None])
+
+        file2 = nextcord.File(f"{interaction.id}0.png", filename="image0.png")
+        trainer_embed.set_image(url=f'attachment://image0.png')
+
         idx1, idx2, log_idx = 0, 0, 0
         while idx1 < len(result['playerAZerpmons']) and idx2 < len(result['playerBZerpmons']):
             z1_obj, z2_obj = result['playerAZerpmons'][idx1], result['playerBZerpmons'][idx2]
@@ -1168,10 +1171,7 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
             bg_img = bg_img1[0] if bg_img1 else (bg_img2[0] if bg_img2 else None)
         if 'Ranked' in battle_name:
             bg_img = config.RANK_IMAGES[b_type]
-        await gen_image(str(message.id) + '0', url1, url2, path1, path2, path3, gym_bg=bg_img)
 
-        file2 = nextcord.File(f"{message.id}0.png", filename="image0.png")
-        trainer_embed.set_image(url=f'attachment://image0.png')
         print('imageformed')
         low_z = max(len(user1_zerpmons), len(user2_zerpmons))
         if b_type <= low_z:
@@ -1269,12 +1269,20 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
     del config.battle_results[uid]
 
     if result:
+        if battle_instance['type'] != 'free_br':
+            await gen_image(str(message.id) + '0', url1, url2, path1, path2, path3, gym_bg=bg_img,
+                            trainer_buffs=[result['playerATrainer'].get('buff') if result['playerATrainer'] else None,
+                                           result['playerBTrainer'].get('buff') if result['playerBTrainer'] else None]
+                            )
+
+            file2 = nextcord.File(f"{message.id}0.png", filename="image0.png")
+            trainer_embed.set_image(url=f'attachment://image0.png')
         idx1, idx2, log_idx = 0, 0, 0
         while idx1 < len(result['playerAZerpmons']) and idx2 < len(result['playerBZerpmons']):
             z1_obj, z2_obj = result['playerAZerpmons'][idx1], result['playerBZerpmons'][idx2]
 
             await battle_funtion_ex.generate_image_ex(message.id, z1_obj, z2_obj,
-                                                      bg_img, show_lvls=is_br)
+                                                      bg_img, show_lvls=True)
             main_embed, file = await battle_funtion_ex.get_zerp_battle_embed_ex(message,
                                                                                 z1_obj,
                                                                                 z2_obj,
@@ -1478,7 +1486,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
             await db_query.update_user_wr(user_id, 1, int(t_matches), is_reset)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
                                              battle_log['teamA'],
-                                             battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
+                                             battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'],
+                                             address1=_data1['address'])
             # await db_query.update_battle_count(user_id, old_num)
             # Reward user on a Win
             double_xp = 'double_xp' in _data1 and _data1['double_xp'] > time.time()
@@ -1525,7 +1534,8 @@ async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zer
                 ephemeral=True)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, 'Mission',
                                              battle_log['teamA'],
-                                             battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
+                                             battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'],
+                                             address1=_data1['address'])
             z1['active_t'] = await checks.get_next_ts()
             await db_query.add_xrp_txn_log(t_matches, 'mission', _data1['address'], 0, 0, )
             await db_query.update_zerpmon_alive(z1, serial, user_id)
@@ -1588,10 +1598,6 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
         bg_img = None
     else:
         bg_img = bg_img[0]
-    await gen_image(str(interaction.id) + '0', url1, url2, path1, path2, path3, gym_bg=bg_img)
-
-    file2 = nextcord.File(f"{interaction.id}0.png", filename="image0.png")
-    trainer_embed.set_image(url=f'attachment://image0.png')
 
     low_z = len(user1_zerpmons)
 
@@ -1636,6 +1642,13 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
         await asyncio.sleep(0.3)
     del config.battle_results[uid]
     if result:
+        await gen_image(str(interaction.id) + '0', url1, url2, path1, path2, path3, gym_bg=bg_img,
+                        trainer_buffs=[result['playerATrainer'].get('buff') if result['playerATrainer'] else None,
+                                       result['playerBTrainer'].get('buff') if result['playerBTrainer'] else None]
+                        )
+
+        file2 = nextcord.File(f"{interaction.id}0.png", filename="image0.png")
+        trainer_embed.set_image(url=f'attachment://image0.png')
         idx1, idx2, log_idx = 0, 0, 0
         cur_hp = boss_hp
         while idx1 < len(result['playerAZerpmons']) and idx2 < len(result['playerBZerpmons']):
@@ -1789,6 +1802,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
     _data1 = user_doc
     user_mention = interaction.user.mention
     stage = user_doc.get('tower_level')
+    free_mode = user_doc['is_free_mode']
 
     gym_type = user_doc['gym_order'][stage - 1]
     leader = await db_query.get_gym_leader(gym_type)
@@ -1824,11 +1838,6 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
     trainer_embed.add_field(
         name=f"{leader_name} (Level {stage})",
         value="\u200B", inline=True)
-
-    await gen_image(str(interaction.id) + '0', url1, '', path1, path2, path3, leader['bg'])
-
-    file2 = nextcord.File(f"{interaction.id}0.png", filename="image0.png")
-    trainer_embed.set_image(url=f'attachment://image0.png')
 
     low_z = max(len(user1_zerpmons), len(user2_zerpmons))
     b_type = 5
@@ -1866,7 +1875,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
         gym_buff_obj['trainerBuff'] = stage > 12
     msg_hook = None
 
-    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['token_id'], None, 'tower', gym_buff_obj)
+    uid = await db_query.make_battle_req(user1_zerpmons, user2_zerpmons, tc1['nft_id'], None, 'tower', gym_buff_obj)
     result = {}
     for cnt in range(120):
         if config.battle_results[uid]:
@@ -1875,6 +1884,13 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
         await asyncio.sleep(0.3)
     del config.battle_results[uid]
     if result:
+        await gen_image(str(interaction.id) + '0', url1, '', path1, path2, path3, leader['bg'],
+                        trainer_buffs=[result['playerATrainer'].get('buff') if result['playerATrainer'] else None,
+                                       result['playerBTrainer'].get('buff') if result['playerBTrainer'] else None]
+                        )
+
+        file2 = nextcord.File(f"{interaction.id}0.png", filename="image0.png")
+        trainer_embed.set_image(url=f'attachment://image0.png')
         idx1, idx2, log_idx = 0, 0, 0
         while idx1 < len(result['playerAZerpmons']) and idx2 < len(result['playerBZerpmons']):
             z1_obj, z2_obj = result['playerAZerpmons'][idx1], result['playerBZerpmons'][idx2]
@@ -1924,16 +1940,18 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
             if stage > 5 or user_doc.get('lives', 0) <= 0:
                 embed.add_field(
                     name=f"TRP gained:",
-                    value=f"{stage - 1}",
+                    value=f"0" if free_mode else f"{stage - 1}",
                     inline=False)
 
                 embed.add_field(
                     name=f"Reached Tower Level",
                     value=f"{stage}",
                     inline=False)
-                zrp_price = await xrpl_functions.get_zrp_price_api()
-                amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
-                await db_query.reset_gym_tower(_data1['discord_id'], amt, stage)
+                amt = 0
+                if not free_mode:
+                    zrp_price = await xrpl_functions.get_zrp_price_api()
+                    amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
+                await db_query.reset_gym_tower(_data1['discord_id'], amt, stage, is_free_mode=free_mode)
                 embed.add_field(name=f"ZRP won", value=amt, inline=True)
                 response = None
                 if amt > 0:
@@ -1969,16 +1987,21 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
             embed.add_field(name='\u200B', value='\u200B')
             embed.add_field(name='\u200B',
                             value='> Please use `/tower_rush battle` again to get another batch of random Zerpmon')
-            await db_query.update_gym_tower(_data1['discord_id'], new_level=stage + 1)
+            amt = 0
             if stage + 1 > 20:
-                zrp_price = await xrpl_functions.get_zrp_price_api()
-                amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
+                if not free_mode:
+                    zrp_price = await xrpl_functions.get_zrp_price_api()
+                    amt = round(config_extra.tower_reward[stage] / zrp_price, 2)
                 embed.add_field(name=f"ZRP won", value=amt, inline=False)
                 embed.add_field(name=f"**Congratulations** {user_mention} on clearing **Gym tower rush**!", value=amt,
                                 inline=False)
+                await db_query.update_gym_tower(_data1['discord_id'], new_level=stage + 1,
+                                                zrp_earned=amt, is_free_mode=free_mode)
                 response = None
                 if amt > 0:
                     response = await xrpl_ws.send_zrp(_data1['address'], amt, 'tower', )
+            else:
+                await db_query.update_gym_tower(_data1['discord_id'], new_level=stage + 1)
             await msg_hook.send(f"**WINNER**   👑**{user_mention}**👑", embed=embed, ephemeral=True)
 
             return 1

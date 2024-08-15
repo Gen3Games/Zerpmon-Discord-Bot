@@ -60,6 +60,7 @@ def get_zerpmon_by_name(name):
     return result
 
 
+@timeout_wrapper(120)
 async def get_nfts(address):
     try:
         if address == config.SAFARI_ADDR:
@@ -99,6 +100,7 @@ async def get_nfts(address):
         return False, []
 
 
+@timeout_wrapper(120)
 async def get_nfts_xahau(address, limit=1000):
     try:
         async with AsyncWebsocketClient('wss://xahau.network') as client:

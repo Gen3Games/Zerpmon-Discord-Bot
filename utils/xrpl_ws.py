@@ -2,11 +2,15 @@ import asyncio
 import logging
 import random
 import traceback
+
+from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 import httpx
 import requests
+from pymongo import ReturnDocument
 from xrpl.models.requests import AccountInfo, AccountLines
-from xrpl.asyncio.transaction import safe_sign_and_submit_transaction, get_transaction_from_hash
+from xrpl.asyncio.transaction import safe_sign_and_submit_transaction, get_transaction_from_hash, \
+    safe_sign_and_autofill_transaction, send_reliable_submission
 from xrpl.utils import xrp_to_drops
 
 import config
@@ -14,8 +18,8 @@ from xrpl.asyncio.clients import AsyncWebsocketClient, AsyncJsonRpcClient
 from xrpl.clients import JsonRpcClient
 from xrpl.asyncio.wallet.wallet_generation import Wallet
 from xrpl.models import Subscribe, Unsubscribe, StreamParameter, Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag, \
-    NFTokenAcceptOffer, IssuedCurrencyAmount, AccountTx, NFTokenCancelOffer, TransactionEntry, AccountOffers
-from xrpl.models.requests.tx import Tx
+    NFTokenAcceptOffer, IssuedCurrencyAmount, AccountTx, NFTokenCancelOffer, TransactionEntry, AccountOffers, ServerInfo
+import config_extra
 import db_query
 import xrpl_functions
 
@@ -23,7 +27,7 @@ URL = config.NODE_URL
 Address = config.STORE_ADDR
 Reward_address = config.REWARDS_ADDR
 
-hashes = []
+hashes = set()
 tokens_sent = []
 
 active_zrp_addr = config.B1_ADDR
@@ -167,6 +171,24 @@ async def get_seq(from_, amount=None):
         sending_wallet = Wallet(seed=config.AUCTION_SEED, sequence=sequence)
         sending_address = config.AUCTION_ADDR
         return sequence, sending_address, sending_wallet
+    elif from_ == 'auction2':
+        acc_info = AccountInfo(
+            account=config.AUCTION_ADDR_W
+        )
+        account_info = await client.request(acc_info)
+        sequence = account_info.result["account_data"]["Sequence"]
+        sending_wallet = Wallet(seed=config.AUCTION_SEED_W, sequence=sequence)
+        sending_address = config.AUCTION_ADDR_W
+        return sequence, sending_address, sending_wallet
+    elif from_ == 'sales':
+        acc_info = AccountInfo(
+            account=config_extra.SALES_ADDR
+        )
+        account_info = await client.request(acc_info)
+        sequence = account_info.result["account_data"]["Sequence"]
+        sending_wallet = Wallet(seed=config_extra.SALES_SEED, sequence=sequence)
+        sending_address = config_extra.SALES_ADDR
+        return sequence, sending_address, sending_wallet
     else:
         return None, None, None
 
@@ -246,11 +268,35 @@ async def listener(client, db_sep, store_address, wager_address):
                             'Destination'] in [i['to'] for i in
                                                config.track_zrp_txn.values()]):
                     if message.get('Memos'):
+                        # Check loan payments (New)
+                        try:
+                            if message['Destination'] == config.LOAN_ADDR and message[
+                                'Account'] in config_extra.loan_payments:
+                                loan_payment = config_extra.loan_payments[message['Account']]
+                                if loan_payment['checked']:
+                                    continue
+                                if type(message['Amount']) == dict and message['Amount']['currency'] == 'ZRP':
+                                    amount = round(float(message['Amount']['value']), 2)
+                                    if amount == loan_payment['ZRP']['amount']:
+                                        loan_payment['ZRP']['paid'] = True
+                                else:
+                                    amount = round(float(int(message['Amount']) / 10 ** 6), 2)
+                                    if amount == loan_payment['XRP']['amount']:
+                                        loan_payment['XRP']['paid'] = True
+                                if loan_payment['ZRP']['paid'] and loan_payment['XRP']['paid']:
+                                    loan_payment['checked'] = True
+                                    asyncio.create_task(proceed_verified_loan(db_sep,
+                                                                              loan_payment['uid'],
+                                                                              message['Account'],
+                                                                              timer=180))
+                                    # Start the loan process
+                        except:
+                            logging.error(traceback.format_exc())
                         continue
-                    if len(hashes) > 1000:
-                        hashes = hashes[900:]
+                    if len(hashes) > 10000:
+                        hashes = set()
                     if message['hash'] not in hashes:
-                        hashes.append(message['hash'])
+                        hashes.add(message['hash'])
                         print(message)
 
                         if type(message['Amount']) == dict and message['Amount']['currency'] == 'ZRP':
@@ -334,10 +380,10 @@ async def listener(client, db_sep, store_address, wager_address):
                 elif 'TransactionType' in message and message['TransactionType'] == "NFTokenCreateOffer" and \
                         'Destination' in message:
                     if message['Destination'] in [wager_address, config.LOAN_ADDR]:
-                        if len(hashes) > 1000:
-                            hashes = hashes[900:]
+                        if len(hashes) > 10000:
+                            hashes = set()
                         if message['hash'] not in hashes:
-                            hashes.append(message['hash'])
+                            hashes.add(message['hash'])
                             logging.error(f'NFT create offer: {msg}')
                             try:
                                 global wager_seq
@@ -368,10 +414,10 @@ async def listener(client, db_sep, store_address, wager_address):
 
                 elif 'TransactionType' in message and message['TransactionType'] == "NFTokenAcceptOffer" and \
                         'Account' in message and message['Account'] in config.eq_ongoing_purchasers:
-                    if len(hashes) > 1000:
-                        hashes = hashes[900:]
+                    if len(hashes) > 10000:
+                        hashes = set()
                     if message['hash'] not in hashes:
-                        hashes.append(message['hash'])
+                        hashes.add(message['hash'])
                         logging.error(f'NFT accept offer: {message}')
                         try:
                             user_addr = message['Account']
@@ -719,6 +765,8 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
                     safari_seq = response.result['account_sequence_next']
                 await asyncio.sleep(random.randint(1, 4))
             else:
+                if response.result['engine_result'] == 'tecPATH_DRY':
+                    return False
                 await asyncio.sleep(random.randint(1, 4))
         except Exception as e:
             logging.error(f"ZRP Txn Request timed out. {traceback.format_exc()}")
@@ -743,7 +791,8 @@ async def reward_gym(user_id, stage):
 async def get_nft_data_wager(id):
     try:
         rr2 = requests.get(
-            f"https://bithomp.com/api/cors/v2/nft/{id}?uri=true&metadata=true&history=true&sellOffers=true&buyOffers=true&offersValidate=true&offersHistory=true")
+            f"https://bithomp.com/api/v2/nft/{id}?uri=true&metadata=true",
+            headers={"x-bithomp-token": "76c6dd73-50e1-4b20-847f-75926ae48cef"})
         meta = rr2.json()['metadata']['attributes']
         url = rr2.json()['metadata']['image']
         name = rr2.json()['metadata']['name']
@@ -1066,7 +1115,7 @@ async def accept_valid_incoming_nft_offers(address, wallet_type='reward', txn_de
 
 async def cancel_invalid_nft_offers_xrpl(address, wallet_type='loan', txn_depth=1000):
     try:
-        client = AsyncWebsocketClient(config.NODE_URL)
+        client = AsyncWebsocketClient('wss://s1.ripple.com')
         await client.open()
         all_txns = []
         print(txn_depth, )
@@ -1095,7 +1144,7 @@ async def cancel_invalid_nft_offers_xrpl(address, wallet_type='loan', txn_depth=
             acct_info = AccountTx(
                 account=address,
                 ledger_index="validated",
-                # ledger_index_max=-1,
+                ledger_index_max=-1,
                 ledger_index_min=-1,
                 limit=400,
                 marker=result['marker']
@@ -1106,8 +1155,7 @@ async def cancel_invalid_nft_offers_xrpl(address, wallet_type='loan', txn_depth=
         all_nfts = [i['NFTokenID'] for i in all_nfts]
         print(all_nfts)
 
-        open_offers = []
-        sold_nfts = []
+        open_invalid_offers = []
         for tx in all_txns:
             if tx['tx']['TransactionType'] == 'NFTokenCreateOffer':
                 tokenId = tx['tx']['NFTokenID']
@@ -1122,14 +1170,12 @@ async def cancel_invalid_nft_offers_xrpl(address, wallet_type='loan', txn_depth=
                               f"NFTokenID -> {tokenId}\n"
                               f"offerId -> {offerId}\n"
                               f"Destination -> {sender}")
-                        open_offers.append((tokenId, offerId, sender))
+                        open_invalid_offers.append((tokenId, offerId, sender))
                     else:
                         print('Incoming NFT: ', tokenId)
-                        sold_nfts.append(tokenId)
                 except:
                     print(traceback.format_exc())
-        print(len(open_offers), open_offers)
-        print(len(sold_nfts), sold_nfts)
+        print(len(open_invalid_offers), open_invalid_offers)
         # for tokenId, offerId, sender in open_offers:
         #     if tokenId not in sold_nfts:
         #         await cancel_offer(wallet_type, offer=offerId,)
@@ -1155,6 +1201,52 @@ async def cancel_invalid_nft_offers_bithomp(address, wallet_type='loan'):
         print(traceback.format_exc())
         return 0
 
+
+async def proceed_verified_loan(db_sep, uid, addr, timer=180):
+    await asyncio.sleep(timer)
+    print(f"Scanning successful for: {addr}\n", config_extra.loan_payments)
+    try:
+        user_obj = await db_query.get_user(addr, db_sep)
+        payment_obj = await db_sep['loan-payments'].find_one_and_update(
+            {'_id': ObjectId(uid)},
+            {'$set': {'status': 'fulfilled'}},
+            return_document=ReturnDocument.BEFORE
+        )
+        # print(payment_obj)
+        if payment_obj is None:
+            return
+        listing = await db_sep['loan'].find_one({'token_id': payment_obj['token_id']})
+        if payment_obj['status'] != 'pending':
+            if payment_obj['status'] != 'fulfilled' or listing['accepted_by']['address'] is not None:
+                return
+        days = payment_obj['days']
+        amount = payment_obj['XRPAmount'] if listing['xrp'] else payment_obj['ZRPAmount']
+        owner_addr = listing['listed_by']['address']
+        accepted = await accept_nft('loan', listing['offer'], sender=owner_addr,
+                                    token=listing['token_id'])
+        if accepted:
+            loaned = await db_query.update_loanee(listing['zerp_data'], listing['serial'],
+                                                  {'id': user_obj['discord_id'], 'username': user_obj['username'],
+                                                   'address': addr}, days,
+                                                  amount_total=amount - listing['per_day_cost'],
+                                                  db_sep=db_sep)
+            if loaned:
+                if listing['xrp']:
+                    await send_txn(owner_addr, (amount - listing['per_day_cost'])/ days, 'loan',
+                                   memo=f'{listing["zerpmon_name"]} loan payment')
+                    # await send_zrp(loaner_obj['address'], amount / days, 'loan')
+                else:
+                    await send_zrp(owner_addr, round((amount - listing['per_day_cost']) / days, 2), 'loan',
+                                   memo=f'{listing["zerpmon_name"]} loan payment')
+    finally:
+        del config_extra.loan_payments[addr]
+
+
+# asyncio.run(cancel_invalid_nft_offers_bithomp(config.LOAN_ADDR))
+# asyncio.run(proceed_verified_loan(AsyncIOMotorClient("mongodb://ZerpmonAdmin:%5EBqUWS%29TArKqj%28XnU%23Tj@mongodb.zerpmon.world:27017/")['Zerpmon'],
+#                                   '66644dc75785ca8d23a48d1c',
+#                                   'rBSsovgmxz4TXuwKeB4UhD7MLca4xBoZYZ'))
+# asyncio.run(cancel_invalid_nft_offers_xrpl(config.LOAN_ADDR, 'loan', ))
 # asyncio.run(cancel_invalid_nft_offers_bithomp(config.LOAN_ADDR, 'loan', ))
 # status, nfts = asyncio.run(xrpl_functions.get_nfts(config.GIFT_ADDR))
 # for nft in nfts:
@@ -1172,25 +1264,40 @@ async def cancel_invalid_nft_offers_bithomp(address, wallet_type='loan'):
 #     send_nft_with_amt('store', config.JACKPOT_ADDR, '000800009DFF301D909E72368E61B385BDE81008B1875053C81A10F200000057',
 #                       '50', ))
 # asyncio.run(cancel_offer('store', '1D233C476376D505623ED844AB02344AB976E3474844EF254C613AA6B31BFCE6'))
-# asyncio.run(cancel_offer('store', '898A175CA69460A7D6ED4FC6B9D9CDED75981935E9C726F5826C3867BB17872B'))
-# asyncio.run(cancel_offer('store', 'B9B91491A25812A2B61101048953820E41100447F3CF2BC2DAD2F2B2F2B3BEE1'))
-# asyncio.run(get_latest_nft_offers(config.REWARDS_ADDR))
+# asyncio.run(cancel_offer('sales', '3EED1CA1BE91D5CED618B1BDB78F5CE861885B97DD0A82CD16DB0DC7A397D794'))
+# asyncio.run(cancel_offer('sales', '6A8E4ECD084908E1B97EE58F1AE1BA688D6FA3EAF4A30314EF01662B4ED3CE2A'))
+# asyncio.run(cancel_offer('wager', 'D4EC852A2F9FDD1BF509C91C614898A1E5AA2C76B5E6B5B22EF3F8AB0FDBC422'))
+# asyncio.run(accept_valid_incoming_nft_offers(config_extra.SALES_ADDR, 'sales'))
 # asyncio.run(accept_nft('auction', offer='9DE087BFBBD4F35BBBCC6BCE49FC13F537AFF401437AB178685C0252409A5308', sender='rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME',
 #                        token='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E808CEC1F048F1E84'))
-# asyncio.run(send_nft('auction', to_address='r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7ED29FD31400000079'))
+# asyncio.run(send_nft('auction2', to_address='rfoVzTB8bL6q78PdVN8WuNYvZQ5mw68WpA', token_id='000800009DFF301D909E72368E61B385BDE81008B187505300B7B41604DD3F7B'))
 # asyncio.run(send_nft('loan', to_address='rKXQxhG2ieKb1EauS5kWG9VceBN4soDbQN', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E3C46E497048F1EFC'))
 # asyncio.run(send_nft('loan', to_address='r9n33aVhaTj39p3xoagwAVNniLfgyG44Uh', token_id='0008138874D997D20619837CF3C7E1050A785E9F9AC53D7EF3E0D81A048F1F7F'))
-# asyncio.run(send_nft('safari', to_address='rpTe9tS8PyizHXaRrg8XFX9WGM35fZQQLW', token_id='000800009DFF301D909E72368E61B385BDE81008B18750536882682804DD418D'))
+# asyncio.run(cancel_offer('wager', to_address='rMaXtm9UhPx2YW8gZ2LLGvAVJZcBBEqKj9', token_id='000800009DFF301D909E72368E61B385BDE81008B187505396B975A504DD420A'))
 # asyncio.run(xrpl_functions.get_nfts(Reward_address))
 # asyncio.run(xrpl_functions.get_offers(config.GIFT_ADDR))
 # asyncio.run(create_nft_offer('reward', '0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E62D3E1C200000127', xrp_to_drops(321), 'r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75'))
-# asyncio.run(send_zrp('rLa5X9ZQhfQrQc1QLe5M67zGsS8jFprrXs', 20.89, 'safari'))
-# asyncio.run(send_zrp('rNRH7SK54JZS2r7PVSbC4ZuboKahdJFcb9', 0.5, 'loan'))
-
+# asyncio.run(send_txn(config.REWARDS_ADDR, 500, 'store'))
+# asyncio.run(send_zrp('rMjN4c2p9yvuTvVozYYUwoF2U859M9tQcC', 0.2, 'loan'))
+# asyncio.run(send_txn('rKaPGFVkaNcw2L7dEkBQ9gKvob57KBpNPg', 1.2, 'loan'))
+# asyncio.run(send_txn(config.REWARDS_ADDR, 150, 'store'))
+# async def test():
+#     client = AsyncWebsocketClient(config.NODE_URL)
+#     await client.open()
+#     print(await client.request(ServerInfo()))
 # asyncio.run(test())
-# asyncio.run(send_txn(config.REWARDS_ADDR, 289, 'store'))
+# asyncio.run(send_txn(config.REWARDS_ADDR, 300, 'store'))
 # asyncio.run(send_txn('rpTe9tS8PyizHXaRrg8XFX9WGM35fZQQLW', 2.5, 'reward'))
-# asyncio.run(send_zrp('rUYYh3qUwzcPeuW8FNNmpUPsQVzyfSM599', 12.1, 'loan'))
+# asyncio.run(send_txn('rN7LMHxNL2sMh2heFRyKdCv8k7X2wydbgq', 637, 'auction2'))
 # asyncio.run(send_txn('rPBwMeDTbrkfVPkGCAVvWMeLXwXaTwMRz6', 0.19, 'reward'))
+# left = {'rPhaYsUb6PwbZ6y7uUYJWU911U8pPJjW62': 0.34, 'rQTRqbjm9avMZPnjHeEFMVwXFAoxb453u': 6.61, 'rNqXMToefg5UF97AmM39bXBaLfPxpnhYky': 5.27, 'rHrVJKUuS8PcMmXWEAKg59g9SLUzFAsfmE': 4.82, 'rL4bgBCnjUdN47WfTFFFdyyPQF8kaNHHZ9': 11.15, 'rPT35AfVZb6wyaCWbM8KVLgcFCnFVxb9rB': 8.51, 'rGdduLLvYWRvNqWDRZhiTwyo8i51mfioNs': 6.71, 'rKaPGFVkaNcw2L7dEkBQ9gKvob57KBpNPg': 8.03, 'rECmio5gSPSJFQrSdVx2wEUkR3wJHWmaD1': 5.02, 'rP4dg8x7WRBRSu13d3JePubdahtnJeBTCX': 3.07, 'rJXvxx7Vnr1WbjDdBYbaPNSDFqaUtjmNwA': 5.14, 'rw8jZqZ5epaoMtNQh226LNC1sXnQhoxFzS': 2.27, 'rM6HpUWfkJpUWhMsrHit2FUdB52KqXfxuB': 4.64, 'rE2JYETcXfZWNoF6buWDFFxu325yvsMuY': 3.65, 'rDG5LDPqdJGfMq57TFrsMAAouvSXSXAsQz': 2.88, 'r3HRMnkbWzmnXbMR52T8838V8Ux15vCnaK': 2.34, 'rEPbQGSGvfgbsiS9Md3izVM8YKffFEymEd': 0.74, 'rPP6uD8QLRCz2NTmieMyANXJdro3mX9TL1': 2, 'rET7MmQUjeNZvN647Jo28u7FArTFVx1vGg': 0.29, 'r92H7K74iiFFUDnapSyHbc8uQv6EiKWR5f': 2.1}
 
+
+# asyncio.run(send_txn('rKteHT33CKs2fRPw2zGd813A3qJSXLsf1K', 350, 'sales'))
+# asyncio.run(send_txn('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 15050, 'sales'))
 # asyncio.run(get_nft_data_wager('0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E283CC566000000CB'))
+# asyncio.run(send_zrp('r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM', 7, 'safari'))
+# refund1 'rhA5i9dWtXprHXYiAzgUdRoyybGmfnV9Pj'
+# asyncio.run(accept_nft("store", 'offer', 'sender', 'token'))
+# asyncio.run(send_nft('wager', to_address='raatYwJEoziduFfYiDXCMVoi9A85ma1WLW', token_id='0008138805D83B701191193A067C4011056D3DEE2B298C553CDCDE2F00000094'))
+

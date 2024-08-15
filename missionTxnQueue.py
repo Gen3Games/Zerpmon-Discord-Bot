@@ -24,7 +24,7 @@ URL = config.NODE_URL
 hashes = []
 sent = []
 
-mission_seq = None
+xahau_seq = None
 ws_client = AsyncWebsocketClient(URL)
 
 
@@ -82,7 +82,7 @@ def update_mission_stats(reward_rate):
 
 async def send_nft(from_, to_address, token_id):
     client = await get_ws_client()
-    global mission_seq
+    global xahau_seq
     try:
         for i in range(5):
             sequence, sending_address, sending_wallet = await get_seq(from_)
@@ -140,7 +140,7 @@ async def send_nft(from_, to_address, token_id):
 
 async def send_txn(to: str, amount: float, sender):
     client = await get_ws_client()
-    global mission_seq
+    global xahau_seq
     memo = 'Zerpmon Mission Reward'
     for i in range(5):
         try:
@@ -203,7 +203,7 @@ async def get_seq_num():
 
 async def get_seq(from_):
     client = await get_ws_client()
-    global mission_seq
+    global xahau_seq
     if from_ == 'mission':
         acc_info = AccountInfo(
             account=config.REWARDS_ADDR
@@ -249,6 +249,7 @@ async def main():
     while True:
         try:
             queued_txns = get_txn_log()
+            await asyncio.sleep(15)
             if time.time() - last_check > 120:
                 async with AsyncWebsocketClient(URL) as client:
                     ws_client = client

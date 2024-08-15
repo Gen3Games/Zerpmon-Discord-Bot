@@ -13,6 +13,7 @@ import pytz
 from PIL import Image, ImageDraw, ImageFont
 from nextcord import ButtonStyle
 from nextcord.ui import Button, View
+from pymongo import ReturnDocument
 
 import config
 import config_extra
@@ -39,15 +40,15 @@ SAFARI_REWARD_CHANCES = {
     "candy_white": 2.1667,
     "candy_gold": 2.1667,
     "candy_level_up": 0.8333,
-    "equipment": 0.7000,
+    "equipment": 0,  # 0.7000,
     "jackpot": 0.1833,
     "gym_refill": 2.6667,
     "revive_potion": 1.2667,
     "mission_refill": 1.2667,
-    "zerpmon": 0 #0.0833
+    "zerpmon": 0.0833
 }
 
-print(sum(list(SAFARI_REWARD_CHANCES.values())))
+print('sum:', sum(list(SAFARI_REWARD_CHANCES.values())))
 
 
 async def wager_battle_r_callback(_i: nextcord.Interaction, amount, user_address, reward):
@@ -174,9 +175,10 @@ async def show_store(interaction: nextcord.Interaction):
     return main_embed
 
 
-async def store_callback(interaction: nextcord.Interaction):
+async def store_callback(interaction: nextcord.Interaction, defer=True):
     user_id = interaction.user.id
-    await interaction.response.defer(ephemeral=True)
+    if defer:
+        await interaction.response.defer(ephemeral=True)
     main_embed = CustomEmbed(title="Zerpmon Store", color=0xfcff82)
     main_embed.add_field(name="**Revive All Potions**" + '\t🍹',
                          value=f"Cost: `{config.POTION[0]} XRP`" if str(user_id) in config.store_24_hr_buyers else
@@ -245,7 +247,11 @@ async def switch_mission_mode(i: nextcord.Interaction, current_mode: bool):
 
 async def button_callback(user_id, interaction: nextcord.Interaction, loser: int = None,
                           mission_zerpmon_used: bool = False):
-    _user_owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
+    if type(user_id) is dict:
+        user_id, _user_owned_nfts = interaction.user.id, user_id
+    else:
+        await interaction.response.defer(ephemeral=True)
+        _user_owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
     u_flair = f' | {_user_owned_nfts["data"].get("flair", [])[0]}' if len(
         _user_owned_nfts["data"].get("flair", [])) > 0 else ''
     _user_owned_nfts['user'] += u_flair
@@ -278,7 +284,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
                                        view=view,
                                        ephemeral=True
                                        )
-            button.callback = lambda i: use_missionP_callback(i, True)
+            button.callback = lambda i: use_missionP_callback(i, _user_owned_nfts, True,)
             return
         elif _user_owned_nfts['data']['battle']['reset_t'] < time.time():
             # await db_query.update_battle_count(user_id, -1)
@@ -297,7 +303,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     r_view = View()
     r_view.add_item(r_button)
     r_view.timeout = 120
-    r_button.callback = lambda i: use_reviveP_callback(interaction, True)
+    r_button.callback = lambda i: use_reviveP_callback(interaction, _user_owned_nfts, True)
     if len(_active_zerpmons) == 0:
         await interaction.send(content=
                                f"Sorry all Zerpmon are resting, please use a **revive** potion to use them "
@@ -365,7 +371,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     view2 = View()
     view2.add_item(button2)
     view2.timeout = 120
-    button2.callback = lambda i: use_missionP_callback(i, True)
+    button2.callback = lambda i: use_missionP_callback(i, _user_owned_nfts, True)
 
     _b_num += 1
     reset_str = ''
@@ -392,10 +398,15 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     button.callback = lambda i: button_callback(user_id, i, loser, mission_zerpmon_used)
 
 
-async def use_missionP_callback(interaction: nextcord.Interaction, button=False):
+async def use_missionP_callback(interaction: nextcord.Interaction, owned_nfts=None, button=False):
     user = interaction.user
     user_id = user.id
-    owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except:
+        pass
+    if owned_nfts is None:
+        owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
 
     if button:
         i_id = interaction.id
@@ -416,7 +427,7 @@ async def use_missionP_callback(interaction: nextcord.Interaction, button=False)
     potions = int(owned_nfts['data']['mission_potion'])
     addr = owned_nfts['data']['address']
     if 'mission_potion' not in owned_nfts['data'] or potions <= 0:
-        return (await store_callback(interaction))
+        return (await store_callback(interaction, defer=False))
 
     # saved = await db_query.mission_refill(user_id)
     # if not saved:
@@ -435,10 +446,14 @@ async def use_missionP_callback(interaction: nextcord.Interaction, button=False)
     return True
 
 
-async def use_reviveP_callback(interaction: nextcord.Interaction, button=False):
+async def use_reviveP_callback(interaction: nextcord.Interaction, owned_nfts=None, button=False):
     user = interaction.user
-
-    owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except:
+        pass
+    if owned_nfts is None:
+        owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
 
     if button:
         i_id = interaction.id
@@ -467,7 +482,7 @@ async def use_reviveP_callback(interaction: nextcord.Interaction, button=False):
         # await interaction.send(
         #     f"Sorry **0** Revive All Potions found for **{owned_nfts['user']}**, need **1** to revive Zerpmon",
         #     ephemeral=True)
-        return (await store_callback(interaction))
+        return (await store_callback(interaction, defer=False))
 
     # await interaction.send(
     #     f"**Reviving all Zerpmon...**",
@@ -599,9 +614,10 @@ async def show_zrp_holdings(interaction: nextcord.Interaction):
     return main_embed
 
 
-async def zrp_store_callback(interaction: nextcord.Interaction):
+async def zrp_store_callback(interaction: nextcord.Interaction, defer=True):
     user_id = interaction.user.id
-    await interaction.response.defer(ephemeral=True)
+    if defer:
+        await interaction.response.defer(ephemeral=True)
     main_embed = CustomEmbed(title="ZRP Store", color=0xfcff82)
     zrp_price = await xrpl_functions.get_zrp_price_api()
     refill_p = config.ZRP_STORE['refill'] / zrp_price
@@ -683,9 +699,9 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
                          value=f"Cost: `{jawb_p:.2f} ZRP`",
                          inline=False)
 
-    main_embed.add_field(name="**Safari Trip**" + '\t🎰',
-                         value=f"Cost: `{safari_p:.2f} ZRP`",
-                         inline=False)
+    # main_embed.add_field(name="**Safari Trip**" + '\t🎰',
+    #                      value=f"Cost: `{safari_p:.2f} ZRP`",
+    #                      inline=False)
 
     main_embed.add_field(name=f"\u200B",
                          value=f"Items will be available within a few minutes after transaction is successful",
@@ -699,7 +715,7 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
 
     sec_embed = await show_zrp_holdings(interaction)
 
-    b0 = Button(label="Buy Safari Trip", style=ButtonStyle.blurple, emoji='🎰', row=0)
+    # b0 = Button(label="Buy Safari Trip", style=ButtonStyle.blurple, emoji='🎰', row=0)
     b1 = Button(label="Buy Gym Refill", style=ButtonStyle.blurple, emoji='🍵', row=0)
     b2 = Button(label="Buy Power Candy (White)", style=ButtonStyle.blurple, emoji='🍬', row=0)
     b3 = Button(label="Buy Power Candy (Gold)", style=ButtonStyle.blurple, emoji='🍭', row=0)
@@ -717,7 +733,8 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     b15 = Button(label="Buy Zerpmon Name Flair", style=ButtonStyle.green, emoji='💎', row=3)
     # user_d = await db_query.get_owned(str(user_id))
     # zrp_gift_box, xblade_gift_box = await db_query.get_boxes(user_d['address'])
-    all_btns = [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15]
+    # all_btns = [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15]
+    all_btns = [b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15]
     # if zrp_gift_box > 0:
     #     b8 = Button(label="Open Zerpmon Gift Box", style=ButtonStyle.success, emoji='🎁', row=2)
     #     all_btns.append(b8)
@@ -740,7 +757,7 @@ async def zrp_store_callback(interaction: nextcord.Interaction):
     view.timeout = 120  # Set a timeout of 60 seconds for the view to automatically remove it after the time is up
 
     # Add the button callback to the button
-    b0.callback = lambda i: on_button_click(i, label=b0.label, amount=safari_p)
+    # b0.callback = lambda i: on_button_click(i, label=b0.label, amount=safari_p)
     b1.callback = lambda i: on_button_click(i, label=b1.label, amount=refill_p)
     b2.callback = lambda i: on_button_click(i, label=b2.label, amount=candy_white_p)
     b3.callback = lambda i: on_button_click(i, label=b3.label, amount=candy_gold_p)
@@ -769,7 +786,7 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
     # Sanity checks
     # if _i.user.id in config.ADMINS:
     #     return user_owned_nfts['address'], True
-    #     amount = round(amount / 100, 2)
+        # amount = round(amount / 100, 2)
     if user_owned_nfts is None:  # or (len(user_owned_nfts['zerpmons']) == 0 and not loan and not fee):
         await _i.edit_original_message(
             content="Sorry you can't make store/marketplace purchases, as you don't hold a Zerpmon NFT",
@@ -824,6 +841,8 @@ async def zrp_purchase_callback(user_owned_nfts, _i: nextcord.Interaction, amoun
 async def use_gym_refill_callback(interaction: nextcord.Interaction):
     user = interaction.user
     user_id = user.id
+    await interaction.response.defer(ephemeral=True)
+
     user_owned_nfts = {'data': await db_query.get_owned(user.id), 'user': user.name}
 
     # Sanity checks
@@ -840,7 +859,7 @@ async def use_gym_refill_callback(interaction: nextcord.Interaction):
 
         if 'gym' not in owned_nfts['data'] or 'refill_potion' not in owned_nfts['data']['gym'] or int(
                 owned_nfts['data']['gym']['refill_potion']) <= 0:
-            return (await zrp_store_callback(interaction))
+            return (await zrp_store_callback(interaction, defer=False))
 
     await interaction.send("**SUCCESS**", ephemeral=True)
     saved = await db_query.gym_refill(user_id)
@@ -852,6 +871,7 @@ async def use_gym_refill_callback(interaction: nextcord.Interaction):
 
 
 async def use_candy_callback(interaction: nextcord.Interaction, label, next_page=0, amt=1):
+    await interaction.response.defer(ephemeral=True)
     owned_nfts = await db_query.get_owned(interaction.user.id)
     if owned_nfts is None:
         await interaction.send(
@@ -860,9 +880,7 @@ async def use_candy_callback(interaction: nextcord.Interaction, label, next_page
         return
 
     if int(owned_nfts.get(label, 0)) < amt:
-        return await zrp_store_callback(interaction)
-
-    await interaction.response.defer(ephemeral=True)
+        return await zrp_store_callback(interaction, defer=False)
 
     async def handle_select_menu(_i: nextcord.Interaction, addr):
         print(_i.data)
@@ -1476,10 +1494,12 @@ async def lure_callback(interaction: nextcord.Interaction, user_doc):
         print(_i.data)
         selected_option = _i.data["values"][0]  # Get the selected option
         await _i.response.defer(ephemeral=True)  # Defer the response to avoid timeout
-        await db_query.add_zerp_lure(user_d['address'], -1)
-        await db_query.update_user_zerp_lure(user_d['discord_id'], selected_option)
-        await interaction.edit_original_message(content="**Success**", embeds=[], view=view)
-
+        success = await db_query.add_zerp_lure(user_d['address'], -1)
+        if success:
+            await db_query.update_user_zerp_lure(user_d['discord_id'], selected_option)
+            await interaction.edit_original_message(content="**Success**", embeds=[], view=view)
+        else:
+            await interaction.edit_original_message(content="**Failed**", embeds=[], view=view)
     # Register the event handler for the select menu
     select_menu.callback = lambda i: handle_select_menu(i, user_doc)
 
@@ -1490,17 +1510,16 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
     xrp_fee = 0.111508861 * xp_gain * 0.05
     zrp_price = await xrpl_functions.get_zrp_price_api()
     zrp_amt = round(xrp_fee / zrp_price, 2)
-    asc_amt = round(90 / zrp_price, 2)
+    asc_amt = round(99 / zrp_price, 2)
 
     ascended = zerp_doc.get('ascended', False)
     logging.error(f"Recycle: {xp_gain, recycle_p, config.RECYCLE_XP[item], cnt}")
     higher_lvls = await db_query.get_higher_lvls(zerp_doc.get('level', 0))
     lvl_up_list = []
-    gain_left = xp_gain
+    gain_left = xp_gain + zerp_doc.get('xp', 0)
     idx = 0
     pending_lvls = len(higher_lvls)
     failed = False
-    gain_left += zerp_doc.get('xp', 0)
     while idx < pending_lvls:
         cur_lvl = higher_lvls[idx]
         if not failed and cur_lvl['level'] > 30 and not ascended:
@@ -1516,7 +1535,7 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                         )
 
     # print(idx, higher_lvls, '\n', lvl_up_list)
-    f_lvl = higher_lvls[idx - 1]['level'] if idx else zerp_doc.get('level')
+    f_lvl = higher_lvls[idx-1]['level'] if idx else zerp_doc.get('level')
     if f_lvl == 60:
         xp_gain -= gain_left
         cnt = int(xp_gain / (config.RECYCLE_XP[item] * (recycle_p / 100))) + 1
@@ -1533,7 +1552,7 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                     inline=False)
     if f_lvl > 30 and not ascended:
         embed.add_field(name="Ascension Fee: ",
-                        value=f"{asc_amt} XRP",
+                        value=f"{asc_amt} ZRP",
                         inline=False)
     embed.add_field(name=f"{zerp_doc['name']} will reach:",
                     value=f"Level **{f_lvl}**",
@@ -1588,8 +1607,8 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
             else:
                 fn = getattr(db_query, f"add_{item}") if item != 'lure_cnt' else db_query.add_zerp_lure
                 await fn(user_doc['address'], -cnt)
-            gain_left = xp_gain
             l_up, reward_list = False, defaultdict(int)
+            gain_left = xp_gain
             dec_idx = False
             idx = -1
             for idx, lvl in enumerate(lvl_up_list):
@@ -1600,7 +1619,11 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                         continue
                     else:
                         break
-                print(gain_left)
+                print(gain_left, lvl)
+                if gain_left < lvl['xp_required']:
+                    # dec_idx = True
+                    print('breaking')
+                    break
                 res, lvl_up, rewards, _ = await db_query.add_xp(zerp_doc['name'], user_doc['address'],
                                                                 lvl['xp_required'],
                                                                 ascended=ascended or ascend)
@@ -1612,8 +1635,13 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                     else:
                         reward_list[key] += val
                 gain_left -= lvl['xp_required']
-            _, _, _, xp_rn = await db_query.add_xp(zerp_doc['name'], user_doc['address'], gain_left,
+            _, _, rewards, xp_rn = await db_query.add_xp(zerp_doc['name'], user_doc['address'], gain_left,
                                                    ascended=ascended or ascend)
+            for key, val in rewards.items():
+                if type(val) is str:
+                    reward_list[val] += rewards['extra_candy_cnt']
+                else:
+                    reward_list[key] += val
             if dec_idx:
                 idx -= 1
             if idx == len(higher_lvls) - 1:
@@ -1621,8 +1649,9 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                 higher_lvls.append(higher_lvls[idx])
             elif idx + 1 >= pending_lvls:
                 higher_lvls[idx + 1] = higher_lvls[idx]
+            print(dec_idx, higher_lvls[idx + 1], f_lvl)
             higher_lvls[idx + 1]['xp'] = xp_rn
-            higher_lvls[idx + 1]['level'] -= 1
+            higher_lvls[idx + 1]['level'] = f_lvl
             embed = checks.populate_lvl_up_embed(zerp_doc, higher_lvls[idx + 1], l_up, reward_list)
             await _i.edit_original_message(
                 content=f"**Success**, **{zerp_doc['name']}** gained `{xp_gain} XP`.", embed=embed, view=None)
@@ -2037,9 +2066,11 @@ async def boss_callback(user_id, interaction: nextcord.Interaction):
         await db_query.set_boss_battle_t(user_id)
         await interaction.send('Battle beginning!', ephemeral=True)
         winner = await battle_function.proceed_boss_battle(interaction)
+        if winner == 0:
+            raise Exception("Boss Battle doc not found", 500)
     except Exception as e:
         await db_query.set_boss_battle_t(user_id, reset_next_t=True)
-        logging.error(f'ERROR in gym battle: {traceback.format_exc()}')
+        logging.error(f'ERROR in boss battle: {traceback.format_exc()}')
 
 
 """Ascend callback"""
@@ -2129,8 +2160,11 @@ def get_alloc_embeds(interaction: nextcord.Interaction, user_obj):
     return embed, embed2
 
 
-async def setup_gym_tower(interaction: nextcord.Interaction, user_d, reset=False):
-    if not reset:
+async def setup_gym_tower(interaction: nextcord.Interaction,
+                          user_d,
+                          reset=False,
+                          is_free_mode=False):
+    if not reset and not is_free_mode:
         zrp_price = await xrpl_functions.get_zrp_price_api()
         zrp_amt = round(5 / zrp_price, 2)
         await interaction.edit_original_message(
@@ -2143,7 +2177,7 @@ async def setup_gym_tower(interaction: nextcord.Interaction, user_d, reset=False
     else:
         success = True
     if success:
-        user_obj = await db_query.add_temp_user(user_d, is_reset=reset)
+        user_obj = await db_query.add_temp_user(user_d, is_reset=reset, is_free_mode=is_free_mode)
         embed, embed2 = get_alloc_embeds(interaction, user_obj)
 
         lvl = user_obj['tower_level']
@@ -2394,3 +2428,4 @@ async def unban_nft(interaction: nextcord.Interaction, nft_id):
         await interaction.send("**Success**", ephemeral=True)
     else:
         await interaction.send("**Failed**, invalid nft id", ephemeral=True)
+

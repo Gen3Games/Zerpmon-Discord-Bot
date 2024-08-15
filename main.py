@@ -216,7 +216,12 @@ async def on_ready():
                         except:
                             logging.error(f"Error while getting holders {traceback.format_exc()}")
                     for r, v in config.RANKS.items():
-                        config.RANKS[r]['role'] = nextcord.utils.get(guild.roles, name=r)
+                        config.RANKS[r]['roles'] = {
+                            'main': nextcord.utils.get(guild.roles, name=r),
+                            '1v1': nextcord.utils.get(guild.roles, name=r + ' (1v1)'),
+                            '3v3': nextcord.utils.get(guild.roles, name=r + ' (3v3)'),
+                            '5v5': nextcord.utils.get(guild.roles, name=r + ' (5v5)'),
+                        }
                     config.global_br_participants = await db_query.get_br_dict()
                     br_channel, br_battle_channel = None, None
                     for channel in guild.channels:
@@ -239,7 +244,7 @@ async def on_ready():
                 except:
                     await asyncio.sleep(5)
         print(guild.name)
-    config.gym_main_reset = await db_query.get_gym_reset()
+    config.gym_main_reset, _ = await db_query.get_gym_reset()
     config.zerpmon_holders = zerpmon_players
     config.boss_active, _, config.boss_reset_t, config.BOSS_MSG_ID, new = await db_query.get_boss_reset(
         zerpmon_players * config.BOSS_HP_PER_USER)
@@ -2660,7 +2665,7 @@ async def trade_nft(interaction: nextcord.Interaction, your_nft_id: str, opponen
                     ):
     execute_before_command(interaction)
     user_id = interaction.user.id
-
+    await interaction.response.defer(ephemeral=True)
     # Sanity
     if your_nft_id == opponent_nft_id:
         await interaction.send("Sorry, you are trying to Trade a single NFT 🥲, this trade isn't possible in this "
@@ -3719,7 +3724,7 @@ async def view_gyms(interaction: nextcord.Interaction):
                   f'> {zerps[4]["name"]}\t({checks.get_type_emoji_without_attr(zerps[4]["zerpmonType"])})\n',
             inline=False)
     h, m, s = await checks.get_time_left_utc(1)
-    main_ts = await db_query.get_gym_reset()
+    main_ts, _ = await db_query.get_gym_reset()
     embed.add_field(name='\u200B', value=f'Won Gym reset: <t:{int(main_ts)}:R>', inline=False)
     embed.set_footer(icon_url=config.ICON_URL, text=f'Time left in Gym Leader Zerpmon Reset {h}h {m}m\n'
                      )
@@ -4345,7 +4350,7 @@ async def gym_tower(interaction: nextcord.Interaction):
 
 
 @gym_tower.subcommand(name='battle', description="Start battle against Tower Rush leaders.")
-async def gym_tower_battle(interaction: nextcord.Interaction):
+async def gym_tower_battle(interaction: nextcord.Interaction, free_mode: bool):
     execute_before_command(interaction)
     user = interaction.user
     await interaction.response.defer(ephemeral=True)
@@ -4357,7 +4362,8 @@ async def gym_tower_battle(interaction: nextcord.Interaction):
         await wallet(interaction)
     elif user_temp_d is None or user_temp_d.get('reset', False) or not user_temp_d.get('fee_paid', False):
         await callback.setup_gym_tower(interaction, user_doc,
-                                       reset=False if not user_temp_d else user_temp_d.get('reset', False))
+                                       reset=False if not user_temp_d else user_temp_d.get('reset', False),
+                                       is_free_mode=free_mode)
     else:
         if await checks.verify_gym_tower(interaction, user_temp_d):
             await interaction.edit_original_message(content='**Battle beginning**...')

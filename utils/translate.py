@@ -42,6 +42,6 @@ def translate_message(code: str, messages: dict, bold=True) -> list[str]:
             fmt = ''
             if bold:
                 fmt = '**'
-            translation = translation.replace(f'{{{key}}}', f'{fmt}{value if value else "⚫" }{fmt}')
+            translation = translation.replace(f'{{{key}}}', f'{fmt}{value if value != "" else "⚫" }{fmt}')
         msgs.append(translation)
     return msgs

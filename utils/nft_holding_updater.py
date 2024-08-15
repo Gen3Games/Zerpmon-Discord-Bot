@@ -4,8 +4,11 @@ import time
 import traceback
 
 import nextcord
+from nextcord import Role
+
 from utils.refresh_fn import get_type, filter_nfts
 import config
+from config import TIERS, RANKS
 import config_extra
 import xrpl_functions
 import db_query
@@ -27,17 +30,27 @@ async def update_nft_holdings(client: nextcord.Client):
         next_runtime = time.time() - 3600
         all_users = await db_query.get_all_users_cursor()
         guilds = client.guilds
-
+        main_servers = [i for i in guilds if i.id == config.MAIN_GUILD[0]]
+        main_guild = main_servers[0] if len(main_servers) > 0 else None
+        z_role, t_role = None, None
+        try:
+            z_role = nextcord.utils.get(main_guild.roles, name="Zerpmon Holder")
+            t_role = nextcord.utils.get(main_guild.roles, name="Trainer")
+        except:
+            logging.error("Failed to grab z_role")
         async for old_user in all_users:
             ti = time.time()
             user_obj = old_user
 
             try:
-                if 'username' not in user_obj:
+                if 'username' in user_obj:
+                    print(user_obj['username'])
+                if 'zerpmons' not in user_obj:
                     continue
-                print(user_obj['username'])
                 if 'address' not in user_obj or len(user_obj['address']) < 5 or \
-                        user_obj['address'] in ['rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM', 'r9AHwn5mL6GpchBEie1K1z8S8pqejsyU2k']:
+                        user_obj['address'] in ['rHvEgvSS4sQR2DSRioKs8rcNXjHwxa6oSe',
+                                                'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM',
+                                                'r9AHwn5mL6GpchBEie1K1z8S8pqejsyU2k']:
                     continue
                 good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
                 if user_obj.get('address_config'):
@@ -97,40 +110,104 @@ async def update_nft_holdings(client: nextcord.Client):
                             remove_serials['equipments'].append(serial)
                             # await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
 
-                if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
-                    for guild in guilds:
-                        if 'guild_id' not in user_obj or ('guild_id' in user_obj and user_obj['guild_id'] == guild.id):
-                            try:
-                                # await asyncio.sleep(1)
-                                user = await guild.fetch_member(int(user_obj['discord_id']))
-                                print(guild, user)
-                                if user is not None:
-                                    user_obj['guild_id'] = guild.id
-                                    if guild.id != config.MAIN_GUILD[0]:
-                                        continue
-                                    if len(user_obj['zerpmons']) > 0:
-                                        try:
-                                            role = nextcord.utils.get(guild.roles, name="Zerpmon Holder")
-                                            if role is None:
-                                                continue
-                                            await user.add_roles(role)
-                                        except Exception as e:
-                                            print(f"USER already has the required role {traceback.format_exc()}")
-                                    if len(user_obj['trainer_cards']) > 0:
-                                        try:
-                                            role = nextcord.utils.get(guild.roles, name="Trainer")
-                                            if role is None:
-                                                continue
-                                            await user.add_roles(role)
-                                        except:
-                                            print("USER already has the required role")
-                            except Exception as e:
-                                print(f"USER already has the required role {e}")
-                            await asyncio.sleep(2)
+                if user_obj.get('discord_id'):
+                    if main_guild:
+                        if 'guild_id' not in user_obj:
+                            user_obj['guild_id'] = main_guild.id
+                        try:
+                            # await asyncio.sleep(1)
+                            user = main_guild.get_member(int(user_obj['discord_id']))
+                            if user is None:
+                                user = await main_guild.fetch_member(int(user_obj['discord_id']))
+                            # print(guild, user)
+                            if user is not None:
+                                rank_role_1v1 = user_obj.get('rank1', {}).get('tier', 'Unranked')
+                                rank_role_3v3 = user_obj.get('rank', {}).get('tier', 'Unranked')
+                                rank_role_5v5 = user_obj.get('rank5', {}).get('tier', 'Unranked')
+                                rank_role_current = TIERS[max([
+                                    TIERS.index(rank_role_1v1),
+                                    TIERS.index(rank_role_3v3),
+                                    TIERS.index(rank_role_5v5)])]
+                                roles_to_add: [Role] = []
+                                roles_to_remove: [Role] = []
+                                has_rank_role, has_z_role, has_t_role = False, False, False
+                                has_1v1_role, has_3v3_role, has_5v5_role = False, False, False
+                                for role in user.roles:
+                                    match role.name:
+                                        case "Novice Trainer" | "Apprentice Battler" | "Elite Explorer" | "Master Tamer" | "Grand Warlord" | "Legendary Trainer" | 'Prestige Trainer':
+                                            # Handle the matched roles here
+                                            print(f"Matched role: {role.name}")
+                                            if role.name != rank_role_current:
+                                                roles_to_remove.append(role)
+                                            else:
+                                                has_rank_role = True
+                                        case "Novice Trainer (1v1)" | "Apprentice Battler (1v1)" | "Elite Explorer (1v1)" | "Master Tamer (1v1)" | "Grand Warlord (1v1)" | "Legendary Trainer (1v1)" | 'Prestige Trainer (1v1)':
+                                            # Handle the matched roles here
+                                            print(f"Matched role: {role.name}")
+                                            if role.name != rank_role_1v1 + ' (1v1)':
+                                                roles_to_remove.append(role)
+                                            else:
+                                                has_1v1_role = True
+                                        case "Novice Trainer (3v3)" | "Apprentice Battler (3v3)" | "Elite Explorer (3v3)" | "Master Tamer (3v3)" | "Grand Warlord (3v3)" | "Legendary Trainer (3v3)" | 'Prestige Trainer (3v3)':
+                                            # Handle the matched roles here
+                                            print(f"Matched role: {role.name}")
+                                            if role.name != rank_role_3v3 + ' (3v3)':
+                                                roles_to_remove.append(role)
+                                            else:
+                                                has_3v3_role = True
+                                        case "Novice Trainer (5v5)" | "Apprentice Battler (5v5)" | "Elite Explorer (5v5)" | "Master Tamer (5v5)" | "Grand Warlord (5v5)" | "Legendary Trainer (5v5)" | 'Prestige Trainer (5v5)':
+                                            # Handle the matched roles here
+                                            print(f"Matched role: {role.name}")
+                                            if role.name != rank_role_5v5 + ' (5v5)':
+                                                roles_to_remove.append(role)
+                                            else:
+                                                has_5v5_role = True
+                                        case "Zerpmon Holder":
+                                            has_z_role = True
+                                        case "Trainer":
+                                            has_t_role = True
+                                if len(user_obj['zerpmons']) == 0 and has_z_role:
+                                    if z_role is not None:
+                                        roles_to_remove.append(z_role)
+                                elif not has_z_role:
+                                    if z_role is not None:
+                                        roles_to_add.append(z_role)
+                                if len(user_obj['trainer_cards']) == 0 and has_t_role:
+                                    if t_role is not None:
+                                        roles_to_remove.append(t_role)
+                                elif not has_t_role:
+                                    if t_role is not None:
+                                        roles_to_add.append(t_role)
+                                if not has_rank_role:
+                                    role = nextcord.utils.get(main_guild.roles, name=rank_role_current)
+                                    if role is not None:
+                                        roles_to_add.append(role)
+                                if not has_1v1_role:
+                                    if RANKS[rank_role_1v1]['roles']['1v1']:
+                                        roles_to_add.append(RANKS[rank_role_1v1]['roles']['1v1'])
+                                if not has_3v3_role:
+                                    if RANKS[rank_role_3v3]['roles']['3v3']:
+                                        roles_to_add.append(RANKS[rank_role_3v3]['roles']['3v3'])
+                                if not has_5v5_role:
+                                    if RANKS[rank_role_5v5]['roles']['5v5']:
+                                        roles_to_add.append(RANKS[rank_role_5v5]['roles']['5v5'])
+                                if len(roles_to_add) > 0:
+                                    try:
+                                        await user.add_roles(*roles_to_add)
+                                    except:
+                                        print("USER already has the required roles", [i.name for i in roles_to_add])
+                                if len(roles_to_remove) > 0:
+                                    try:
+                                        await user.remove_roles(*roles_to_remove)
+                                    except:
+                                        print("Failed to remove roles", [i.name for i in roles_to_remove])
+                        except Exception as e:
+                            print(f"USER already has the required role {e}")
+                        await asyncio.sleep(2)
 
                 await db_query.update_user_decks(user_obj, user_obj['discord_id'], serials, t_serial,
                                                  e_serial, remove_serials)
-                print('timeTaken:', time.time()-ti)
+                print('timeTaken:', time.time() - ti)
             except Exception as e:
                 logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")
 

@@ -114,20 +114,23 @@ async def setup_gym(amount):
     bal = float(await get_zrp_balance(active_zrp_addr)) if gym_bal is None else gym_bal
     if bal is not None:
         gym_bal = bal - amount
+        block_number = 1
         if bal is not None and bal < amount:
             if active_zrp_addr == config.B1_ADDR:
                 active_zrp_addr, active_zrp_seed = config.B2_ADDR, config.B2_SEED
+                block_number = 2
             else:
                 active_zrp_addr, active_zrp_seed = config.B3_ADDR, config.B3_SEED
-        await update_zrp_stats(burn_amount=0, distributed_amount=amount,
+                block_number = 3
+        await update_zrp_stats(burn_amount=0, distributed_amount=amount, block_number=block_number,
                                left_amount=gym_bal)
 
 
-@timeout_wrapper(20)
+@timeout_wrapper(30)
 async def accept_nft(from_, offer, sender='0', token='0'):
     client = await get_ws_client()
     global wager_seq, loan_seq, gym_seq, tower_seq
-    for i in range(3):
+    for i in range(2):
         sequence, sending_address, sending_wallet = await get_seq(from_)
 
         tx = NFTokenAcceptOffer(
@@ -154,15 +157,15 @@ async def accept_nft(from_, offer, sender='0', token='0'):
 def update_seq(response, from_):
     global gym_seq, loan_seq, wager_seq, tower_seq
     if from_ == 'loan':
-        loan_seq = response.result['account_sequence_next']
+        loan_seq = response.result['Sequence'] + 1
     elif from_ == 'gym':
-        gym_seq = response.result['account_sequence_next']
+        gym_seq = response.result['Sequence'] + 1
     elif from_ == 'tower':
-        tower_seq = response.result['account_sequence_next']
+        tower_seq = response.result['Sequence'] + 1
     elif from_ == 'wager':
-        wager_seq = response.result['account_sequence_next']
+        wager_seq = response.result['Sequence'] + 1
     else:
-        auction_seq = response.result['account_sequence_next']
+        auction_seq = response.result['Sequence'] + 1
 
 
 @timeout_wrapper(30)
@@ -170,7 +173,7 @@ async def send_nft(from_, to_address, token_id, memo=None):
     client = await get_ws_client()
     global gym_seq, loan_seq, wager_seq, tower_seq
     try:
-        for i in range(3):
+        for i in range(2):
             sequence, sending_address, sending_wallet = await get_seq(from_)
             memos = []
             if memo:
@@ -225,7 +228,7 @@ async def send_nft(from_, to_address, token_id, memo=None):
 async def create_nft_offer(from_: str, token_id: str, price: int, to_address: str, currency='XRP', memo=None):
     client = await get_ws_client()
     try:
-        for i in range(5):
+        for i in range(2):
             sequence, sending_address, sending_wallet = await get_seq(from_)
             memos = []
             if memo:
@@ -294,11 +297,11 @@ async def create_nft_offer(from_: str, token_id: str, price: int, to_address: st
     return False, None, None
 
 
-@timeout_wrapper(20)
+@timeout_wrapper(30)
 async def send_txn(to: str, amount: float, sender, memo=None):
     client = await get_ws_client()
     global gym_seq, loan_seq, wager_seq, tower_seq
-    for i in range(5):
+    for i in range(2):
         try:
             sequence, sending_address, sending_wallet = await get_seq(sender)
 
@@ -325,14 +328,16 @@ async def send_txn(to: str, amount: float, sender, memo=None):
             )
 
             # Sign and send the transaction
-            response = await safe_sign_and_submit_transaction(transaction, sending_wallet, client)
+            signed = await safe_sign_and_autofill_transaction(transaction, sending_wallet, client)
+            response = await send_reliable_submission(signed, client)
 
             # Print the response
             print(response.result)
-            if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
+            meta = response.result['meta']
+            if meta['TransactionResult'] in ["tesSUCCESS", "terQUEUED"]:
                 update_seq(response, sender)
-                return True, response.result['tx_json']['hash'], False
-            elif response.result['engine_result'] in ["tefPAST_SEQ"]:
+                return True, response.result['hash'], False
+            elif meta['TransactionResult'] in ["tefPAST_SEQ"]:
                 update_seq(response, sender)
                 await asyncio.sleep(random.randint(1, 4))
             else:
@@ -344,11 +349,11 @@ async def send_txn(to: str, amount: float, sender, memo=None):
     return False, '', False
 
 
-@timeout_wrapper(20)
+@timeout_wrapper(30)
 async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
     client = await get_ws_client()
     global wager_seq, active_zrp_seed, active_zrp_addr, gym_seq, loan_seq, tower_seq
-    for i in range(5):
+    for i in range(2):
         try:
             sequence, sending_address, sending_wallet = await get_seq(sender, amount)
             # Set the receiving address
@@ -377,14 +382,16 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
             transaction = Payment.from_dict(req_json)
 
             # Sign and send the transaction
-            response = await safe_sign_and_submit_transaction(transaction, sending_wallet, client)
+            signed = await safe_sign_and_autofill_transaction(transaction, sending_wallet, client)
+            response = await send_reliable_submission(signed, client)
 
             # Print the response
             print(response.result)
-            if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
+            meta = response.result['meta']
+            if meta['TransactionResult'] in ["tesSUCCESS", "terQUEUED"]:
                 update_seq(response, sender)
-                return True, response.result['tx_json']['hash'], False
-            elif response.result['engine_result'] in ["tefPAST_SEQ"]:
+                return True, response.result['hash'], False
+            elif meta['TransactionResult'] in ["tefPAST_SEQ"]:
                 update_seq(response, sender)
                 await asyncio.sleep(random.randint(1, 4))
             else:
@@ -396,13 +403,15 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
     return False, '', False
 
 
-async def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, jackpot_amount=0, db_sep=None):
+async def update_zrp_stats(burn_amount, distributed_amount, block_number: 1 | 2 | 3, left_amount=None, jackpot_amount=0,
+                           db_sep=None):
     stats_col = db['stats_log'] if db_sep is None else db_sep['stats_log']
     query = {'$inc': {'burnt': burn_amount, 'distributed': distributed_amount, 'jackpot_amount': jackpot_amount}}
     if left_amount is not None:
         query['$set'] = {'left_amount': left_amount}
     else:
         query['$inc']['left_amount'] = 0
+    query['$set']['block_number'] = block_number
     print(query)
     stats_col.update_one({
         'name': 'zrp_stats'
@@ -413,6 +422,7 @@ async def update_zrp_stats(burn_amount, distributed_amount, left_amount=None, ja
 
 @timeout_wrapper(20)
 async def get_seq(from_, amount=None):
+    global loan_seq
     client = await get_ws_client()
     match from_:
         case 'loan':
@@ -420,17 +430,17 @@ async def get_seq(from_, amount=None):
                 account=config.LOAN_ADDR
             )
             account_info = await client.request(acc_info)
-            sequence = account_info.result["account_data"]["Sequence"] if loan_seq is None else loan_seq
+            loan_seq = account_info.result["account_data"]["Sequence"]
             # Load the sending account's secret and address from a wallet
-            sending_wallet = Wallet(seed=config.LOAN_SEED, sequence=sequence)
+            sending_wallet = Wallet(seed=config.LOAN_SEED, sequence=loan_seq)
             sending_address = config.LOAN_ADDR
-            return sequence, sending_address, sending_wallet
+            return loan_seq, sending_address, sending_wallet
         case 'wager':
             acc_info = AccountInfo(
                 account=config.WAGER_ADDR
             )
             account_info = await client.request(acc_info)
-            sequence = account_info.result["account_data"]["Sequence"] if wager_seq is None else wager_seq
+            sequence = account_info.result["account_data"]["Sequence"] # if wager_seq is None else wager_seq
             # Load the sending account's secret and address from a wallet
             sending_wallet = Wallet(seed=config.WAGER_SEED, sequence=sequence)
             sending_address = config.WAGER_ADDR
@@ -440,7 +450,7 @@ async def get_seq(from_, amount=None):
                 account=config.TOWER_ADDR
             )
             account_info = await client.request(acc_info)
-            sequence = account_info.result["account_data"]["Sequence"] if tower_seq is None else tower_seq
+            sequence = account_info.result["account_data"]["Sequence"] # if tower_seq is None else tower_seq
             # Load the sending account's secret and address from a wallet
             sending_wallet = Wallet(seed=config.TOWER_SEED, sequence=sequence)
             sending_address = config.TOWER_ADDR
@@ -451,7 +461,7 @@ async def get_seq(from_, amount=None):
                 account=active_zrp_addr
             )
             account_info = await client.request(acc_info)
-            sequence = account_info.result["account_data"]["Sequence"] if gym_seq is None else gym_seq
+            sequence = account_info.result["account_data"]["Sequence"]# if gym_seq is None else gym_seq
             sending_wallet = Wallet(seed=active_zrp_seed, sequence=sequence)
             sending_address = active_zrp_addr
             return sequence, sending_address, sending_wallet
@@ -532,15 +542,15 @@ async def set_boss_hp(addr, dmg_done, cur_hp) -> dict:
 
     if new_hp > 0:
         doc = stats_col.find_one_and_update({'name': 'world_boss', 'boss_active': True},
-                             {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}},
-                                      return_document=ReturnDocument.AFTER)
+                                            {'$inc': {'total_weekly_dmg': dmg_done, 'boss_hp': -dmg_done}},
+                                            return_document=ReturnDocument.AFTER)
     else:
         doc = stats_col.find_one_and_update({'name': 'world_boss', 'boss_active': True},
-                                      {
-                                          '$inc': {'total_weekly_dmg': cur_hp},
-                                          '$set': {'boss_hp': 0, 'boss_active': False}
-                                       },
-                                      return_document=ReturnDocument.AFTER)
+                                            {
+                                                '$inc': {'total_weekly_dmg': cur_hp},
+                                                '$set': {'boss_hp': 0, 'boss_active': False}
+                                            },
+                                            return_document=ReturnDocument.AFTER)
     if doc:
         users_col.update_one({'address': addr},
                              {'$inc': {'boss_battle_stats.weekly_dmg': dmg_done,
@@ -598,7 +608,6 @@ async def mark_failed_boss_txns(failed_address_list, failed_str):
 
 
 async def send_boss_notification(title, body, url=''):
-
     category = "general"
     send_on = int(time.time() * 1000)  # send_on timestamp in ms
 
@@ -648,7 +657,8 @@ async def handle_boss_txn(_id, txn):
                         if len(reward_dict) < 30:
                             description += f"<@{player['discord_id']}>\t**DMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
                 await save_boss_rewards(defeated_by=addr, winners=reward_dict, description=description,
-                                        channel_id=config.BOSS_CHANNEL, image=new_boss_stats.get('boss_zerpmon', {}).get('image'))
+                                        channel_id=config.BOSS_CHANNEL,
+                                        image=new_boss_stats.get('boss_zerpmon', {}).get('image'))
                 break
             except:
                 logging.error(f'Error while sending Boss rewards: {traceback.format_exc()}')

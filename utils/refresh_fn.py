@@ -142,6 +142,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
         if not await db_query.update_address(user_doc['address'], old_address):
             return False
     user_obj = user_doc
+
     try:
         if 'address' not in user_obj or len(user_obj['address']) < 5 or \
                 user_obj['address'] == 'rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME':
@@ -159,7 +160,11 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
         serials = []
         t_serial = []
         e_serial = []
-
+        remove_serials = {
+            'zerpmons': [],
+            'trainer_cards': [],
+            'equipments': []
+        }
         # Filter fn
         await filter_nfts(user_obj, nfts, serials, t_serial, e_serial)
         if not good_status_xahau:
@@ -182,21 +187,21 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     serials.append(serial)
                 else:
                     # if False:
-                    await db_query.remove_user_nft(user_obj['discord_id'], serial, False)
+                    remove_serials['zerpmons'].append(serial)
         for serial in list(user_obj['trainer_cards'].keys()):
             if serial not in t_serial:
                 loaned = user_obj['trainer_cards'][serial].get('loaned', False)
                 if loaned:
                     t_serial.append(serial)
                 else:
-                    await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
+                    remove_serials['trainer_cards'].append(serial)
         for serial in list(user_obj['equipments'].keys()):
             if serial not in e_serial:
                 loaned = user_obj['equipments'][serial].get('loaned', False)
                 if loaned:
                     e_serial.append(serial)
                 else:
-                    await db_query.remove_user_nft(user_obj['discord_id'], serial, equipment=True)
+                    remove_serials['equipments'].append(serial)
 
         if len(user_obj['zerpmons']) > 0 or len(user_obj['trainer_cards']) > 0:
             if MAIN_GUILD == guild.id:
@@ -226,7 +231,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     print(f"USER already has the required role {e}")
                 await asyncio.sleep(2)
 
-        await db_query.update_user_decks(user_obj, user_obj['discord_id'], serials, t_serial, e_serial)
+        await db_query.update_user_decks(user_obj, user_obj['discord_id'], serials, t_serial, e_serial, remove_serials)
         return True
     except Exception as e:
         logging.error(f"ERROR while updating NFTs: {traceback.format_exc()}")

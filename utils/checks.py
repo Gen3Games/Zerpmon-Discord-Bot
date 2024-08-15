@@ -61,6 +61,14 @@ def get_days_left(ts):
     return days
 
 
+def get_type_str(doc):
+    if 'type' in doc:
+        return ', '.join([i for i in doc['type']])
+    emj_list = [(i['value']) for i in doc['attributes'] if
+                i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
+    return ', '.join(emj_list)
+
+
 def get_type_emoji(attrs, emoji=True):
     emj_list = [(config.TYPE_MAPPING[i['value']] if emoji else i['value']) for i in attrs if
                 i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type']
@@ -566,7 +574,7 @@ def populate_trainer_lvl_up_embed(trainer_doc, trainerXP: db_query.AddXPTrainerR
                     ,
                     inline=False)
     my_button = f"https://xrp.cafe/nft/{trainer_doc.get('token_id')}"
-    nft_type = ', '.join([i for i in trainer_doc['type']])
+    nft_type = get_type_str(trainer_doc)
     embed.add_field(
         name=f"**{trainer_doc['name']}** ({nft_type})",
         value=f"> Level: **{trainerXP.new_level}/30**\n"
@@ -626,8 +634,8 @@ async def get_battle_results(global_dict):
         config.stale_results = []
 
 
-async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None, ascend=False, zerp_ascension=None,
-                    lvls=None):
+async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None,
+                    ascend=False, zerp_ascension=None, lvls=None, trainer_buffs=None):
     if gym_bg and gym_bg is not None:
         bg_img = Image.open(gym_bg)
     elif ascend:
@@ -678,6 +686,13 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
             img1.paste(extra_img1, (1200 - 420, 0), mask=extra_img1)
         if zerp_ascension[1]:
             img3.paste(extra_img1, (1200 - 420, 0), mask=extra_img1)
+    elif trainer_buffs:
+        if trainer_buffs[0]:
+            extra_img1 = Image.open(f"./static/images/_{trainer_buffs[0]}.png")
+            img1.paste(extra_img1, (1200 - 420, 0), mask=extra_img1)
+        if trainer_buffs[1]:
+            extra_img2 = Image.open(f"./static/images/_{trainer_buffs[1]}.png")
+            img3.paste(extra_img2, (1200 - 420, 0), mask=extra_img2)
     # Create new images with 1/10th of the original size
 
     # Create a new RGBA image with the size of the background image

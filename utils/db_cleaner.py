@@ -102,10 +102,9 @@ def check_move_format(z_obj):
                 pass
             else:
                 return False, None
-
             # Check stars and convert to correct format
             if 'stars' in move:
-                z_obj['moves'][i]['stars'] = move['stars'].replace(" ", "").lower().title()
+                z_obj['moves'][i]['stars'] = move['stars']
             elif i != 2:
                 pass
             else:
