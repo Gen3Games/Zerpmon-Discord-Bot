@@ -17,6 +17,7 @@ test.json
 config_extra.py
 *.png
 *.csv
+missionTxnQueue.log
 /sim
 /static/zerpmon-translations/
 /static

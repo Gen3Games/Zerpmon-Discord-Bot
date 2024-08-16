@@ -12,6 +12,7 @@ from xrpl.models import Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag
 from xrpl.wallet import Wallet
 from pymongo import MongoClient
 import config
+import config_extra
 
 logging.basicConfig(filename='missionTxnQueue.log', level=logging.ERROR,
                     format='%(asctime)s %(levelname)s %(module)s %(funcName)s %(message)s %(lineno)d')
@@ -28,6 +29,21 @@ xahau_seq = None
 ws_client = AsyncWebsocketClient(URL)
 
 
+def timeout_wrapper(timeout):
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            try:
+                res = await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
+                return res
+            except asyncio.TimeoutError:
+                logging.error(f"{func.__name__} timed out after {timeout} seconds")
+                return False, '', False
+
+        return wrapper
+
+    return decorator
+
+
 async def get_ws_client():
     global ws_client
     if not ws_client.is_open():
@@ -38,9 +54,23 @@ async def get_ws_client():
 
 def get_txn_log():
     txn_log_col = db['mission-txn-queue']
-    return [i for i in txn_log_col.find({'status': 'pending',
-                                         '$or': [{'retry_cnt': {'$lt': 5}}, {'retry_cnt': {'$exists': False}}]
-                                         })]
+    txn_list = list(txn_log_col.find({'status': 'pending',
+                                      '$or': [{'retry_cnt': {'$lt': 5}}, {'retry_cnt': {'$exists': False}}]
+                                      }))
+    # This is a mapping of destinationTag -> total_amount_in_xrp
+    payment_mapping = {}
+    for txn in txn_list:
+        destinationTag = txn.get('destinationTag')
+        if destinationTag:
+            if destinationTag in payment_mapping:
+                payment_mapping[destinationTag]['amt'] += txn.get('amount', 0)
+            else:
+                payment_mapping[destinationTag] = {
+                    'amt': txn.get('amount', 0),
+                    'hash': None,
+                }
+    print(payment_mapping)
+    return txn_list, payment_mapping
 
 
 def update_txn_log(_id, doc):
@@ -56,6 +86,18 @@ def mark_txn_candy(_id, set_fulfilled):
         q['status'] = 'fulfilled'
         q['hash'] = ''
     res = txn_log_col.update_one({'_id': _id}, {'$set': q})
+    return res.acknowledged
+
+
+def insert_failed_txn(destinationTag, amount):
+    failed_log_col = db['custodial-failed-txn-stats']
+    res = failed_log_col.insert_one(
+        {
+            'destinationTag': destinationTag,
+            'amount': amount,
+            'from': 'mission'
+        }
+    )
     return res.acknowledged
 
 
@@ -80,6 +122,7 @@ def update_mission_stats(reward_rate):
     )
 
 
+@timeout_wrapper(30)
 async def send_nft(from_, to_address, token_id):
     client = await get_ws_client()
     global xahau_seq
@@ -138,7 +181,8 @@ async def send_nft(from_, to_address, token_id):
     return False, None, None
 
 
-async def send_txn(to: str, amount: float, sender):
+@timeout_wrapper(30)
+async def send_txn(to: str, amount: float, sender, destinationTag=None):
     client = await get_ws_client()
     global xahau_seq
     memo = 'Zerpmon Mission Reward'
@@ -167,6 +211,7 @@ async def send_txn(to: str, amount: float, sender):
                 sequence=sequence,
                 source_tag=13888813,
                 memos=memos,
+                destination_tag=destinationTag
             )
 
             # Sign and send the transaction
@@ -177,7 +222,7 @@ async def send_txn(to: str, amount: float, sender):
             if response.result['engine_result'] in ["tesSUCCESS", "terQUEUED"]:
                 # if sender == 'mission':
                 #     mission_seq = response.result['account_sequence_next']
-                return True, response.result['tx_json']['hash']
+                return True, response.result['tx_json']['hash'], None
             elif response.result['engine_result'] in ["tefPAST_SEQ"]:
                 # if sender == 'mission':
                 #     mission_seq = response.result['account_sequence_next']
@@ -188,7 +233,7 @@ async def send_txn(to: str, amount: float, sender):
             logging.error(f"XRP Txn Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
     # await db_query.save_error_txn(to, amount, None)
-    return False, ''
+    return False, '', None
 
 
 async def get_seq_num():
@@ -218,6 +263,7 @@ async def get_seq(from_):
         return None, None, None
 
 
+@timeout_wrapper(30)
 async def get_balance(address):
     bal = 0
     while bal == 0:
@@ -233,13 +279,13 @@ async def get_balance(address):
             logging.error(f"Balance Request timed out. {traceback.format_exc()}")
             await asyncio.sleep(random.randint(1, 4))
         logging.error(f"Retrying bal request")
-    return bal
+    return bal, None, None
 
 
 async def add_potion(address, key):
     users_collection = db['users']
     res = users_collection.update_one({'address': address},
-                                            {'$inc': {key: 1}})
+                                      {'$inc': {key: 1}})
     return res.acknowledged
 
 
@@ -248,12 +294,12 @@ async def main():
     last_check = -1
     while True:
         try:
-            queued_txns = get_txn_log()
+            queued_txns, payment_mapping = get_txn_log()
             await asyncio.sleep(15)
             if time.time() - last_check > 120:
                 async with AsyncWebsocketClient(URL) as client:
                     ws_client = client
-                    bal = await get_balance(config.REWARDS_ADDR)
+                    bal, _, _ = await get_balance(config.REWARDS_ADDR)
                     amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
                     update_mission_stats(amount_to_send)
                     last_check = time.time()
@@ -269,7 +315,8 @@ async def main():
                         if _id not in sent:
                             del txn['_id']
                             if txn['type'] == 'NFTokenCreateOffer':
-                                success, offerID, hash_ = await send_nft(txn['from'], txn['destination'], txn['nftokenID'])
+                                success, offerID, hash_ = await send_nft(txn['from'], txn['destination'],
+                                                                         txn['nftokenID'])
                                 if success:
                                     sent.append(_id)
                                     txn['status'] = 'fulfilled'
@@ -289,7 +336,14 @@ async def main():
                                     mark_txn_candy(_id, True)
                                     continue
                                 bal -= amt
-                                success, hash_ = await send_txn(txn['destination'], amt, txn['from'], )
+                                if txn.get('destinationTag') and payment_mapping[txn.get('destinationTag')]:
+                                    # Will send txn to custodial wallet so mark the request fulfilled will handle
+                                    # failure later
+                                    mark_txn_candy(_id, True)
+                                    continue
+                                else:
+                                    # Send direct payment
+                                    success, hash_, _ = await send_txn(txn['destination'], amt, txn['from'], )
                                 # success, hash_ = True, 'x'
                                 if success:
                                     sent.append(_id)
@@ -299,6 +353,16 @@ async def main():
                                     sent.pop()
                                 else:
                                     inc_retry_cnt(_id)
+                    for destinationTag, payment_obj in payment_mapping.items():
+                        if payment_obj['amt'] > 0:
+                            success, hash_, _ = await send_txn(config_extra.CUSTODIAL_ADDR,
+                                                               payment_obj['amt'],
+                                                               txn['from'],
+                                                               destinationTag=destinationTag)
+                            if success:
+                                payment_obj['hash'] = hash_
+                            else:
+                                insert_failed_txn(destinationTag, payment_obj['amt'], )
                 amount_to_send = bal * (config.MISSION_REWARD_XRP_PERCENT / 100)
                 update_mission_stats(amount_to_send)
         except Exception as e:
