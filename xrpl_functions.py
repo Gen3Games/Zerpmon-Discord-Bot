@@ -9,7 +9,6 @@ from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models import IssuedCurrency, AccountLines, Transaction, AccountObjects
 from xrpl.models.requests.account_nfts import AccountNFTs
 from xrpl.models.requests import AccountOffers, BookOffers, AccountInfo, tx, NFTSellOffers, request, AccountTx
-from xrpl.transaction import get_transaction_from_hash
 import config
 import json
 import requests

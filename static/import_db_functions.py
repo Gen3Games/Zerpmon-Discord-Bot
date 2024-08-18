@@ -1,13 +1,16 @@
+import asyncio
 import json
 import random
 import re
 import time
 import traceback
-
+from typing import TypedDict
 import pymongo
 import csv
 import requests
 from pymongo import ReturnDocument
+from xrpl.asyncio.clients import AsyncWebsocketClient
+from xrpl.models import NFTsByIssuer
 
 import config
 import config_extra
@@ -17,9 +20,63 @@ client = pymongo.MongoClient(config.MONGO_URL)
 db = client['Zerpmon']
 print([i['name'] for i in db.list_collections()])
 
-
 # exit(1)
 # users_c = db['users']
+
+
+class NFTDict(TypedDict):
+    nft_id: str
+    ledger_index: int
+    owner: str
+    is_burned: bool
+    uri: str
+    flags: int
+    transfer_fee: int
+    issuer: str
+    nft_taxon: int
+    nft_serial: int
+
+
+async def fetchNFTsByIssuer(issuer_address, limit=10000, delay_per_request=1):
+    try:
+        # Can switch to private node after installing clio server
+        ws_client = AsyncWebsocketClient('wss://s2.ripple.com/')
+        await ws_client.open()
+        all_nfts: [NFTDict] = []
+
+        acct_info = NFTsByIssuer(
+            issuer=issuer_address,
+            ledger_index="validated",
+            marker=None,
+            limit=400
+        )
+        response = await ws_client.request(acct_info)
+        result = response.result
+        print(result)
+        while True:
+            await asyncio.sleep(delay_per_request)
+            # print(result)
+            if 'nfts' not in result or len(all_nfts) >= limit:
+                break
+            length = len(result["nfts"])
+            print(length)
+            all_nfts.extend(result['nfts'])
+            if "marker" not in result:
+                break
+            acct_info = NFTsByIssuer(
+                issuer=issuer_address,
+                ledger_index="validated",
+                marker=result['marker'],
+                limit=400
+            )
+            response = await ws_client.request(acct_info)
+            result = response.result
+        print(len(all_nfts))
+        await ws_client.close()
+        return all_nfts
+    except Exception as e:
+        print(traceback.format_exc())
+        return None
 
 
 def get_all_z():
