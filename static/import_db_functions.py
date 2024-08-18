@@ -148,7 +148,7 @@ def get_effects(effects, entries, l_effect):
 
 
 def import_moves(col_name):
-    with open('Zerpmon_Moves_-_Move_List_260524.csv', 'r') as csvfile:
+    with open('ZerpmonMoves-Movelist.csv', 'r') as csvfile:
         collection = db[col_name]
         csvreader = csv.reader(csvfile)
         entries = []
@@ -226,7 +226,7 @@ def import_purple_star_ids():
 
 
 def import_movesets():
-    with open('Zerpmon_Movesets_280724_For_Glad.csv', 'r') as csvfile:
+    with open('ZerpmonMoves-Movsets.csv', 'r') as csvfile:
         collection = db['MoveSets']
         movelist_col = db['MoveList']
         # c2 = db['MoveSets2']
@@ -288,7 +288,6 @@ def import_movesets():
                     ],
 
                     'move_types': list(move_types),
-                    'nft_id': row[38] if row[38] else None
                 }
 
                 # doc = {
@@ -315,7 +314,10 @@ def import_movesets():
                 # }
                 collection.update_one({'name': row[1]}, {'$unset': {'moves': ''}})
                 collection.update_one({'name': row[1]}, {'$set': doc, '$setOnInsert': {'attributes': None,
-                                                                                       'image': None, }}, upsert=True)
+                                                                                       'image': None,
+                                                                                       'nft_id': row[38] if row[
+                                                                                           38] else None
+                                                                                       }}, upsert=True)
                 # c2.insert_one(document=doc)
             except Exception as e:
                 print(traceback.format_exc(), '\n', row)
@@ -617,14 +619,15 @@ def update_all_zerp_moves():
 
 
 def get_issuer_nfts_data(issuer):
+    i = 1
     try:
         ti = time.time()
         print("get_collection_5kk")
-        url = f"https://bithomp.com/api/v2/nfts?list=nfts&issuer={issuer}&limit=400"
+        url = f"https://bithomp.com/api/v2/nfts?issuer={issuer}&limit=100"
         response = requests.get(url, headers={"x-bithomp-token": "76c6dd73-50e1-4b20-847f-75926ae48cef"})
         # print(response.text)
         response = response.json()
-
+        print(response)
         nfts = response['nfts']
         print('nfts len:', len(nfts))
         marker = False
@@ -634,7 +637,11 @@ def get_issuer_nfts_data(issuer):
             markerVal = response['marker']
 
         while marker:
-            url2 = f"https://bithomp.com/api/v2/nfts?list=nfts&issuer={issuer}&marker={markerVal}&limit=400"
+            i += 1
+            if i >= 10:
+                time.sleep(60)
+                i = 1
+            url2 = f"https://bithomp.com/api/v2/nfts?issuer={issuer}&marker={markerVal}&limit=100"
             response2 = requests.get(url2, headers={"x-bithomp-token": "76c6dd73-50e1-4b20-847f-75926ae48cef"})
             response2 = response2.json()
             try:
@@ -686,11 +693,13 @@ def get_issuer_nfts_data(issuer):
         return nfts
     except Exception as e:
         print(traceback.format_exc())
+        exit()
 
 
 def cache_data(get_eqs=True, get_collab=True):
     try:
         z_nfts = get_issuer_nfts_data('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME')
+        time.sleep(60)
         nfts = get_issuer_nfts_data('rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy')
         # Update trainers col
         for nft in nfts:
@@ -1002,19 +1011,19 @@ def add_gym_trainers():
 # import_ascend_levels()
 # gift_ascension_reward()
 
-import_equipments()
+# import_equipments()
 
 # add_gym_level_buffs()
 # add_gym_trainers()
 # import_trainer_level()
-# import_moves('MoveList')
+import_moves('MoveList')
 # import_moves('MoveList2')
 # import_purple_star_ids()
-# import_movesets()
-# ## import_attrs_img()
-# cache_data(get_eqs=False, get_collab=False)
-# clean_attrs()
-# update_all_zerp_moves()
-# save_30_level_zerp()
+import_movesets()
+## import_attrs_img()
+cache_data(get_eqs=False, get_collab=False)
+clean_attrs()
+update_all_zerp_moves()
+save_30_level_zerp()
 
 # save_30_level_trainer()

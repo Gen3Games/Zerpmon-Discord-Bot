@@ -1458,7 +1458,7 @@ async def add_gp_queue(user_data, gp, block_number=1):
         'amount': amt,
         'currency': 'ZRP',
         'gp': gp,
-        'destination_tag': user_data.get('destination_tag')
+        'destinationTag': user_data.get('destination_tag')
     }
     await db['general-txn-queue'].update_one(
         {'uniqueId': uid},
@@ -2760,7 +2760,7 @@ async def add_xrp_txn_log(uid: str, from_addr: str, user_data: dict, amount: flo
                                            'status': 'pending' if (amount > 0 or candy) else 'fulfilled',
                                            'xp': xp,
                                            'candy': candy,
-                                           'destination_tag': user_data.get('destination_tag')
+                                           'destinationTag': user_data.get('destination_tag')
                                        }}, upsert=True)
     return res.acknowledged
 

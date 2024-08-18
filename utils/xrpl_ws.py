@@ -1296,8 +1296,11 @@ async def proceed_verified_loan(db_sep, uid, addr, timer=180):
 # asyncio.run(send_txn('rKteHT33CKs2fRPw2zGd813A3qJSXLsf1K', 350, 'sales'))
 # asyncio.run(send_txn('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 15050, 'sales'))
 # asyncio.run(get_nft_data_wager('0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E283CC566000000CB'))
-# asyncio.run(send_zrp('r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM', 7, 'safari'))
+# asyncio.run(send_zrp('rJCGL6hW2hcippbZRzcJbX9isp4DL9G1gq', 32.61, 'safari'))
 # refund1 'rhA5i9dWtXprHXYiAzgUdRoyybGmfnV9Pj'
 # asyncio.run(accept_nft("store", 'offer', 'sender', 'token'))
 # asyncio.run(send_nft('wager', to_address='raatYwJEoziduFfYiDXCMVoi9A85ma1WLW', token_id='0008138805D83B701191193A067C4011056D3DEE2B298C553CDCDE2F00000094'))
+# payments = {'rsSDTfFq8zgLFcccw6vY84uBdwdU6TsF4T': 179.764, 'rPBwMeDTbrkfVPkGCAVvWMeLXwXaTwMRz6': 21.352286, 'rpHjtR5cYmGYEYSofefbwa2izj6Mgv9rEv': 536.0749178000001, 'rp1nu7hJVyKBT3mVxCY1mVcaC4FPX2w7yA': 23.261235199999998, 'raPQesPbVR84MuPr6oWX64L2R1ZfNqFb4D': 171.394633}
+# for addr, amt in payments.items():
+# asyncio.run(send_zrp('r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', 67.34, 'safari'))
 
