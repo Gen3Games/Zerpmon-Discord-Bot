@@ -1558,7 +1558,7 @@ async def add_tower_txn_to_gen_queue(user_data, uid, paymentAmount, memo=None):
     await db['general-txn-queue'].update_one({'uniqueId': uid},
                                              {'$setOnInsert': queue_query},
                                              upsert=True )
-    return amt
+    return True
 
 
 async def update_gym_won(discord_id, gym_obj, gym_type, stage, resetTs, lost=False):
