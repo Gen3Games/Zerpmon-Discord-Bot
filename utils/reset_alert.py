@@ -165,13 +165,13 @@ async def send_reset_message(client: nextcord.Client):
                         if loan['xrp']:
                             await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'XRP',
                                                                  loan['per_day_cost'],
-                                                                 memo=f'{loan["zerpmon_name"]} loan payment',
+                                                                 memo=f'{loan["zerpmon_name"]}',
                                                                  ts=next_day_ts)
                             # await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
                         else:
                             await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'ZRP',
                                                                  loan['per_day_cost'],
-                                                                 memo=f'{loan["zerpmon_name"]} loan payment',
+                                                                 memo=f'{loan["zerpmon_name"]}',
                                                                  ts=next_day_ts)
                             # await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
                         await db_query.decrease_loan_pending(loan['token_id'], loan['per_day_cost'])

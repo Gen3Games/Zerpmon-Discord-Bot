@@ -32,11 +32,11 @@ async def do_matches(channel_id: int, msg: Message, participants=None, name="Bat
     i = 0
     while i < count:
         winners.appendleft(all_players[i])
-        if i+1 < count:
-            winners.appendleft(all_players[i+1])
-            schedule_str += f"**Match #{(i+2)//2}**:\n{all_players[i]['username']} vs {all_players[i+1]['username']}\n\n"
+        if i + 1 < count:
+            winners.appendleft(all_players[i + 1])
+            schedule_str += f"**Match #{(i + 2) // 2}**:\n{all_players[i]['username']} vs {all_players[i + 1]['username']}\n\n"
         else:
-            schedule_str += f"**Match #{(i+2)//2}**:\n{all_players[i]['username']} vs Revived Wildcard\n\n"
+            schedule_str += f"**Match #{(i + 2) // 2}**:\n{all_players[i]['username']} vs Revived Wildcard\n\n"
         i += 2
 
     await msg.reply(embed=CustomEmbed(title=f"Round {round_n}", color=0xe0ffcd, description=schedule_str))
@@ -47,7 +47,7 @@ async def do_matches(channel_id: int, msg: Message, participants=None, name="Bat
         print(losers)
         old_losers = losers.copy()
         losers = []
-        for i in range((size+1)//2):
+        for i in range((size + 1) // 2):
             p1 = winners.pop()
             if size > 1:
                 p2 = winners.pop()
@@ -111,7 +111,7 @@ async def do_matches(channel_id: int, msg: Message, participants=None, name="Bat
             i = count - 2
             while i >= 0:
                 # if i - 1 < count:
-                schedule_str += f"**Match #{(count - i) // 2}**:\n{winners[i+1]['username']} vs {winners[i]['username']}\n\n"
+                schedule_str += f"**Match #{(count - i) // 2}**:\n{winners[i + 1]['username']} vs {winners[i]['username']}\n\n"
                 # else:
                 #     schedule_str += f"**Match #{(i + 2) // 2}**:\n{winners[i]['username']} vs Revived Wildcard\n\n"
                 i -= 2
@@ -136,8 +136,8 @@ async def start_global_br(battle_channel: TextChannel):
             f"**CONGRATULATIONS** **{winners[0]['username']}** on winning the Battle Royale!")
         await msg.reply(
             f"'Sending transaction for **`1 ZRP`** to {winners[0]['username']}'")
-        saved = await send_zrp(winners[0]["address"],
-                                  1, 'wager')
+        saved = await db_query.add_wager_txn_to_gen_queue(winners[0]["address"], 'ZRP',
+                                                          1, isAddress=True)
         if not saved:
             await msg.reply(
                 f"**Failed**, something went wrong while sending the Txn")

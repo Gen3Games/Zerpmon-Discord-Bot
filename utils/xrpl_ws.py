@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import time
 import traceback
 
 from bson import ObjectId
@@ -1232,12 +1233,15 @@ async def proceed_verified_loan(db_sep, uid, addr, timer=180):
                                                   db_sep=db_sep)
             if loaned:
                 if listing['xrp']:
-                    await send_txn(owner_addr, (amount - listing['per_day_cost'])/ days, 'loan',
-                                   memo=f'{listing["zerpmon_name"]} loan payment')
-                    # await send_zrp(loaner_obj['address'], amount / days, 'loan')
+                    await db_query.add_loan_txn_to_queue(owner_addr, 'XRP',
+                                                         round((amount - listing['per_day_cost']) / days, 2),
+                                                         memo=f'{listing["zerpmon_name"]}',
+                                                         ts=time.time())
                 else:
-                    await send_zrp(owner_addr, round((amount - listing['per_day_cost']) / days, 2), 'loan',
-                                   memo=f'{listing["zerpmon_name"]} loan payment')
+                    await db_query.add_loan_txn_to_queue(owner_addr, 'ZRP',
+                                                         round((amount - listing['per_day_cost']) / days, 2),
+                                                         memo=f'{listing["zerpmon_name"]}',
+                                                         ts=time.time())
     finally:
         del config_extra.loan_payments[addr]
 
@@ -1293,7 +1297,7 @@ async def proceed_verified_loan(db_sep, uid, addr, timer=180):
 # left = {'rPhaYsUb6PwbZ6y7uUYJWU911U8pPJjW62': 0.34, 'rQTRqbjm9avMZPnjHeEFMVwXFAoxb453u': 6.61, 'rNqXMToefg5UF97AmM39bXBaLfPxpnhYky': 5.27, 'rHrVJKUuS8PcMmXWEAKg59g9SLUzFAsfmE': 4.82, 'rL4bgBCnjUdN47WfTFFFdyyPQF8kaNHHZ9': 11.15, 'rPT35AfVZb6wyaCWbM8KVLgcFCnFVxb9rB': 8.51, 'rGdduLLvYWRvNqWDRZhiTwyo8i51mfioNs': 6.71, 'rKaPGFVkaNcw2L7dEkBQ9gKvob57KBpNPg': 8.03, 'rECmio5gSPSJFQrSdVx2wEUkR3wJHWmaD1': 5.02, 'rP4dg8x7WRBRSu13d3JePubdahtnJeBTCX': 3.07, 'rJXvxx7Vnr1WbjDdBYbaPNSDFqaUtjmNwA': 5.14, 'rw8jZqZ5epaoMtNQh226LNC1sXnQhoxFzS': 2.27, 'rM6HpUWfkJpUWhMsrHit2FUdB52KqXfxuB': 4.64, 'rE2JYETcXfZWNoF6buWDFFxu325yvsMuY': 3.65, 'rDG5LDPqdJGfMq57TFrsMAAouvSXSXAsQz': 2.88, 'r3HRMnkbWzmnXbMR52T8838V8Ux15vCnaK': 2.34, 'rEPbQGSGvfgbsiS9Md3izVM8YKffFEymEd': 0.74, 'rPP6uD8QLRCz2NTmieMyANXJdro3mX9TL1': 2, 'rET7MmQUjeNZvN647Jo28u7FArTFVx1vGg': 0.29, 'r92H7K74iiFFUDnapSyHbc8uQv6EiKWR5f': 2.1}
 
 
-# asyncio.run(send_txn('rKteHT33CKs2fRPw2zGd813A3qJSXLsf1K', 350, 'sales'))
+# asyncio.run(send_zrp('r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM', 1, 'store'))
 # asyncio.run(send_txn('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 15050, 'sales'))
 # asyncio.run(get_nft_data_wager('0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E283CC566000000CB'))
 # asyncio.run(send_zrp('rJCGL6hW2hcippbZRzcJbX9isp4DL9G1gq', 32.61, 'safari'))
@@ -1302,5 +1306,5 @@ async def proceed_verified_loan(db_sep, uid, addr, timer=180):
 # asyncio.run(send_nft('wager', to_address='raatYwJEoziduFfYiDXCMVoi9A85ma1WLW', token_id='0008138805D83B701191193A067C4011056D3DEE2B298C553CDCDE2F00000094'))
 # payments = {'rsSDTfFq8zgLFcccw6vY84uBdwdU6TsF4T': 179.764, 'rPBwMeDTbrkfVPkGCAVvWMeLXwXaTwMRz6': 21.352286, 'rpHjtR5cYmGYEYSofefbwa2izj6Mgv9rEv': 536.0749178000001, 'rp1nu7hJVyKBT3mVxCY1mVcaC4FPX2w7yA': 23.261235199999998, 'raPQesPbVR84MuPr6oWX64L2R1ZfNqFb4D': 171.394633}
 # for addr, amt in payments.items():
-# asyncio.run(send_zrp('r9Sv6hJaB4SXaMcaRZifnmL8xeieW93p75', 67.34, 'safari'))
+# asyncio.run(send_zrp('rECmio5gSPSJFQrSdVx2wEUkR3wJHWmaD1', 18.6, 'loan'))
 

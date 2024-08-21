@@ -1520,6 +1520,47 @@ async def add_loan_nft_txn_to_queue(address, nft_id, memo=None):
     )
 
 
+async def add_wager_txn_to_gen_queue(user_data, currency, paymentAmount, memo=None, isAddress=False, ):
+    address = user_data['address'] if not isAddress else user_data
+    amt = round(paymentAmount, 3)
+    queue_query = {
+        'uniqueId': f'{str(uuid.uuid4())}',
+        'type': 'Payment',
+        'destination': address,
+        'from': 'wager',
+        'status': 'pending',
+        'amount': amt,
+        'currency': currency,
+        'ts': int(time.time()),
+        'destinationTag': user_data.get('destination_tag') if not isAddress else await get_destination_tag(user_data)
+    }
+    if memo:
+        queue_query['memo'] = memo
+    await db['general-txn-queue'].insert_one(queue_query, )
+    return amt
+
+
+async def add_tower_txn_to_gen_queue(user_data, uid, paymentAmount, memo=None):
+    address = user_data['address']
+    queue_query = {
+        'uniqueId': f'{str(uuid.uuid4())}',
+        'type': 'Payment',
+        'destination': address,
+        'from': 'tower',
+        'status': 'pending',
+        'amount': paymentAmount,
+        'currency': 'ZRP',
+        'ts': int(time.time()),
+        'destinationTag': user_data.get('destination_tag')
+    }
+    if memo:
+        queue_query['memo'] = memo
+    await db['general-txn-queue'].update_one({'uniqueId': uid},
+                                             {'$setOnInsert': queue_query},
+                                             upsert=True )
+    return amt
+
+
 async def update_gym_won(discord_id, gym_obj, gym_type, stage, resetTs, lost=False):
     users_collection = db['users']
     next_day_ts = await get_next_ts(1)
@@ -2177,7 +2218,7 @@ async def get_eq_by_name(name, gym=False):
         return await equipment_col.find_one({'name': name}, )
 
 
-async def get_all_eqs(limit=None, substr=None, remove_survive=False, remove_random_eq = True):
+async def get_all_eqs(limit=None, substr=None, remove_survive=False, remove_random_eq=True):
     if remove_survive:
         q = {
             'effects': {

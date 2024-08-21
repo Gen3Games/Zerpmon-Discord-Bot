@@ -112,12 +112,23 @@ def inc_user_trp(address, zrp_earned, trp):
 
 async def setup_gym(amount):
     global gym_seq, gym_bal, active_zrp_addr, active_zrp_seed
+    # Update from db first
+    doc = db['stats_log'].find_one({
+        'name': 'zrp_stats'
+    })
+    block_number = doc.get('block_number', 1)
+    if block_number == 2:
+        active_zrp_addr, active_zrp_seed = config.B2_ADDR, config.B2_SEED
+    elif block_number == 3:
+        active_zrp_addr, active_zrp_seed = config.B3_ADDR, config.B3_SEED
+
+    # Check balance
     bal = float(await get_zrp_balance(active_zrp_addr)) if gym_bal is None else gym_bal
     if bal is not None:
         gym_bal = bal - amount
-        block_number = 1
+        # Only update block number when balance is below the amount to be sent
         if bal is not None and bal < amount:
-            if active_zrp_addr == config.B1_ADDR:
+            if block_number == 1:
                 active_zrp_addr, active_zrp_seed = config.B2_ADDR, config.B2_SEED
                 block_number = 2
             else:
@@ -858,7 +869,8 @@ async def main():
                     # Gym custodial txns active
                     gym_task = asyncio.create_task(complete_txns(gym_log, payment_gym_mapping, from_wallet='gym'))
                     loan_task = asyncio.create_task(complete_txns(loan_log, payment_loan_mapping, from_wallet='loan'))
-                    wager_task = asyncio.create_task(complete_txns(wager_txn, payment_wager_mapping, from_wallet='wager'))
+                    wager_task = asyncio.create_task(
+                        complete_txns(wager_txn, payment_wager_mapping, from_wallet='wager'))
                     rest_task = asyncio.create_task(complete_txns(rest_txn))
                     await asyncio.gather(gym_task, loan_task, wager_task, rest_task)
         except Exception as e:

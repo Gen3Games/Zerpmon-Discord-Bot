@@ -993,7 +993,8 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
             # Save user's match
-            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, resetTs=resetTs, lost=True)
+            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, resetTs=resetTs,
+                                          lost=True)
         elif loser == 2:
             # Add GP to user
             trainer_rewards = await db_query.add_xp_trainer(tc1['token_id'], _data1['address'], xp_gain)
@@ -1002,7 +1003,8 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
 
-            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, resetTs=resetTs, lost=False)
+            await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, resetTs=resetTs,
+                                          lost=False)
         # Now send messages
         await gen_image(str(interaction.id) + '0', url1, '', path1, path2, path3, leader['bg'],
                         trainer_buffs=[result['playerATrainer'].get('buff') if result['playerATrainer'] else None,
@@ -1141,8 +1143,8 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
 
         if tc2 is None:
             tc2 = list(_data2['trainer_cards'].values())[0] if ('battle_deck' not in _data2) or (
-                '0' in _data2['battle_deck'] and (not _data2['battle_deck']['0'].get('trainer', None))) else \
-            _data2['trainer_cards'][_data2['battle_deck']['0']['trainer']]
+                    '0' in _data2['battle_deck'] and (not _data2['battle_deck']['0'].get('trainer', None))) else \
+                _data2['trainer_cards'][_data2['battle_deck']['0']['trainer']]
         tc2i = tc2['image']
 
         path1 = f"./static/images/{tc1['name']}.png"
@@ -1953,7 +1955,9 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                 embed.add_field(name=f"ZRP won", value=amt, inline=True)
                 response = None
                 if amt > 0:
-                    response = await xrpl_ws.send_zrp(_data1['address'], amt, 'tower', )
+                    response = await db_query.add_tower_txn_to_gen_queue(_data1,
+                                                                         f"tower-{_data1['address']}-{_data1.get('total_matches', 0)}",
+                                                                         amt, )
                 await interaction.send(
                     f"Sorry you **LOST** 💀 \nYou can try competing in **Gym Tower Rush** again by purchasing another ticket\n" + (
                         f"**Failed**, something went wrong." if response == False else (
@@ -1995,9 +1999,10 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
                                 inline=False)
                 await db_query.update_gym_tower(_data1['discord_id'], new_level=stage + 1,
                                                 zrp_earned=amt, is_free_mode=free_mode)
-                response = None
                 if amt > 0:
-                    response = await xrpl_ws.send_zrp(_data1['address'], amt, 'tower', )
+                    await db_query.add_tower_txn_to_gen_queue(_data1,
+                                                              f"tower-{_data1['address']}-{_data1.get('total_matches', 0)}",
+                                                              amt, )
             else:
                 await db_query.update_gym_tower(_data1['discord_id'], new_level=stage + 1)
             await msg_hook.send(f"**WINNER**   👑**{user_mention}**👑", embed=embed, ephemeral=True)
