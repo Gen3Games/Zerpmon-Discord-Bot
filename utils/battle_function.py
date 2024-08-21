@@ -1719,7 +1719,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, tc2['name'],
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
-            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'],
+            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1,
                                             1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
             # Save user's match
             await asyncio.sleep(1)
@@ -1741,7 +1741,7 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
                 embeds=[embed],
                 ephemeral=True)
             reward_dict = {}
-            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1['address'],
+            await db_query.add_boss_txn_log(f"boss-{_data1['address']}", _data1,
                                             1 if boss_hp <= dmg_done else 0, dmg_done, boss_hp)
             # total_dmg = boss_info['total_weekly_dmg'] + boss_hp
             # winners = await db_query.boss_reward_winners()

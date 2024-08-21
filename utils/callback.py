@@ -1206,7 +1206,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                             case "zrp":
                                 r_int = random.randint(10, 415) / 10
                                 s_amount = round(amount * r_int / 100, 2)
-                                status = await db_query.add_zrp_txn_log('safari', addr, s_amount, )
+                                status = await db_query.add_zrp_txn_log('safari', addr, s_amount, user_doc.get('destination_tag'))
                                 msg = random.choice(
                                     config.ZRP_STATEMENTS) + f'\nCongrats, Won `{s_amount} $ZRP`!\n{"`Transaction added to queue`" if status else ""}!'
                                 rewards.append(f"Gained {s_amount} $ZRP!")
@@ -1260,7 +1260,7 @@ async def on_button_click(interaction: nextcord.Interaction, label, amount, qty=
                             case "jackpot":
                                 bal = float(await xrpl_functions.get_zrp_balance(config.JACKPOT_ADDR))
                                 amount_ = round(bal * 0.8, 2)
-                                status = await db_query.add_zrp_txn_log('jackpot', addr, amount_, )
+                                status = await db_query.add_zrp_txn_log('jackpot', addr, amount_, user_doc.get('destination_tag'))
                                 msg = config.JACKPOT_MSG(interaction.user.name,
                                                          amount_) + f'\n{"Transaction added to queue" if status else ""}!'
                                 rewards.append(f"Won Jackpot {amount_} $ZRP!")

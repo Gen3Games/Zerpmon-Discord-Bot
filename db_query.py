@@ -26,6 +26,16 @@ move_collection = db['MoveList']
 level_collection = db['levels']
 equipment_col = db['Equipment']
 
+Address_to_dest_tag_mapping = {}
+
+
+async def get_destination_tag(address):
+    if Address_to_dest_tag_mapping.get(address) is None:
+        users_collection = db['users']
+        res = await users_collection.find_one({'address': address}, projection={'_id': 0, 'destination_tag': 1})
+        Address_to_dest_tag_mapping[address] = res.get('destination_tag') if res else None
+    return Address_to_dest_tag_mapping[address]
+
 
 async def get_next_ts(days=1):
     # Get the current time in UTC
@@ -1479,7 +1489,8 @@ async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None, 
         'status': 'pending',
         'amount': amt,
         'currency': paymentType,
-        'ts': int(time.time())
+        'ts': int(time.time()),
+        'destinationTag': await get_destination_tag(address)
     }
     if memo:
         queue_query['memo'] = memo
@@ -2515,8 +2526,9 @@ async def set_boss_battle_t(user_id, reset_next_t=False) -> None:
                                                                                 await get_next_ts()) + 60 if not reset_next_t else 0}})
 
 
-async def add_boss_txn_log(uid: str, to_addr: str, amount: float, dmgDealt, startHp):
+async def add_boss_txn_log(uid: str, user_data: dict, amount: float, dmgDealt, startHp):
     txn_log_col = db['general-txn-queue']
+    to_addr = user_data['address']
     res = await txn_log_col.update_one({'uniqueId': uid + f'-{int(await get_next_ts()) + 60}'},
                                        {'$setOnInsert': {
                                            'type': 'Payment',
@@ -2527,6 +2539,7 @@ async def add_boss_txn_log(uid: str, to_addr: str, amount: float, dmgDealt, star
                                            'status': 'pending',
                                            'dmgDealt': dmgDealt,
                                            'startHp': startHp,
+                                           'destinationTag': user_data.get('destination_tag')
                                        }}, upsert=True)
     return res.acknowledged
 
@@ -2765,7 +2778,7 @@ async def add_xrp_txn_log(uid: str, from_addr: str, user_data: dict, amount: flo
     return res.acknowledged
 
 
-async def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
+async def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, destination_tag: int | None):
     txn_log_col = db['safari-txn-queue']
     res = await txn_log_col.insert_one({
         'type': 'Payment',
@@ -2774,6 +2787,7 @@ async def add_zrp_txn_log(from_addr: str, to_addr: str, amount: float, ):
         'amount': amount,
         'currency': 'ZRP',
         'status': 'pending',
+        'destinationTag': destination_tag,
     })
     return res.acknowledged
 

@@ -59,16 +59,16 @@ def get_txn_log():
                                       }))
     # This is a mapping of destinationTag -> total_amount_in_xrp
     payment_mapping = {}
-    # for txn in txn_list:
-    #     destinationTag = txn.get('destinationTag')
-    #     if destinationTag:
-    #         if destinationTag in payment_mapping:
-    #             payment_mapping[destinationTag]['amt'] += txn.get('amount', 0)
-    #         else:
-    #             payment_mapping[destinationTag] = {
-    #                 'amt': txn.get('amount', 0),
-    #                 'hash': None,
-    #             }
+    for txn in txn_list:
+        destinationTag = txn.get('destinationTag')
+        if destinationTag in [896, 1]:
+            if destinationTag in payment_mapping:
+                payment_mapping[destinationTag]['amt'] += txn.get('amount', 0)
+            else:
+                payment_mapping[destinationTag] = {
+                    'amt': txn.get('amount', 0),
+                    'hash': None,
+                }
     print(payment_mapping)
     return txn_list, payment_mapping
 
@@ -336,14 +336,14 @@ async def main():
                                     mark_txn_candy(_id, True)
                                     continue
                                 bal -= amt
-                                # if txn.get('destinationTag') and payment_mapping[txn.get('destinationTag')]:
-                                #     # Will send txn to custodial wallet so mark the request fulfilled will handle
-                                #     # failure later
-                                #     mark_txn_candy(_id, True)
-                                #     continue
-                                # else:
-                                # Send direct payment
-                                success, hash_, _ = await send_txn(txn['destination'], amt, txn['from'], )
+                                if txn.get('destinationTag') and txn.get('destinationTag') in payment_mapping:
+                                    # Will send txn to custodial wallet so mark the request fulfilled will handle
+                                    # failure later
+                                    mark_txn_candy(_id, True)
+                                    continue
+                                else:
+                                    # Send direct payment
+                                    success, hash_, _ = await send_txn(txn['destination'], amt, txn['from'], )
                                 # success, hash_ = True, 'x'
                                 if success:
                                     sent.append(_id)

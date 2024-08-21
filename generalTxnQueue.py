@@ -299,7 +299,7 @@ async def create_nft_offer(from_: str, token_id: str, price: int, to_address: st
 
 
 @timeout_wrapper(30)
-async def send_txn(to: str, amount: float, sender, memo=None):
+async def send_txn(to: str, amount: float, sender, memo=None, destinationTag=None):
     client = await get_ws_client()
     global gym_seq, loan_seq, wager_seq, tower_seq
     for i in range(2):
@@ -326,6 +326,7 @@ async def send_txn(to: str, amount: float, sender, memo=None):
                 sequence=sequence,
                 source_tag=13888813,
                 memos=memos,
+                destination_tag=destinationTag
             )
 
             # Sign and send the transaction
@@ -351,7 +352,7 @@ async def send_txn(to: str, amount: float, sender, memo=None):
 
 
 @timeout_wrapper(30)
-async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
+async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None, destinationTag=None):
     client = await get_ws_client()
     global wager_seq, active_zrp_seed, active_zrp_addr, gym_seq, loan_seq, tower_seq
     for i in range(2):
@@ -371,7 +372,8 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None):
                     "issuer": 'rZapJ1PZ297QAEXRGu3SZkAiwXbA7BNoe'
                 },
                 "sequence": sequence,
-                "source_tag": 13888813
+                "source_tag": 13888813,
+                "destination_tag": destinationTag
             }
             if memo:
                 req_json['memos'] = [
@@ -744,7 +746,7 @@ async def complete_txns(queued_txns, payment_mapping=None, from_wallet=''):
                         txn['hash'] = ''
                         update_txn_log(_id, txn)
                         continue
-                    if payment_mapping and txn.get('destinationTag') and payment_mapping[txn.get('destinationTag')]:
+                    if payment_mapping and txn.get('destinationTag') and txn.get('destinationTag') in payment_mapping:
                         # Will send txn to custodial wallet so mark the request fulfilled will handle
                         # failure later
                         if txn.get('gp'):
@@ -812,12 +814,12 @@ async def main():
                     ws_client = client
                     loan_log, gym_log, boss_wager_txn = [], [], []
                     # This is a mapping of destinationTag -> total_amount_in_xrp
-                    payment_gym_mapping = {}
+                    payment_gym_mapping, payment_loan_mapping = {}, {}
                     for txn in queued_txns:
                         if txn['from'] == 'gym':
                             gym_log.append(txn)
                             destinationTag = txn.get('destinationTag')
-                            if destinationTag:
+                            if destinationTag in [896, 1]:
                                 if destinationTag in payment_gym_mapping:
                                     payment_gym_mapping[destinationTag]['amt'] += txn.get('amount', 0)
                                 else:
@@ -828,6 +830,16 @@ async def main():
                                     }
                         elif txn['from'] == 'loan':
                             loan_log.append(txn)
+                            destinationTag = txn.get('destinationTag')
+                            if destinationTag in [896, 1]:
+                                if destinationTag in payment_gym_mapping:
+                                    payment_gym_mapping[destinationTag]['amt'] += txn.get('amount', 0)
+                                else:
+                                    payment_gym_mapping[destinationTag] = {
+                                        'amt': txn.get('amount', 0),
+                                        'hash': None,
+                                        'currency': 'ZRP'
+                                    }
                         else:
                             boss_wager_txn.append(txn)
                     print(len(queued_txns), len(gym_log), len(loan_log), len(boss_wager_txn), payment_gym_mapping)
