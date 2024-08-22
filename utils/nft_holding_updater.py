@@ -73,7 +73,8 @@ async def update_nft_holdings(client: nextcord.Client):
                 if not good_status_xrpl:
                     continue
 
-                success, found_root_nfts = await getOwnedRootNFTs(root_addresses)
+                # 1 min timeout so the loop isn't stuck
+                success, found_root_nfts = await asyncio.wait_for(getOwnedRootNFTs(root_addresses), timeout=60)
                 if not success:
                     good_status_trn = False
 

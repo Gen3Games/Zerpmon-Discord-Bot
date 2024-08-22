@@ -169,8 +169,8 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
             nfts.extend(found_nfts)
         if not good_status_xrpl:
             return False
-
-        success, found_root_nfts = await getOwnedRootNFTs(root_addresses)
+        # 1 min timeout
+        success, found_root_nfts = await asyncio.wait_for(getOwnedRootNFTs(root_addresses), timeout=60)
         if not success:
             good_status_trn = False
 
