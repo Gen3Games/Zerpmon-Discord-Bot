@@ -160,7 +160,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                 xrpl_addresses.append(addr)
             else:
                 root_addresses.append(addr)
-
+        root_task = asyncio.create_task(getOwnedRootNFTs(root_addresses))
         for addr in xrpl_addresses:
             success, found_nfts = await xrpl_functions.get_nfts(addr)
             if not success:
@@ -170,7 +170,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
         if not good_status_xrpl:
             return False
         # 1 min timeout
-        success, found_root_nfts = await asyncio.wait_for(getOwnedRootNFTs(root_addresses), timeout=60)
+        success, found_root_nfts = await asyncio.wait_for(root_task, timeout=60)
         if not success:
             good_status_trn = False
 
@@ -289,21 +289,23 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, chain='xrpl')
                         serials.append(serial)
                         continue
                     metadata = xrpl_functions.get_nft_metadata(token_id, nft_id)
-                    if "Zerpmon " in metadata['description']:
-                        serials.append(serial)
-                        try:
-                            active_t = user_obj["zerpmons"][serial]['active_t']
-                        except:
-                            active_t = 0
-                        # Add to MongoDB here
-                        new_z = {"name": metadata['name'],
-                                 "image": metadata['image'],
-                                 "attributes": metadata['attributes'],
-                                 "token_id": nft_id,
-                                 'active_t': active_t,
-                                 "type": get_type(metadata['attributes'])
-                                 }
-                        await db_query.add_user_nft(user_obj['address'], serial, new_z, False)
+                    if metadata is None:
+                        logging.error(f"Unable to find TRN metadata for {nft_id}")
+                        continue
+                    serials.append(serial)
+                    try:
+                        active_t = user_obj["zerpmons"][serial]['active_t']
+                    except:
+                        active_t = 0
+                    # Add to MongoDB here
+                    new_z = {"name": metadata['name'],
+                             "image": metadata['image'],
+                             "attributes": metadata['attributes'],
+                             "token_id": nft_id,
+                             'active_t': active_t,
+                             "type": get_type(metadata['attributes'])
+                             }
+                    await db_query.add_user_nft(user_obj['address'], serial, new_z, False)
                     await asyncio.sleep(0.5)
             if obj[trainer_collection_id]:
                 for token_id in obj[trainer_collection_id]:
@@ -313,8 +315,8 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, chain='xrpl')
                         t_serial.append(serial)
                         continue
                     metadata = xrpl_functions.get_nft_metadata(token_id, nft_id)
-
                     if metadata is None:
+                        logging.error(f"Unable to find TRN metadata for {nft_id}")
                         continue
                     t_serial.append(serial)
                     # Add to MongoDB here
@@ -334,8 +336,8 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, chain='xrpl')
                         e_serial.append(serial)
                         continue
                     metadata = xrpl_functions.get_nft_metadata(token_id, nft_id)
-
                     if metadata is None:
+                        logging.error(f"Unable to find TRN metadata for {nft_id}")
                         continue
                     e_serial.append(serial)
                     # Add to MongoDB here
@@ -383,7 +385,8 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, chain='xrpl')
                     serials.append(serial)
                     continue
                 metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft[token_id_key])
-
+                if metadata is None:
+                    continue
                 if "Zerpmon " in metadata['description']:
                     serials.append(serial)
                     try:
@@ -407,7 +410,8 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, chain='xrpl')
                     continue
                 print(serial, list(user_obj['equipments'].keys()))
                 metadata = xrpl_functions.get_nft_metadata(nft['URI'], nft[token_id_key])
-
+                if metadata is None:
+                    continue
                 if "Zerpmon Equipment" in metadata['description']:
                     e_serial.append(serial)
                     # Add to MongoDB here

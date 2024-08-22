@@ -108,8 +108,8 @@ class RootWebsocket:
 
 
 zerp_collection_id = 65636
-trainer_collection_id = None
-eq_collection_id = None
+trainer_collection_id = 66660
+eq_collection_id = 67684
 
 
 async def getOwnedRootNFTs(addresses: List[str], fetchMetadataUri=False):
@@ -171,4 +171,4 @@ async def test():
     # await asyncio.sleep(10)
 
 
-print(asyncio.run(test()))
+# print(asyncio.run(test()))
