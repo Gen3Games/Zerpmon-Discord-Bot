@@ -229,7 +229,7 @@ async def remove_user_nft(discord_id, serial, trainer=False, equipment=False, db
     )
 
 
-async def add_user_nft(discord_id, serial, zerpmon, trainer=False, equipment=False, db_sep=None):
+async def add_user_nft(address, serial, zerpmon, trainer=False, equipment=False, db_sep=None):
     users_collection = db['users'] if db_sep is None else db_sep['users']
     # Upsert user
     # print(user)
@@ -240,8 +240,8 @@ async def add_user_nft(discord_id, serial, zerpmon, trainer=False, equipment=Fal
     update_query = {"$set": {f"equipments.{serial}": zerpmon}} if equipment else (
         {"$set": {f"zerpmons.{serial}": zerpmon}} if not trainer else
         {"$set": {f"trainer_cards.{serial}": zerpmon}})
-    result = await users_collection.update_one(
-        {'discord_id': discord_id},
+    await users_collection.update_one(
+        {'address': address},
         update_query
     )
 
@@ -2310,7 +2310,7 @@ async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, 
                               db_sep=db_sep)
     else:
         zerp['loaned'] = True
-        await add_user_nft(loanee['id'], sr, zerp, trainer=category == 'trainer', equipment=category == 'equipment',
+        await add_user_nft(loanee['address'], sr, zerp, trainer=category == 'trainer', equipment=category == 'equipment',
                            db_sep=db_sep)
     return res.acknowledged
 

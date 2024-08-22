@@ -107,43 +107,60 @@ class RootWebsocket:
                 await asyncio.sleep(1)
 
 
-collection_id = 65636
+zerp_collection_id = 65636
+trainer_collection_id = None
+eq_collection_id = None
 
 
 async def getOwnedRootNFTs(addresses: List[str], fetchMetadataUri=False):
     """
-    fetchMetadataUri=False Returns address -> [token_id_1, token_id_2, ...] mapping
+    fetchMetadataUri=False Returns tuple(
+    bool,
+    address -> {zerp_collection_id: [token_id_1, token_id_2, ...], ...}
+    )
+    mapping
 
-    fetchMetadataUri=True Returns address -> [{'token_id': token_id, 'uri': metadata_url}, ...] mapping
+    fetchMetadataUri=True Returns tuple(
+    bool,
+    address -> {zerp_collection_id: [{'token_id': token_id, 'uri': metadata_url}], ...}
+    )
     """
     try:
         root_handler = RootWebsocket()
         task = asyncio.create_task(root_handler.run_ws())
-        result = {address: [] for address in addresses}
+        result = {
+            address: {zerp_collection_id: [], trainer_collection_id: [], eq_collection_id: []}
+            for address in addresses}
         for address in addresses:
             try:
-                data = await root_handler.request(
-                    get_owned_tokens_payload(address, collection_id))
-                owned_nft_data = data.data
-                token_ids = owned_nft_data[2]
-                print(len(token_ids))
-                if fetchMetadataUri:
-                    for token_id in token_ids:
-                        data = await root_handler.request(get_nft_uri_payload(collection_id, token_id))
-                        bytes_uri = bytes(data.data)
-                        metadata_url = bytes_uri.decode('utf-8')
-                        print(metadata_url, bytes_uri.hex())
-                        result[address].append({'token_id': token_id, 'uri': metadata_url})
-                else:
-                    result[address] = token_ids
+                for collection_id in [zerp_collection_id, trainer_collection_id, eq_collection_id]:
+                    if collection_id is None:
+                        continue
+                    data = await root_handler.request(
+                        get_owned_tokens_payload(address, collection_id))
+                    owned_nft_data = data.data
+                    token_ids = owned_nft_data[2]
+                    print(len(token_ids))
+                    if fetchMetadataUri:
+                        for token_id in token_ids:
+                            data = await root_handler.request(get_nft_uri_payload(zerp_collection_id, token_id))
+                            bytes_uri = bytes(data.data)
+                            metadata_url = bytes_uri.decode('utf-8')
+                            print(metadata_url, bytes_uri.hex())
+                            result[address][collection_id].append({'token_id': token_id, 'uri': metadata_url})
+                    else:
+                        result[address][collection_id] = token_ids
             except Exception as e:
                 print(e)
+                await root_handler.close()
+                await task
+                return False, None
 
         await root_handler.close()
         await task
-        return result
+        return True, result
     except:
-        return None
+        return False, None
 
 
 async def test():
@@ -154,4 +171,4 @@ async def test():
     # await asyncio.sleep(10)
 
 
-# print(asyncio.run(test()))
+print(asyncio.run(test()))

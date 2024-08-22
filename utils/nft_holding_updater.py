@@ -5,7 +5,9 @@ import traceback
 
 import nextcord
 from nextcord import Role
+from xrpl.core.addresscodec import is_valid_classic_address
 
+from rootTest import getOwnedRootNFTs
 from utils.refresh_fn import get_type, filter_nfts
 import config
 from config import TIERS, RANKS
@@ -52,16 +54,32 @@ async def update_nft_holdings(client: nextcord.Client):
                                                 'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM',
                                                 'r9AHwn5mL6GpchBEie1K1z8S8pqejsyU2k']:
                     continue
-                good_status, nfts = await xrpl_functions.get_nfts(user_obj['address'])
-                if user_obj.get('address_config'):
-                    if user_obj['address_config'].get('xrpl'):
-                        good_status2, nfts2 = await xrpl_functions.get_nfts(user_obj['address_config'].get('xrpl'))
-                        if not good_status2:
-                            continue
-                        nfts.extend(nfts2)
-                good_status_xahau, nfts_xahau = await xrpl_functions.get_nfts_xahau(user_obj['address'])
-                if not good_status:
+                xrpl_addresses, root_addresses = [], []
+                linked_addresses = [*user_obj['linked_addresses'], user_obj['address']] if \
+                    'linked_addresses' in user_obj else [user_obj['address']]
+                good_status_xrpl, good_status_trn, nfts = True, True, []
+                for addr in linked_addresses:
+                    if is_valid_classic_address(addr):
+                        xrpl_addresses.append(addr)
+                    else:
+                        root_addresses.append(addr)
+
+                for addr in xrpl_addresses:
+                    success, found_nfts = await xrpl_functions.get_nfts(addr)
+                    if not success:
+                        good_status_xrpl = False
+                        break
+                    nfts.extend(found_nfts)
+                if not good_status_xrpl:
                     continue
+
+                success, found_root_nfts = await getOwnedRootNFTs(root_addresses)
+                if not success:
+                    good_status_trn = False
+
+                # good_status_xahau, nfts_xahau = await xrpl_functions.get_nfts_xahau(user_obj['address'])
+                # if not good_status:
+                #     continue
                 serials = []
                 t_serial = []
                 e_serial = []
@@ -72,18 +90,30 @@ async def update_nft_holdings(client: nextcord.Client):
                 }
                 # Filter fn
                 await filter_nfts(user_obj, nfts, serials, t_serial, e_serial)
-                if not good_status_xahau:
+                if not good_status_trn:
                     for sr in user_obj['zerpmons']:
-                        if str(sr).startswith('xahau-'):
+                        if str(sr).startswith('trn-'):
                             serials.append(sr)
                     for sr in user_obj['trainer_cards']:
-                        if str(sr).startswith('xahau-'):
+                        if str(sr).startswith('trn-'):
                             serials.append(sr)
                     for sr in user_obj['equipments']:
-                        if str(sr).startswith('xahau-'):
+                        if str(sr).startswith('trn-'):
                             serials.append(sr)
                 else:
-                    await filter_nfts(user_obj, nfts_xahau, serials, t_serial, e_serial, xahau=True)
+                    await filter_nfts(user_obj, found_root_nfts, serials, t_serial, e_serial, chain='trn')
+                # if not good_status_xahau:
+                #     for sr in user_obj['zerpmons']:
+                #         if str(sr).startswith('xahau-'):
+                #             serials.append(sr)
+                #     for sr in user_obj['trainer_cards']:
+                #         if str(sr).startswith('xahau-'):
+                #             serials.append(sr)
+                #     for sr in user_obj['equipments']:
+                #         if str(sr).startswith('xahau-'):
+                #             serials.append(sr)
+                # else:
+                #     await filter_nfts(user_obj, nfts_xahau, serials, t_serial, e_serial, xahau=True)
                 for serial in list(old_user['zerpmons'].keys()):
                     if serial not in serials:
                         loaned = old_user['zerpmons'][serial].get('loaned', False)
