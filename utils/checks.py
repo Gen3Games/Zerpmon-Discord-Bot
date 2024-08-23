@@ -636,6 +636,8 @@ async def get_battle_results(global_dict):
 
 async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None,
                     ascend=False, zerp_ascension=None, lvls=None, trainer_buffs=None):
+    path1 = str(path1).split(' #')[0] + '.png'
+    path3 = str(path3).split(' #')[0] + '.png'
     if gym_bg and gym_bg is not None:
         bg_img = Image.open(gym_bg)
     elif ascend:

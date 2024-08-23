@@ -293,12 +293,10 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, chain='xrpl')
                         logging.error(f"Unable to find TRN metadata for {nft_id}")
                         continue
                     serials.append(serial)
-                    try:
-                        active_t = user_obj["zerpmons"][serial]['active_t']
-                    except:
-                        active_t = 0
+
+                    active_t = 0
                     # Add to MongoDB here
-                    new_z = {"name": metadata['name'],
+                    new_z = {"name": f"{metadata['name']} #{token_id}",
                              "image": metadata['image'],
                              "attributes": metadata['attributes'],
                              "token_id": nft_id,
@@ -320,7 +318,7 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, chain='xrpl')
                         continue
                     t_serial.append(serial)
                     # Add to MongoDB here
-                    new_z = {"name": metadata['name'],
+                    new_z = {"name": f"{metadata['name']} #{token_id}",
                              "image": metadata['image'],
                              "attributes": metadata['attributes'],
                              "token_id": nft_id,
@@ -341,7 +339,7 @@ async def filter_nfts(user_obj, nfts, serials, t_serial, e_serial, chain='xrpl')
                         continue
                     e_serial.append(serial)
                     # Add to MongoDB here
-                    new_z = {"name": metadata['name'],
+                    new_z = {"name": f"{metadata['name']}",
                              "image": metadata['image'],
                              "attributes": metadata['attributes'],
                              "token_id": nft_id,

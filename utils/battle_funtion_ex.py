@@ -2,6 +2,7 @@ import re
 from nextcord import File
 import config
 import db_query
+from config_extra import ipfsGateway
 from utils.checks import CustomEmbed, gen_image
 
 
@@ -125,7 +126,7 @@ async def generate_image_ex(_id, z1_equipped, z2_equipped, gym_bg, show_lvls=Fal
     z1_asc = z1_obj.get("ascended", False)
     z2_asc = z2_obj.get("ascended", False)
 
-    url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
-    url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
+    url1 = zimg1 if "https:/" in zimg1 else ipfsGateway + zimg1.replace("ipfs://", "")
+    url2 = zimg2 if "https:/" in zimg2 else ipfsGateway + zimg2.replace("ipfs://", "")
     await gen_image(_id, url1, url2, path1, path2, path3, gym_bg=gym_bg, eq1=z1_eq,
                     eq2=z2_eq, zerp_ascension=[z1_asc, z2_asc] if z1_asc or z2_asc else None, lvls=lvls)

@@ -1882,7 +1882,7 @@ async def add_jawbreaker(address, inc_by, purchased=False, amount=0):
     return True
 
 
-async def apply_white_candy(user_id, zerp_name, amt=1):
+async def apply_white_candy(user_id, zerp_name: str, amt=1):
     z_collection = db['MoveSets']
     users_collection = db['users']
     user = await users_collection.find_one({'discord_id': str(user_id)})
@@ -1894,7 +1894,7 @@ async def apply_white_candy(user_id, zerp_name, amt=1):
     amt = min(amt, limit - cnt)
     print(amt)
 
-    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name})
+    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name.split(' #')[0]})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'white':
             zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * (0.02 * amt)),
@@ -1918,7 +1918,7 @@ async def apply_gold_candy(user_id, zerp_name, amt=1):
         return False
     amt = min(amt, limit - cnt)
 
-    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name})
+    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name.split(' #')[0]})
     for i, move in enumerate(zerp['moves']):
         if move['color'].lower() == 'gold':
             zerp['moves'][i]['dmg'] = round(zerp['moves'][i]['dmg'] + original_zerp['moves'][i]['dmg'] * (0.02 * amt),
@@ -2025,7 +2025,7 @@ async def update_zerp_moves_effective(document):
     g_candy = document.get('gold_candy', 0)
     if w_candy > 0:
 
-        original_zerp = await db['MoveSets2'].find_one({'name': document['name']})
+        original_zerp = await db['MoveSets2'].find_one({'name': document['name'].split(' #')[0]})
 
         for i, move in enumerate(document['moves']):
             if move['color'].lower() == 'white':
@@ -2033,7 +2033,7 @@ async def update_zerp_moves_effective(document):
                     document['moves'][i]['dmg'] + (original_zerp['moves'][i]['dmg'] * 0.02 * w_candy),
                     1)
     if g_candy > 0:
-        original_zerp = await db['MoveSets2'].find_one({'name': document['name']})
+        original_zerp = await db['MoveSets2'].find_one({'name': document['name'].split(' #')[0]})
         for i, move in enumerate(document['moves']):
             if move['color'].lower() == 'gold':
                 document['moves'][i]['dmg'] = round(
@@ -2043,7 +2043,7 @@ async def update_zerp_moves_effective(document):
 
 
 async def get_trainer_buff_dmg(zerp_name):
-    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name})
+    original_zerp = await db['MoveSets2'].find_one({'name': zerp_name.split(' #')[0]})
     extra_dmg_arr = []
     for i, move in enumerate(original_zerp['moves']):
         extra_dmg_arr.append(round(move.get('dmg', 0) * 0.1, 2))

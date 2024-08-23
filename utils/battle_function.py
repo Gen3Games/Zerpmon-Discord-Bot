@@ -252,7 +252,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
     z1_asc = z1_obj.get("ascended", False)
     z2_asc = z2_obj.get("ascended", False)
 
-    url1 = zimg1 if "https:/" in zimg1 else 'https://cloudflare-ipfs.com/ipfs/' + zimg1.replace("ipfs://", "")
+    url1 = zimg1 if "https:/" in zimg1 else config_extra.ipfsGateway + zimg1.replace("ipfs://", "")
     main_embed.add_field(
         name=f"{z1_obj['name2']} ({', '.join(z1_type)})\t`{w_candy1}x🍬\t{g_candy1}x🍭`\t" + (
             f' (**Ascended** ☄️)' if z1_asc else ''),
@@ -287,7 +287,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
     main_embed.add_field(name=f"🆚", value="\u200B", inline=False)
     main_embed.add_field(name="\u200B", value="\u200B", inline=False)
 
-    url2 = zimg2 if "https:/" in zimg2 else 'https://cloudflare-ipfs.com/ipfs/' + zimg2.replace("ipfs://", "")
+    url2 = zimg2 if "https:/" in zimg2 else config_extra.ipfsGateway + zimg2.replace("ipfs://", "")
     main_embed.add_field(
         name=f"{z2['name2']} ({', '.join(z2_type)})\t`{w_candy2}x🍬\t{g_candy2}x🍭`\t" + (
             f' (**Ascended** ☄️)' if z2_asc else ''),
@@ -910,7 +910,7 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
     path2 = f"./static/images/vs.png"
     path3 = tc2i
 
-    url1 = tc1i if "https:/" in tc1i else 'https://cloudflare-ipfs.com/ipfs/' + tc1i.replace("ipfs://", "")
+    url1 = tc1i if "https:/" in tc1i else config_extra.ipfsGateway + tc1i.replace("ipfs://", "")
     trainer_embed.add_field(
         name=f"{tc1['name']} ({', '.join(buffed_types)})",
         value="\u200B", inline=True)
@@ -1151,14 +1151,14 @@ async def proceed_battle(message: nextcord.Message, battle_instance, b_type=5, b
         path2 = f"./static/images/vs.png"
         path3 = f"./static/images/{tc2['name']}.png"
 
-        url1 = tc1i if "https:/" in tc1i else 'https://cloudflare-ipfs.com/ipfs/' + tc1i.replace("ipfs://", "")
+        url1 = tc1i if "https:/" in tc1i else config_extra.ipfsGateway + tc1i.replace("ipfs://", "")
         trainer_embed.add_field(
             name=f"{tc1['name']} ({', '.join([i['value'] for i in tc1['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type' or i['trait_type'] == 'Status'])})",
             value="\u200B", inline=True)
 
         trainer_embed.add_field(name=f"🆚", value="\u200B", inline=True)
 
-        url2 = tc2i if "https:/" in tc2i else 'https://cloudflare-ipfs.com/ipfs/' + tc2i.replace("ipfs://", "")
+        url2 = tc2i if "https:/" in tc2i else config_extra.ipfsGateway + tc2i.replace("ipfs://", "")
         trainer_embed.add_field(
             name=f"{tc2['name']} ({', '.join([i['value'] for i in tc2['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type' or i['trait_type'] == 'Status'])})",
             value="\u200B", inline=True)
@@ -1581,14 +1581,14 @@ async def proceed_boss_battle(interaction: nextcord.Interaction):
     path2 = f"./static/images/vs.png"
     path3 = f"./static/images/{tc2['name']}.png"
 
-    url1 = tc1i if "https:/" in tc1i else 'https://cloudflare-ipfs.com/ipfs/' + tc1i.replace("ipfs://", "")
+    url1 = tc1i if "https:/" in tc1i else config_extra.ipfsGateway + tc1i.replace("ipfs://", "")
     trainer_embed.add_field(
         name=f"{tc1['name']} ({', '.join([i['value'] for i in tc1['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type' or i['trait_type'] == 'Status'])})",
         value="\u200B", inline=True)
 
     trainer_embed.add_field(name=f"🆚", value="\u200B", inline=True)
 
-    url2 = tc2i if "https:/" in tc2i else 'https://cloudflare-ipfs.com/ipfs/' + tc2i.replace("ipfs://", "")
+    url2 = tc2i if "https:/" in tc2i else config_extra.ipfsGateway + tc2i.replace("ipfs://", "")
     trainer_embed.add_field(
         name=f"{tc2['name']} ({', '.join([i['value'] for i in tc2['attributes'] if i['trait_type'] == 'Affinity' or i['trait_type'] == 'Type' or i['trait_type'] == 'Status'])})",
         value="\u200B", inline=True)
@@ -1828,7 +1828,7 @@ async def proceed_gym_tower_battle(interaction: nextcord.Interaction, user_doc):
     path2 = f"./static/images/vs.png"
     path3 = tc2i
 
-    url1 = tc1i if "https:/" in tc1i else 'https://cloudflare-ipfs.com/ipfs/' + tc1i.replace("ipfs://", "")
+    url1 = tc1i if "https:/" in tc1i else config_extra.ipfsGateway + tc1i.replace("ipfs://", "")
     trainer_embed.add_field(
         name=f"{tc1['name']} ({buffed_type1})",
         value="\u200B", inline=True)

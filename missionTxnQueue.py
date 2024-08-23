@@ -61,7 +61,7 @@ def get_txn_log():
     payment_mapping = {}
     for txn in txn_list:
         destinationTag = txn.get('destinationTag')
-        if destinationTag in [896, 1]:
+        if destinationTag:
             if destinationTag in payment_mapping:
                 payment_mapping[destinationTag]['amt'] += txn.get('amount', 0)
             else:

@@ -814,9 +814,9 @@ async def complete_txns(queued_txns, payment_mapping=None, from_wallet=''):
     sent.extend(sent_txns)
 
 
-def update_payment_mapping(txn, payment_mapping):
+def update_payment_mapping(txn, payment_mapping, enable_for_all=False):
     destinationTag = txn.get('destinationTag')
-    if destinationTag in [896, 1]:
+    if (enable_for_all and destinationTag) or destinationTag in [896, 1]:
         if destinationTag in payment_mapping:
             if txn['currency'] == 'XRP':
                 payment_mapping[destinationTag]['XRP']['amt'] += txn.get('amount', 0)
@@ -854,7 +854,7 @@ async def main():
                     for txn in queued_txns:
                         if txn['from'] == 'gym':
                             gym_log.append(txn)
-                            update_payment_mapping(txn, payment_gym_mapping)
+                            update_payment_mapping(txn, payment_gym_mapping, enable_for_all=True)
                         elif txn['from'] == 'loan':
                             loan_log.append(txn)
                             # Here payment could be xrp or zrp
