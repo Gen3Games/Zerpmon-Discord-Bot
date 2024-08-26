@@ -11,6 +11,7 @@ from xrpl.models import Payment, NFTokenCreateOffer, NFTokenCreateOfferFlag
 from xrpl.wallet import Wallet
 from pymongo import MongoClient
 import config
+import config_extra
 
 logging.basicConfig(filename='safariTxnQueue.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(module)s %(funcName)s %(message)s %(lineno)d')
@@ -37,9 +38,23 @@ async def get_ws_client():
 
 def get_txn_log():
     txn_log_col = db['safari-txn-queue']
-    return [i for i in txn_log_col.find({'status': 'pending',
-                                         '$or': [{'retry_cnt': {'$lt': 5}}, {'retry_cnt': {'$exists': False}}]
-                                         })]
+    txn_list = list(txn_log_col.find({'status': 'pending',
+                                      '$or': [{'retry_cnt': {'$lt': 5}}, {'retry_cnt': {'$exists': False}}]
+                                      }))
+    # This is a mapping of destinationTag -> total_amount_in_xrp
+    payment_mapping = {}
+    for txn in txn_list:
+        destinationTag = txn.get('destinationTag')
+        if destinationTag:
+            if destinationTag in payment_mapping:
+                payment_mapping[destinationTag]['amt'] += txn.get('amount', 0)
+            else:
+                payment_mapping[destinationTag] = {
+                    'amt': txn.get('amount', 0),
+                    'hash': None,
+                }
+    print(payment_mapping)
+    return txn_list, payment_mapping
 
 
 def update_txn_log(_id, doc):
@@ -125,7 +140,7 @@ async def send_nft(from_, to_address, token_id):
     return False, None, None
 
 
-async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
+async def send_zrp(to: str, amount: float, sender, issuer='ZRP', destinationTag=None):
     client = await get_ws_client()
     global safari_seq
     for i in range(5):
@@ -135,7 +150,7 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
             receiving_address = to
 
             # Set the amount to be sent, in drops of XRP
-            send_amt = float(amount)
+            send_amt = round(amount, 3)
             req_json = {
                 "account": sending_address,
                 "destination": receiving_address,
@@ -145,7 +160,8 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP'):
                     "issuer": config.ISSUER[issuer]
                 },
                 "sequence": sequence,
-                "source_tag": 13888813
+                "source_tag": 13888813,
+                "destination_tag": destinationTag,
             }
             # Construct the transaction dictionary
             transaction = Payment.from_dict(req_json)
@@ -223,11 +239,22 @@ async def get_tx(client, hash_):
             logging.error(f'{traceback.format_exc()}')
             await asyncio.sleep(1)
 
+def insert_failed_txn(destinationTag, amount):
+    failed_log_col = db['custodial-failed-txn-stats']
+    res = failed_log_col.insert_one(
+        {
+            'destinationTag': destinationTag,
+            'amount': amount,
+            "currency": "ZRP",
+            'from': 'safari'
+        }
+    )
+    return res.acknowledged
 
 async def main():
     while True:
         try:
-            queued_txns = get_txn_log()
+            queued_txns, payment_mapping = get_txn_log()
             await asyncio.sleep(15)
             if len(queued_txns) == 0:
                 if int(time.time()) % 10 == 0:
@@ -253,7 +280,12 @@ async def main():
                                 else:
                                     inc_retry_cnt(_id)
                             elif txn['type'] == 'Payment':
-                                success, hash_ = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
+                                if txn.get('destinationTag') and txn.get('destinationTag') in payment_mapping:
+                                    # Will send txn to custodial wallet so mark the request fulfilled will handle
+                                    # failure later
+                                    success, hash_  = True, ''
+                                else:
+                                    success, hash_ = await send_zrp(txn['destination'], round(txn['amount'], 2), txn['from'], )
                                 if success:
                                     sent.append(_id)
                                     if txn['destination'] == config.JACKPOT_ADDR:
@@ -265,6 +297,16 @@ async def main():
                                     sent.pop()
                                 else:
                                     inc_retry_cnt(_id)
+                    for destinationTag, payment_obj in payment_mapping.items():
+                        if payment_obj['amt'] > 0:
+                            success, hash_, _ = await send_zrp(config_extra.CUSTODIAL_ADDR,
+                                                               payment_obj['amt'],
+                                                               txn['from'],
+                                                               destinationTag=destinationTag)
+                            if success:
+                                payment_obj['hash'] = hash_
+                            else:
+                                insert_failed_txn(destinationTag, payment_obj['amt'], )
         except Exception as e:
             logging.error(f'EXECPTION in WS: {traceback.format_exc()}')
 
