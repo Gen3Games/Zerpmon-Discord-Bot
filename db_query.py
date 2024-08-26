@@ -37,6 +37,12 @@ async def get_destination_tag(address):
     return Address_to_dest_tag_mapping[address]
 
 
+async def get_destination_tag_from_id(discord_id):
+    users_collection = db['users']
+    res = await users_collection.find_one({'discord_id': f"{discord_id}"}, projection={'_id': 0, 'destination_tag': 1})
+    return res.get('destination_tag') if res else None
+
+
 async def get_next_ts(days=1):
     # Get the current time in UTC
     current_time = datetime.datetime.now(pytz.utc)
@@ -1557,7 +1563,7 @@ async def add_tower_txn_to_gen_queue(user_data, uid, paymentAmount, memo=None):
         queue_query['memo'] = memo
     await db['general-txn-queue'].update_one({'uniqueId': uid},
                                              {'$setOnInsert': queue_query},
-                                             upsert=True )
+                                             upsert=True)
     return True
 
 
@@ -2310,7 +2316,8 @@ async def update_loanee(zerp, sr, loanee, days, amount_total, loan_ended=False, 
                               db_sep=db_sep)
     else:
         zerp['loaned'] = True
-        await add_user_nft(loanee['address'], sr, zerp, trainer=category == 'trainer', equipment=category == 'equipment',
+        await add_user_nft(loanee['address'], sr, zerp, trainer=category == 'trainer',
+                           equipment=category == 'equipment',
                            db_sep=db_sep)
     return res.acknowledged
 
@@ -3408,3 +3415,124 @@ async def send_user_notification(content_list, addr, _id, ):
     add_to_in_app_user_notifications_promise = db['user-notifications'].insert_many(notification_list)
 
     await asyncio.gather(add_to_user_notification_queue_promise, add_to_in_app_user_notifications_promise)
+
+
+async def get_custodial_wallet_user_balance(tag: int, currency: str) -> float:
+    custodial_wallet_address = config_extra.CUSTODIAL_ADDR
+
+    pipeline = [
+        {
+            "$match": {
+                "$or": [
+                    {
+                        "destinationAddress": custodial_wallet_address,
+                        "destinationTag": tag,
+                        "currency": {"$regex": currency, "$options": "i"},
+                    },
+                    {
+                        "sourceAddress": custodial_wallet_address,
+                        "sourceTag": tag,
+                        "currency": {"$regex": currency, "$options": "i"},
+                    },
+                ]
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "balance": {
+                    "$sum": {
+                        "$cond": [
+                            {
+                                "$and": [
+                                    {"$eq": ["$destinationAddress", custodial_wallet_address]},
+                                    {"$eq": ["$destinationTag", tag]},
+                                ]
+                            },
+                            "$amount",
+                            {"$multiply": ["$amount", -1]},
+                        ]
+                    }
+                },
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "balance": 1,
+            }
+        },
+    ]
+
+    result = await db['custodial-wallet-payments'].aggregate(pipeline).to_list(length=None)
+
+    balance = result[0]['balance'] if len(result) > 0 else 0
+    fixed_balance = round(float(balance), 6)
+    return fixed_balance
+
+
+async def get_pending_user_withdrawals_amount(tag: int, currency: str) -> float:
+    pipeline = [
+        {
+            "$match": {
+                "userTag": tag,
+                "currency": {"$regex": currency, "$options": "i"},
+                "status": "pending",
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "balance": {"$sum": "$amount"},
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "balance": 1,
+            }
+        },
+    ]
+
+    result = await db['custodial-wallet-withdrawal-requests'].aggregate(pipeline).to_list(length=None)
+
+    balance = result[0]['balance'] if len(result) > 0 else 0
+    fixed_balance = round(float(balance), 6)
+    return fixed_balance
+
+
+async def get_pending_user_withdrawals_count(tag: int) -> int:
+    count = await db['custodial-wallet-withdrawal-requests'].count_documents({
+        'userTag': tag,
+        'status': 'pending',
+    })
+
+    return count
+
+
+async def add_user_tip_txn(currency:str, amt:float, source_tag:int, recv_destination_tag:int):
+    doc = {
+        "transactionId": f"USER-TIP-{str(uuid.uuid4())}",
+        "amount": amt,
+        "currency": currency,
+        "destinationAddress": "rUNEer3ptfFXnrenuaspvoZ1KsSgvnCpj5",
+        "destinationTag": recv_destination_tag,
+        "sourceAddress": "rUNEer3ptfFXnrenuaspvoZ1KsSgvnCpj5",
+        "sourceTag": source_tag,
+        "timestamp": int(time.time() * 1000)
+    }
+    bal, withdrawal_req_cnt = await asyncio.gather(get_custodial_wallet_user_balance(source_tag, currency),
+                                                   get_pending_user_withdrawals_count(source_tag))
+    if withdrawal_req_cnt > 0:
+        return False, "**Failed** trying to tip when a withdrawal request is in queue"
+    if bal < amt:
+        return False, "**Failed** tip amount more than **ZerpWallet** balance"
+    await db['custodial-wallet-payments'].insert_one(doc)
+    withdrawal_req_cnt = await get_pending_user_withdrawals_count(source_tag)
+    if withdrawal_req_cnt > 0:
+        """We missed a withdrawal request due to odd timing
+        Remove the tip txn"""
+        await db['custodial-wallet-payments'].delete_one({"transactionId": doc['transactionId']})
+        return False, "**Failed** trying to tip when a withdrawal request is in queue"
+    return True, "**Success**"
+

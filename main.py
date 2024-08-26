@@ -3898,7 +3898,7 @@ async def zrp_stats(interaction: nextcord.Interaction, amount: int,
             embeds=[], view=View())
         return
     if send_to_nfts is None:
-        await interaction.edit_original_message(content=f"Sorry {send_to.mention} haven't verified their wallet yet",
+        await interaction.edit_original_message(content=f"Sorry, {send_to.mention} hasn't verified their wallet yet.",
                                                 embeds=[], view=View())
 
         return
@@ -3924,6 +3924,45 @@ async def zrp_stats(interaction: nextcord.Interaction, amount: int,
                 print(traceback.format_exc())
         await asyncio.sleep(10)
     return False
+
+
+@zrp.subcommand(name="zerp_wallet_tip", description="Send ZRP tip from your zerpWallet to someone")
+async def zrp_stats(interaction: nextcord.Interaction, amount: float = SlashOption(required=True, min_value=0.01),
+                    send_to: Optional[nextcord.Member] = SlashOption(required=True), ):
+    execute_before_command(interaction)
+    if amount <= 0:
+        await interaction.send("Please provide a positive amount for the tip.", ephemeral=True)
+        return
+    if interaction.user.id not in config_extra.ADMINS:
+        await interaction.edit_original_message(content="Only admins can use this command.")
+        return
+    await interaction.response.defer(ephemeral=True)
+    user_id = interaction.user.id
+    user_src_tag = await db_query.get_destination_tag_from_id(user_id)
+    sendTo_dest_tag = await db_query.get_destination_tag_from_id(send_to.id)
+
+    # Sanity checks
+
+    if user_src_tag is None:
+        await interaction.edit_original_message(
+            content="Sorry you can't use this feature, as you haven't verified your wallet",
+            embeds=[], view=View())
+        return
+    if sendTo_dest_tag is None:
+        await interaction.edit_original_message(content=f"Sorry, {send_to.mention} hasn't verified their wallet yet.",
+                                                embeds=[], view=View())
+
+        return
+
+    success, error_msg = await db_query.add_user_tip_txn("ZRP", amount, user_src_tag, sendTo_dest_tag)
+    if success:
+        await interaction.send(content='', embed=CustomEmbed(title="**Success**",
+                                                             description=f"{interaction.user.mention} tipped {send_to.mention} `{amount} ZRP`!"
+                                                             ))
+    else:
+        await interaction.send(content='', embed=CustomEmbed(title="**Failed**",
+                                                             description=f"{error_msg}"
+                                                             ))
 
 
 # ZRP COMMANDS
