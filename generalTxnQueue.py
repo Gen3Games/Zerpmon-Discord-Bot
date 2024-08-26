@@ -36,6 +36,10 @@ gym_bal = None
 active_zrp_addr = config.B1_ADDR
 active_zrp_seed = config.B1_SEED
 ws_client = AsyncWebsocketClient(URL)
+GYM_CUSTODIAL_PAYMENTS_ENABLED, \
+LOAN_CUSTODIAL_PAYMENTS_ENABLED, \
+WAGER_CUSTODIAL_PAYMENTS_ENABLED, \
+TOWER_CUSTODIAL_PAYMENTS_ENABLED = True, True, True, True
 
 
 def timeout_wrapper(timeout):
@@ -372,8 +376,8 @@ async def send_zrp(to: str, amount: float, sender, issuer='ZRP', memo=None, dest
             # Set the receiving address
             receiving_address = to
 
-            # Set the amount to be sent, in drops of XRP
-            send_amt = float(amount)
+            # Set the amount to be sent
+            send_amt = round(amount, 3)
             req_json = {
                 "account": sending_address,
                 "destination": receiving_address,
@@ -584,7 +588,7 @@ async def boss_reward_winners() -> list:
     users_col = db['users']
 
     filter = {"boss_battle_stats": {"$exists": True}}
-    projection = {"boss_battle_stats": 1, "address": 1, "discord_id": 1, "username": 1, '_id': 0}
+    projection = {"boss_battle_stats": 1, "address": 1, "discord_id": 1, "username": 1, 'destination_tag': 1, '_id': 0}
     li = users_col.find(filter, projection)
 
     return [i for i in li]
@@ -668,7 +672,8 @@ async def handle_boss_txn(_id, txn, payment_mapping=None):
                     if p_dmg > 0:
                         print(total_dmg, t_reward, p_dmg)
                         amt = round(p_dmg * t_reward / total_dmg, 2)
-                        reward_dict[player['address']] = {'amt': amt, 'name': player['username']}
+                        reward_dict[player['address']] = {'amt': amt, 'name': player['username'],
+                                                          'd_tag': player.get('destination_tag')}
                         if len(reward_dict) < 30:
                             description += f"**{player['username']}\tDMG dealt**: {p_dmg}\t**Reward**:`{amt}`\n"
                 await save_boss_rewards(defeated_by=addr, winners=reward_dict, description=description,
@@ -685,8 +690,9 @@ async def handle_boss_txn(_id, txn, payment_mapping=None):
         failed_list = []
         saved = False
         for addr, obj in reward_dict.items():
-            if payment_mapping and payment_mapping.get(dest_tag):
-                payment_mapping[dest_tag]['ZRP']['amt'] += obj['amt']
+            if update_payment_mapping({'amount': obj['amt'], 'destinationTag': obj['d_tag'], 'currency': 'ZRP'},
+                                      payment_mapping, WAGER_CUSTODIAL_PAYMENTS_ENABLED):
+                saved = True
             else:
                 saved, hash_, _ = await send_zrp(addr, obj['amt'], 'wager')
             if saved:
@@ -702,13 +708,14 @@ async def handle_boss_txn(_id, txn, payment_mapping=None):
     update_txn_log(_id, txn)
 
 
-def insert_failed_txn(destinationTag, amount):
+def insert_failed_txn(destinationTag, amount, currency):
     failed_log_col = db['custodial-failed-txn-stats']
     res = failed_log_col.insert_one(
         {
             'destinationTag': destinationTag,
             'amount': amount,
-            'from': 'mission'
+            'currency': currency,
+            'from': 'general-queue'
         }
     )
     return res.acknowledged
@@ -801,20 +808,23 @@ async def complete_txns(queued_txns, payment_mapping=None, from_wallet=''):
                         success, hash_, _ = await send_txn(config_extra.CUSTODIAL_ADDR,
                                                            payment_obj['amt'],
                                                            from_wallet,
-                                                           destinationTag=destinationTag)
+                                                           memo=payment_obj.get("memo"),
+                                                           destinationTag=destinationTag,
+                                                           )
                     else:
                         success, hash_, _ = await send_zrp(config_extra.CUSTODIAL_ADDR,
                                                            payment_obj['amt'],
                                                            from_wallet,
+                                                           memo=payment_obj.get("memo"),
                                                            destinationTag=destinationTag)
                     if success:
                         payment_obj['hash'] = hash_
                     else:
-                        insert_failed_txn(destinationTag, payment_obj['amt'], )
+                        insert_failed_txn(destinationTag, payment_obj['amt'], currency)
     sent.extend(sent_txns)
 
 
-def update_payment_mapping(txn, payment_mapping, enable_for_all=False):
+def update_payment_mapping(txn, payment_mapping, enable_for_all=False, joinMemos=False):
     destinationTag = txn.get('destinationTag')
     if (enable_for_all and destinationTag) or destinationTag in [896, 1]:
         if destinationTag in payment_mapping:
@@ -826,11 +836,19 @@ def update_payment_mapping(txn, payment_mapping, enable_for_all=False):
             payment_mapping[destinationTag] = {
                 'XRP': {'amt': txn.get('amount', 0) if txn['currency'] == 'XRP' else 0,
                         'hash': None,
+                        'memo': '',
                         'currency': 'XRP'},
                 'ZRP': {'amt': txn.get('amount', 0) if txn['currency'] == 'ZRP' else 0,
                         'hash': None,
+                        'memo': '',
                         'currency': 'ZRP'},
             }
+        if joinMemos and txn.get('memo'):
+            """Only for loans"""
+            if len(payment_mapping[destinationTag][txn['currency']]['memo']) < 512:
+                payment_mapping[destinationTag][txn['currency']]['memo'] += f"{txn['memo']}, "
+        return True
+    return False
 
 
 async def main():
@@ -848,31 +866,38 @@ async def main():
                 async with AsyncWebsocketClient(URL) as client:
                     ws_client = client
                     # Wager includes both boss + wager
-                    loan_log, gym_log, wager_txn, rest_txn = [], [], [], []
+                    loan_log, gym_log, wager_txn, tower_txn, rest_txn = [], [], [], [], []
                     # This is a mapping of destinationTag -> total_amount_in_xrp
-                    payment_gym_mapping, payment_loan_mapping, payment_wager_mapping = {}, {}, {}
+                    payment_gym_mapping, payment_loan_mapping, payment_wager_mapping, payment_tower_mapping = {}, {}, {}, {}
                     for txn in queued_txns:
                         if txn['from'] == 'gym':
                             gym_log.append(txn)
-                            update_payment_mapping(txn, payment_gym_mapping, enable_for_all=True)
+                            update_payment_mapping(txn, payment_gym_mapping,
+                                                   enable_for_all=GYM_CUSTODIAL_PAYMENTS_ENABLED)
                         elif txn['from'] == 'loan':
                             loan_log.append(txn)
                             # Here payment could be xrp or zrp
-                            update_payment_mapping(txn, payment_loan_mapping)
+                            update_payment_mapping(txn, payment_loan_mapping,
+                                                   enable_for_all=LOAN_CUSTODIAL_PAYMENTS_ENABLED, joinMemos=True)
                         elif txn['from'] in ['boss', 'wager']:
                             wager_txn.append(txn)
-                            update_payment_mapping(txn, payment_wager_mapping)
+                            update_payment_mapping(txn, payment_wager_mapping,
+                                                   enable_for_all=WAGER_CUSTODIAL_PAYMENTS_ENABLED)
+                        elif txn['from'] == 'tower':
+                            tower_txn.append(txn)
+                            update_payment_mapping(txn, payment_tower_mapping,
+                                                   enable_for_all=TOWER_CUSTODIAL_PAYMENTS_ENABLED)
                         else:
                             rest_txn.append(txn)
-                    print(len(queued_txns), len(gym_log), len(loan_log), len(wager_txn), len(rest_txn))
-                    print(payment_gym_mapping, payment_loan_mapping, payment_wager_mapping)
+                    print(len(queued_txns), len(gym_log), len(loan_log), len(wager_txn), len(tower_txn), len(rest_txn))
+                    print(payment_gym_mapping, payment_loan_mapping, payment_tower_mapping, payment_wager_mapping)
                     # Gym custodial txns active
                     gym_task = asyncio.create_task(complete_txns(gym_log, payment_gym_mapping, from_wallet='gym'))
                     loan_task = asyncio.create_task(complete_txns(loan_log, payment_loan_mapping, from_wallet='loan'))
-                    wager_task = asyncio.create_task(
-                        complete_txns(wager_txn, payment_wager_mapping, from_wallet='wager'))
+                    wager_task = asyncio.create_task(complete_txns(wager_txn, payment_wager_mapping, from_wallet='wager'))
+                    tower_task = asyncio.create_task(complete_txns(tower_txn, payment_tower_mapping, from_wallet='tower'))
                     rest_task = asyncio.create_task(complete_txns(rest_txn))
-                    await asyncio.gather(gym_task, loan_task, wager_task, rest_task)
+                    await asyncio.gather(gym_task, loan_task, wager_task, tower_task, rest_task)
         except Exception as e:
             logging.error(f'EXECPTION in WS: {traceback.format_exc()}')
 
