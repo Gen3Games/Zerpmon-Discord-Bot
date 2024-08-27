@@ -167,8 +167,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                 good_status_xrpl = False
                 break
             nfts.extend(found_nfts)
-        if not good_status_xrpl:
-            return False
+
         # 1 min timeout
         success, found_root_nfts = await asyncio.wait_for(root_task, timeout=60)
         if not success:
@@ -185,8 +184,19 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
             'trainer_cards': [],
             'equipments': []
         }
-        # Filter fn
-        await filter_nfts(user_obj, nfts, serials, t_serial, e_serial)
+        if not good_status_xrpl:
+            for sr in user_obj['zerpmons']:
+                if not str(sr).startswith('trn-'):
+                    serials.append(sr)
+            for sr in user_obj['trainer_cards']:
+                if not str(sr).startswith('trn-'):
+                    serials.append(sr)
+            for sr in user_obj['equipments']:
+                if not str(sr).startswith('trn-'):
+                    serials.append(sr)
+        else:
+            # Filter fn
+            await filter_nfts(user_obj, nfts, serials, t_serial, e_serial)
         if not good_status_trn:
             for sr in user_obj['zerpmons']:
                 if str(sr).startswith('trn-'):
