@@ -8,6 +8,7 @@ import sys
 import time
 import traceback
 import uuid
+from typing import List
 
 from utils import battle_effect
 import pymongo
@@ -280,10 +281,10 @@ async def get_all_users_cursor():
     return result
 
 
-async def get_all_users():
+async def get_all_users(field='gym'):
     users_collection = db['users']
 
-    result = await users_collection.find().to_list(None)
+    result = await users_collection.find({}, projection={'_id': 0, 'address': 1, 'discord_id': 1, 'gym': 1}).to_list(None)
     return [i for i in result if i.get('discord_id', None)]
 
 
@@ -355,8 +356,13 @@ async def check_wallet_exist(address):
     # Upsert user
     # print(address)
 
-    user_id = str(address)
-    result = await users_collection.find_one({"address": user_id})
+    result = await users_collection.find_one({
+        "$or": [
+            {"address": address},
+            {"linked_addresses": {'$elemMatch': {"$eq": address}}
+             },
+        ]
+    })
     discord_user_exist = result is not None and result.get('discord_id')
     # print(f"Found user {result}")
 
@@ -1218,7 +1224,7 @@ class AddXPTrainerResult:
 
 async def add_xp_trainer(nft_id: str, address: str, xp: int):
     trainer_col = db['trainers']
-    level_col = db['levels_trainer']
+    level_col = db['levels_trainer_trn'] if nft_id.startswith('trn-') else db['levels_trainer']
 
     trainer = await trainer_col.find_one({'nft_id': nft_id, 'isCollab': {'$exists': False}})
     max_level = 30
@@ -1301,7 +1307,7 @@ async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_x
     zerpmon_collection = db['MoveSets']
 
     old = await zerpmon_collection.find_one({'name': zerpmon_name})
-    level = old['level'] if 'level' in old else 1
+    level = old['level'] if 'level' in old else 0
     # maxed = old.get('maxed_out', 0)
     # if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (
     #         old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
@@ -1421,7 +1427,7 @@ async def get_gym_leader(gym_type):
     return res
 
 
-async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, reset=False):
+async def reset_gym(address, gym_obj, gym_type, lost=True, skipped=False, reset=False):
     users_collection = db['users']
     if gym_obj == {}:
         gym_obj = {
@@ -1436,7 +1442,7 @@ async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, res
             'gp': 0
         }
         await users_collection.update_one(
-            {'discord_id': str(discord_id)},
+            {'address': address},
             {'$set': {'gym': gym_obj}}
         )
     else:
@@ -1455,7 +1461,7 @@ async def reset_gym(discord_id, gym_obj, gym_type, lost=True, skipped=False, res
             'lose_streak': 0 if reset else (l_streak if skipped or lost else l_streak - 1)
         }
         await users_collection.update_one(
-            {'discord_id': str(discord_id)},
+            {'address': address},
             {'$set': {'gym.won': gym_obj['won']}}
         )
 
@@ -3145,8 +3151,9 @@ async def insert_free_mode_stats():
 #             logging.error(f'USER OBJ ERROR: {traceback.format_exc()}')
 # asyncio.run(test(True))
 
-async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission', extraB=None, startHp=None):
+async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission', extraB=None, startHp=None, is_br=False):
     input_col = db['discord_battle_requests']
+    isValidXbladeGame = not is_br and battle_type != 'tower'
     obj = {
         'uid': str(uuid.uuid4()),
         'playerAZerpmons': [],
@@ -3160,12 +3167,25 @@ async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission',
         'extrabuff': extraB,
         'startHp': startHp,
     }
+    xbladesIds = []
     for i in zerp_arr1:
         obj['playerAZerpmons'].append(i['name'])
         obj['playerAEquipments'].append(i.get('buff_eq'))
+        if isValidXbladeGame and i.get('buff_eq') == 'Xblade' and i.get('eq_id'):
+            xbladesIds.append(i.get('eq_id'))
     for i in zerp_arr2:
         obj['playerBZerpmons'].append(i['name'])
         obj['playerBEquipments'].append(i.get('buff_eq'))
+        if isValidXbladeGame and i.get('buff_eq') == 'Xblade' and i.get('eq_id'):
+            xbladesIds.append(i.get('eq_id'))
+    if len(xbladesIds) > 0:
+        await db['equipment_hosted_metadata'].update_many({
+            'token_id':{'$in': xbladesIds}
+        },
+            {
+                '$inc': {'game_count': 1}
+            }
+        )
 
     input_col.insert_one(obj)
     config.battle_results[obj['uid']] = None
@@ -3352,11 +3372,11 @@ async def check_banned(user_addr, is_id=False):
 async def change_stream_listener():
     inner_client = AsyncIOMotorClient(config.MONGO_URL)
     _db = inner_client['Zerpmon']
+    pipeline = [{'$match': {'operationType': 'insert'}}]
+    resume_token = None
     while True:
-        resume_token = None
         try:
-            pipeline = [{'$match': {'operationType': 'insert'}}]
-            async with _db['loan-payments'].watch(pipeline) as stream:
+            async with _db['loan-payments'].watch(pipeline, resume_after=resume_token) as stream:
                 stream: AsyncIOMotorChangeStream = stream
                 async for insert_change in stream:
                     try:
@@ -3536,3 +3556,8 @@ async def add_user_tip_txn(currency:str, amt:float, source_tag:int, recv_destina
         return False, "**Failed** trying to tip when a withdrawal request is in queue"
     return True, "**Success**"
 
+
+async def get_player_cnt():
+    users_collection = db['users']
+    top_users = await users_collection.count_documents({})
+    return top_users
