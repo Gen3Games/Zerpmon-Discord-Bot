@@ -118,10 +118,10 @@ async def send_reset_message(client: nextcord.Client):
                         won_gyms = user['gym'].get('won', {})
                         for gym, obj in won_gyms.items():
                             if obj['next_battle_t'] < time.time() - 86300:
-                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False, skipped=True,
+                                await db_query.reset_gym(user['address'], user['gym'], gym, lost=False, skipped=True,
                                                          reset=is_gym_reset)
                             else:
-                                await db_query.reset_gym(user['discord_id'], user['gym'], gym, lost=False,
+                                await db_query.reset_gym(user['address'], user['gym'], gym, lost=False,
                                                          reset=is_gym_reset)
                     # for r_key in ['rank', 'rank1', 'rank5']:
                     #     if r_key in user:
@@ -137,44 +137,49 @@ async def send_reset_message(client: nextcord.Client):
                 in expired_loans]
             try:
                 for loan in active_loans:
-                    """less than 5 seconds left to loan end"""
-                    if loan['loan_expires_at'] <= time.time():
-                        await db_query.remove_user_nft_addr(loan['accepted_by']['address'], loan['serial'],
-                                                            trainer=loan['zerp_data'].get('category') == 'trainer',
-                                                            equipment=loan['zerp_data'].get(
-                                                                'category') == 'equipment', )
-                        ack = await db_query.update_loanee(loan['zerp_data'], loan['serial'],
-                                                           {'id': None, 'username': None, 'address': None}, days=0,
-                                                           amount_total=0, loan_ended=True,
-                                                           discord_id=loan['accepted_by']['id'])
-                        if ack:
-                            if loan['loan_expires_at'] != 0:
-                                await db_query.add_loan_nft_txn_to_queue(loan['listed_by']['address'], loan['token_id'],
-                                                                         memo=f'{loan["zerpmon_name"]} offer')
-                                # await send_nft('loan', loan['listed_by']['address'], loan['token_id'])
-                            if loan['expires_at'] <= time.time() or loan['loan_expires_at'] == 0:
-                                await db_query.remove_listed_loan(loan['token_id'], loan['listed_by']['id'], is_id=True)
-                            else:
-                                offer_expired.append(
-                                    f"<@{loan['listed_by']['id']}> your loan listing for {loan['zerpmon_name']} has been deactivated\n")
-                    elif loan['expires_at'] <= time.time() and loan['accepted_by']['id'] is None:
-                        await db_query.remove_listed_loan(loan['token_id'], loan['listed_by']['id'], is_id=True)
-                    else:
-                        if loan['amount_pending'] < 0:
-                            continue
-                        if loan['xrp']:
-                            await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'XRP',
-                                                                 loan['per_day_cost'],
-                                                                 memo=f'{loan["zerpmon_name"]}',
-                                                                 ts=next_day_ts)
-                            # await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
+                    try:
+                        """less than 5 seconds left to loan end"""
+                        if loan.get('loan_expires_at') is not None and loan.get('loan_expires_at', -1) <= time.time():
+                            await db_query.remove_user_nft_addr(loan['accepted_by']['address'], loan['serial'],
+                                                                trainer=loan['zerp_data'].get('category') == 'trainer',
+                                                                equipment=loan['zerp_data'].get(
+                                                                    'category') == 'equipment', )
+                            ack = await db_query.update_loanee(loan['zerp_data'], loan['serial'],
+                                                               {'id': None, 'username': None, 'address': None}, days=0,
+                                                               amount_total=0, loan_ended=True,
+                                                               discord_id=loan['accepted_by']['id'])
+                            if ack:
+                                if loan.get('loan_expires_at', -1) != 0:
+                                    await db_query.add_loan_nft_txn_to_queue(loan['listed_by']['address'], loan['token_id'],
+                                                                             memo=f'{loan["zerpmon_name"]} offer')
+                                    # await send_nft('loan', loan['listed_by']['address'], loan['token_id'])
+                                if loan['expires_at'] <= time.time() or loan['loan_expires_at'] == 0:
+                                    await db_query.remove_listed_loan(loan['token_id'], loan['listed_by']['id'], is_id=True)
+                                else:
+                                    offer_expired.append(
+                                        f"<@{loan['listed_by']['id']}> your loan listing for {loan['zerpmon_name']} has been deactivated\n")
+                        elif loan['expires_at'] <= time.time() and loan['accepted_by']['id'] is None:
+                            await db_query.remove_listed_loan(loan['token_id'], loan['listed_by']['id'], is_id=True)
                         else:
-                            await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'ZRP',
-                                                                 loan['per_day_cost'],
-                                                                 memo=f'{loan["zerpmon_name"]}',
-                                                                 ts=next_day_ts)
-                            # await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
-                        await db_query.decrease_loan_pending(loan['token_id'], loan['per_day_cost'])
+                            if loan['amount_pending'] < 0:
+                                continue
+                            if loan['xrp']:
+                                await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'XRP',
+                                                                     loan['per_day_cost'],
+                                                                     memo=f'{loan["zerpmon_name"]}',
+                                                                     ts=next_day_ts,
+                                                                     nft_sr=loan.get('serial'))
+                                # await send_txn(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
+                            else:
+                                await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'ZRP',
+                                                                     loan['per_day_cost'],
+                                                                     memo=f'{loan["zerpmon_name"]}',
+                                                                     ts=next_day_ts,
+                                                                     nft_sr=loan.get('serial'))
+                                # await send_zrp(loan['listed_by']['address'], loan['per_day_cost'], 'loan', memo=f'{loan["zerpmon_name"]} loan payment')
+                            await db_query.decrease_loan_pending(loan['token_id'], loan['per_day_cost'])
+                    except Exception as e:
+                        logging.error(f"Loan loop failed for : {loan['listed_by']['id']} {loan['token_id']}")
                 logging.error(f"offer_expired: {offer_expired}")
                 if len(offer_expired) > 0:
                     if len(offer_expired) > 20:

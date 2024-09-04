@@ -636,8 +636,8 @@ async def get_battle_results(global_dict):
 
 async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None, eq2=None,
                     ascend=False, zerp_ascension=None, lvls=None, trainer_buffs=None):
-    path1 = str(path1).split(' #')[0] + '.png'
-    path3 = str(path3).split(' #')[0] + '.png'
+    path1 = (str(path1).split(' #')[0] + '.png') if ' #' in path1 and 'Shill Punk' not in path1 else path1
+    path3 = (str(path3).split(' #')[0] + '.png')  if ' #' in path3 and 'Shill Punk' not in path3 else path3
     if gym_bg and gym_bg is not None:
         bg_img = Image.open(gym_bg)
     elif ascend:
@@ -664,13 +664,13 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
             print('failed to convert to rgba')
     if not ascend:
         img2 = Image.open(path2)
-        try:
-            img1.save(path1)
-        except:
-            print('failed to convert to rgba')
     img3 = Image.open(path3)
     if img3.mode != 'RGBA':
         img3 = img3.convert("RGBA")
+        try:
+            img3.save(path3)
+        except:
+            print('failed to convert to rgba')
     img1 = img1.resize((1200, 1200))
     img3 = img3.resize((1200, 1200))
     if eq1:
@@ -726,6 +726,7 @@ async def gen_image(_id, url1, url2, path1, path2, path3, gym_bg=False, eq1=None
 
 
 def fetch_url(url,):
+    print(url)
     response = requests.get(url)
     return response.content
 

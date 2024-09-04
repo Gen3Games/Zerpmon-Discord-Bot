@@ -30,9 +30,9 @@ equipment_col = db['Equipment']
 Address_to_dest_tag_mapping = {}
 
 
-async def get_destination_tag(address):
+async def get_destination_tag(address, db_sep= None):
     if Address_to_dest_tag_mapping.get(address) is None:
-        users_collection = db['users']
+        users_collection = db['users'] if db_sep is None else db_sep['users']
         res = await users_collection.find_one({'address': address}, projection={'_id': 0, 'destination_tag': 1})
         Address_to_dest_tag_mapping[address] = res.get('destination_tag') if res else None
     return Address_to_dest_tag_mapping[address]
@@ -1490,8 +1490,8 @@ async def add_gp_queue(user_data, gp, block_number=1):
     return amt
 
 
-async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None, ts=None):
-    uid = f'{address}-{memo}-{int(ts)}'
+async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None, ts=None, db_sep=None, nft_sr=None):
+    uid = f'{address}-{nft_sr}-{memo}-{int(ts)}'
     amt = round(paymentAmount, 3)
     queue_query = {
         'uniqueId': uid,
@@ -1502,11 +1502,11 @@ async def add_loan_txn_to_queue(address, paymentType, paymentAmount, memo=None, 
         'amount': amt,
         'currency': paymentType,
         'ts': int(time.time()),
-        'destinationTag': await get_destination_tag(address)
+        'destinationTag': await get_destination_tag(address, db_sep=db_sep)
     }
     if memo:
         queue_query['memo'] = memo
-    await db['general-txn-queue'].update_one({'uniqueId': uid},
+    await (db if db_sep is None else db_sep)['general-txn-queue'].update_one({'uniqueId': uid},
                                              {'$setOnInsert': queue_query},
                                              upsert=True,
                                              )
@@ -2292,7 +2292,7 @@ async def list_for_loan(zerp, sr, offer, user_id, username, addr, price, active_
     return res.acknowledged
 
 
-async def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False, db_sep=None):
+async def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False, db_sep=None, doubleOffeTo=None):
     loan_col = db['loan'] if db_sep is None else db_sep['loan']
     if not is_id:
         query = {'zerpmon_name': zerp_name_or_id,
@@ -2300,7 +2300,10 @@ async def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False, d
     else:
         query = {'token_id': zerp_name_or_id,
                  'loan_expires_at': {'$ne': 0}}
-    r = await loan_col.delete_one(query)
+    if doubleOffeTo:
+        r = await loan_col.update_one({'offer': None, 'doubleOffeTo':doubleOffeTo})
+    else:
+        r = await loan_col.delete_one(query)
     return r.acknowledged
 
 
@@ -3153,7 +3156,7 @@ async def insert_free_mode_stats():
 
 async def make_battle_req(zerp_arr1, zerp_arr2, tc1, tc2, battle_type='mission', extraB=None, startHp=None, is_br=False):
     input_col = db['discord_battle_requests']
-    isValidXbladeGame = not is_br and battle_type != 'tower'
+    isValidXbladeGame = battle_type != 'tower'
     obj = {
         'uid': str(uuid.uuid4()),
         'playerAZerpmons': [],
