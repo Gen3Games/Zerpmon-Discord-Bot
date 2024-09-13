@@ -372,12 +372,13 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
         #         f"Sorry please wait **{_hours}**h **{_minutes}**m for your next Gym Battle.", ephemeral=True)
         #     return False
         last_battle_t = user_d['gym'].get('last_battle_t', 0)
-        if last_battle_t + config_extra.GYM_CD > time.time():
-            await interaction.send(content=
-                                   f"Sorry you are under a cooldown\t(ends in `{int(last_battle_t + config_extra.GYM_CD - time.time())}s`)",
-                                   ephemeral=True
-                                   )
-            return False, last_battle_t
+        if not user_d.get('feature_flags', {}).get('no_gym_cooldown'):
+            if last_battle_t + config_extra.GYM_CD > time.time():
+                await interaction.send(content=
+                                       f"Sorry you are under a cooldown\t(ends in `{int(last_battle_t + config_extra.GYM_CD - time.time())}s`)",
+                                       ephemeral=True
+                                       )
+                return False, last_battle_t
         won_gyms = user_d['gym'].get('won', {})
         exclude = [i for i in won_gyms if
                    won_gyms[i]['next_battle_t'] > time.time()]

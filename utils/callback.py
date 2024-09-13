@@ -263,12 +263,13 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     else:
         _b_num = _user_owned_nfts['data']['battle']['num']
         last_battle_t = _user_owned_nfts['data']['battle'].get('last_battle_t', 0)
-    if last_battle_t > currentTs - config_extra.MISSION_CD:
-        await interaction.send(content=
-                               f"Sorry you are under a cooldown\t(ends in `{int(last_battle_t + config_extra.MISSION_CD - currentTs + 1)}s`)",
-                               ephemeral=True
-                               )
-        return
+    if not _user_owned_nfts['data'].get('feature_flags', {}).get('no_mission_cooldown'):
+        if last_battle_t > currentTs - config_extra.MISSION_CD:
+            await interaction.send(content=
+                                   f"Sorry you are under a cooldown\t(ends in `{int(last_battle_t + config_extra.MISSION_CD - currentTs + 1)}s`)",
+                                   ephemeral=True
+                                   )
+            return
     old_num, is_reset = _b_num, False
     if _b_num > 0:
         if _user_owned_nfts['data']['battle']['reset_t'] > currentTs and _b_num >= 10:
