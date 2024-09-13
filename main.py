@@ -34,7 +34,7 @@ from utils.autocomplete_functions import zerpmon_autocomplete, equipment_autocom
 from utils.callback import wager_battle_r_callback
 
 intents = nextcord.Intents.all()
-client = commands.AutoShardedBot(command_prefix="/", intents=intents)
+client = commands.Bot(command_prefix="/", intents=intents)
 
 logging.basicConfig(filename='logfile_wrapper.log', level=logging.ERROR,
                     format='%(asctime)s %(levelname)s %(module)s %(funcName)s %(message)s %(lineno)d')
@@ -625,16 +625,16 @@ async def revive_potion(interaction: nextcord.Interaction, qty: int = SlashOptio
                                  db_query.add_revive_potion)
 
 
-@gift.subcommand(name='double_xp', description="Gift double XP potion (only Admins)")
+@gift.subcommand(name='double_xp', description="Gift double XP potion")
 async def xp_potion(interaction: nextcord.Interaction,
                     user: Optional[nextcord.Member] = SlashOption(required=True)):
     # msg = await interaction.send(f"Searching...")
     execute_before_command(interaction)
-    if interaction.user.id not in config.ADMINS:
-        await interaction.send('You must be an Admin to use this command')
-        return
-    await callback.gift_callback(interaction, 1, user, 'double_xp', 'Double XP Potion',
-                                 db_query.double_xp_24hr)
+    # if interaction.user.id not in config.ADMINS:
+    #     await interaction.send('You must be an Admin to use this command')
+    #     return
+    await callback.gift_callback(interaction, 1, user, 'double_xp_potion', 'Double XP Potion',
+                                 db_query.add_double_xp_potion)
 
 
 @gift.subcommand(name='white_candy', description="Gift White Power Candy")
@@ -2810,19 +2810,22 @@ async def trade(interaction: nextcord.Interaction):
 @trade.subcommand(name="potion",
                   description="Trade potions (Mission Refill potion <-> Revive All potion)",
                   )
-async def potion(interaction: nextcord.Interaction, amount: int = SlashOption(min_value=1),
+async def potion(interaction: nextcord.Interaction,
                  trade_type: int = SlashOption(
                      name="picker",
                      choices={"Give Mission Refill Potion get Revive All Potion": 1,
                               "Give Revive All Potion get Mission Refill Potion": 2},
                  ),
                  trade_with: Optional[nextcord.Member] = SlashOption(required=True),
+                 revive_potion_qty: int = SlashOption(required=True, default=1, min_value=1),
+                 mission_potion_qty: int = SlashOption(required=True, default=1, min_value=1),
                  ):
     user = interaction.user
     if user.id == trade_with.id:
         await interaction.send(
             f"Please choose a valid member to Trade with.")
         return False
+    print(trade_type, trade_with, revive_potion_qty, mission_potion_qty)
     user_owned_nfts = await db_query.get_owned(user.id)
     u_flair = f' | {user_owned_nfts.get("flair", [])[0]}' if len(
         user_owned_nfts.get("flair", [])) > 0 else ''
@@ -2835,39 +2838,37 @@ async def potion(interaction: nextcord.Interaction, amount: int = SlashOption(mi
     potion_on_hold = False
     try:
         if trade_type == 1:
-            if user_owned_nfts is None or user_owned_nfts['mission_potion'] < amount:
+            if user_owned_nfts is None or user_owned_nfts['mission_potion'] < mission_potion_qty:
                 await interaction.send(
-                    f"Sorry you don't have {amount} Mission Refill Potion.")
+                    f"Sorry you don't have {mission_potion_qty} Mission Refill Potion.")
                 return False
-            elif opponent_owned_nfts is None or opponent_owned_nfts['revive_potion'] < amount:
+            elif opponent_owned_nfts is None or opponent_owned_nfts['revive_potion'] < revive_potion_qty:
                 await interaction.send(
-                    f"Sorry {trade_with.name} doesn't have {amount} Revive All Potion.")
+                    f"Sorry {trade_with.name} doesn't have {revive_potion_qty} Revive All Potion.")
                 return False
             else:
                 # Put potions on hold os user doesn't spam
-                await db_query.add_mission_potion(user_owned_nfts['address'], -amount)
-                potion_on_hold = True
+                potion_on_hold = await db_query.add_mission_potion(user_owned_nfts['address'], -mission_potion_qty)
                 embed = CustomEmbed(title="Trade request",
-                                    description=f'{oppo_mention}, {user_mention} wants to trade their {amount} Mission Refill Potion for your {amount} Revive All Potion\n',
+                                    description=f'{oppo_mention}, {user_mention} wants to trade their {mission_potion_qty} Mission Refill Potion for your {revive_potion_qty} Revive All Potion\n',
                                     color=0x01f39d)
                 embed.add_field(name="React with a ✅ if you agree to this Trade", value='\u200B')
                 msg = await interaction.channel.send(embed=embed)
 
         elif trade_type == 2:
-            if opponent_owned_nfts is None or opponent_owned_nfts['mission_potion'] < amount:
+            if opponent_owned_nfts is None or opponent_owned_nfts['mission_potion'] < mission_potion_qty:
                 await interaction.send(
-                    f"Sorry {trade_with.name} doesn't have {amount} Mission Refill Potion.")
+                    f"Sorry {trade_with.name} doesn't have {mission_potion_qty} Mission Refill Potion.")
                 return False
-            elif user_owned_nfts is None or user_owned_nfts['revive_potion'] < amount:
+            elif user_owned_nfts is None or user_owned_nfts['revive_potion'] < revive_potion_qty:
                 await interaction.send(
-                    f"Sorry you don't have {amount} Revive All Potion.")
+                    f"Sorry you don't have {revive_potion_qty} Revive All Potion.")
                 return False
             else:
                 # Put potions on hold os user doesn't spam
-                await db_query.add_revive_potion(user_owned_nfts['address'], -amount)
-                potion_on_hold = True
+                potion_on_hold = await db_query.add_revive_potion(user_owned_nfts['address'], -revive_potion_qty)
                 embed = CustomEmbed(title="Trade request",
-                                    description=f'{oppo_mention}, {user_mention} wants to trade their {amount} Revive All Potion for your {amount} Mission Refill Potion\n',
+                                    description=f'{oppo_mention}, {user_mention} wants to trade their {revive_potion_qty} Revive All Potion for your {mission_potion_qty} Mission Refill Potion\n',
                                     color=0x01f39d)
                 embed.add_field(name="React with a ✅ if you agree to this Trade", value='\u200B')
                 msg = await interaction.channel.send(embed=embed)
@@ -2882,28 +2883,34 @@ async def potion(interaction: nextcord.Interaction, amount: int = SlashOption(mi
             "active": False,
             "channel_id": interaction.channel_id,
             "timeout": time.time() + 60,
-            "amount": amount,
+            "amount_r": revive_potion_qty,
+            "amount_m": mission_potion_qty,
             "trade_type": trade_type
         }
         await asyncio.sleep(60)
         if msg.id in config.potion_trades and config.potion_trades[msg.id]['active'] == False:
             del config.potion_trades[msg.id]
-            await msg.edit(embeds=[CustomEmbed(title=f"Timed out!",
-                                               description=f"<t:{int(time.time())}:R>\n**Info**: {oppo_mention}, {user_mention} wanted to trade their {amount} Revive All Potion for your {amount} Mission Refill Potion")])
-            await msg.add_reaction("❌")
+            if trade_type == 1:
+                await msg.edit(embeds=[CustomEmbed(title=f"Timed out!",
+                                               description=f"<t:{int(time.time())}:R>\n**Info**: {oppo_mention}, {user_mention} wanted to trade their {mission_potion_qty} Mission Refill Potion for your {revive_potion_qty} Revive All Potion")])
+            else:
+                await msg.edit(embeds=[CustomEmbed(title=f"Timed out!",
+                                                   description=f"<t:{int(time.time())}:R>\n**Info**: {oppo_mention}, {user_mention} wanted to trade their {revive_potion_qty} Revive All Potion for your {mission_potion_qty} Mission Refill Potion")])
+
+                await msg.add_reaction("❌")
             if potion_on_hold:
                 if trade_type == 1:
-                    await db_query.add_mission_potion(user_owned_nfts['address'], amount)
+                    await db_query.add_mission_potion(user_owned_nfts['address'], mission_potion_qty)
                 elif trade_type == 2:
-                    await db_query.add_revive_potion(user_owned_nfts['address'], amount)
+                    await db_query.add_revive_potion(user_owned_nfts['address'], revive_potion_qty)
     except:
         if msg.id in config.potion_trades and config.potion_trades[msg.id]['active'] == False:
             del config.potion_trades[msg.id]
             if potion_on_hold:
                 if trade_type == 1:
-                    await db_query.add_mission_potion(user_owned_nfts['address'], amount)
+                    await db_query.add_mission_potion(user_owned_nfts['address'], mission_potion_qty)
                 elif trade_type == 2:
-                    await db_query.add_revive_potion(user_owned_nfts['address'], amount)
+                    await db_query.add_revive_potion(user_owned_nfts['address'], revive_potion_qty)
 
 
 @trade.subcommand(name="item",
@@ -3983,11 +3990,11 @@ async def gym_battle(interaction: nextcord.Interaction,
     await interaction.response.defer(ephemeral=True)
     user = interaction.user
 
-    proceed = await checks.check_gym_battle(user.id, interaction, gym_leader)
+    proceed, last_battle_t = await checks.check_gym_battle(user.id, interaction, gym_leader)
     if not proceed:
         return
 
-    await callback.gym_callback(user.id, interaction, gym_leader)
+    await callback.gym_callback(user.id, interaction, gym_leader, last_battle_t)
 
 
 # GYM COMMANDS
@@ -4741,21 +4748,21 @@ async def on_reaction_add(reaction: nextcord.Reaction, user: nextcord.Member):
                 config.potion_trades[r_msg_id]['active'] = True
                 await reaction.message.edit(embeds=[CustomEmbed(title="**Trade Successful**!")])
                 if potion_trade['trade_type'] == 1:
-                    if oppo['revive_potion'] < potion_trade['amount']:
+                    if oppo['revive_potion'] < potion_trade['amount_r']:
                         del config.potion_trades[r_msg_id]
-                        await db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount'])
+                        await db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount_m'])
                         return
-                    await db_query.add_revive_potion(potion_trade['address2'], -potion_trade['amount'])
-                    await db_query.add_mission_potion(potion_trade['address2'], potion_trade['amount'])
-                    await db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount'])
+                    await db_query.add_revive_potion(potion_trade['address2'], -potion_trade['amount_r'])
+                    await db_query.add_mission_potion(potion_trade['address2'], potion_trade['amount_m'])
+                    await db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount_r'])
                 elif potion_trade['trade_type'] == 2:
-                    if oppo['mission_potion'] < potion_trade['amount']:
+                    if oppo['mission_potion'] < potion_trade['amount_m']:
                         del config.potion_trades[r_msg_id]
-                        await db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount'])
+                        await db_query.add_revive_potion(potion_trade['address1'], potion_trade['amount_r'])
                         return
-                    await db_query.add_mission_potion(potion_trade['address2'], -potion_trade['amount'])
-                    await db_query.add_revive_potion(potion_trade['address2'], potion_trade['amount'])
-                    await db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount'])
+                    await db_query.add_mission_potion(potion_trade['address2'], -potion_trade['amount_m'])
+                    await db_query.add_revive_potion(potion_trade['address2'], potion_trade['amount_r'])
+                    await db_query.add_mission_potion(potion_trade['address1'], potion_trade['amount_m'])
         elif r_msg_id in config.trades:
             trade_obj = config.trades[reaction.message.id]
             if user.id == trade_obj["challenged"]:

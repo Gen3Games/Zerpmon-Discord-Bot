@@ -15,7 +15,7 @@ async def get_zerp_battle_embed_ex(message, z1_equipped, z2_equipped, moves, buf
     critA = moves['critA']
     z2_moves = moves['B']
     critB = moves['critB']
-    print(z1_obj)
+    # print(z1_obj)
     w_candy1, g_candy1, lvl_candy1, purple1 = z1_obj.get('white_candy') or 0, z1_obj.get('gold_candy') or 0, z1_obj.get(
         'licorice') or 0, z1_obj.get('purple_candy') or 0
     w_candy2, g_candy2, lvl_candy2, purple2 = z2_obj.get('white_candy') or 0, z2_obj.get('gold_candy') or 0, z2_obj.get(

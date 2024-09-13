@@ -167,7 +167,7 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
         eq2_note2 = await db_query.get_eq_by_name(z2.get('buff_eq2'))
         for i in eq2_note2['notes']:
             eq2_lower_list.append(i.lower())
-    print(z1, z2)
+    # print(z1, z2)
     z1_blue_percent = 0 if z1_obj['moves'][6]['percent'] in ["0.00", "0", ""] else float(z1_obj['moves'][6]['percent'])
     z2_blue_percent = 0 if z2_obj['moves'][6]['percent'] in ["0.00", "0", ""] else float(z2_obj['moves'][6]['percent'])
     blue_dict = {'orig_b1': z1_blue_percent, 'orig_b2': z2_blue_percent, 'new_b1': z1_blue_percent,
@@ -345,7 +345,14 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
 # print(json.dumps(bt, indent=2))
 
 
-async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type):
+async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type, last_battle_t):
+    updated_battle_t = await db_query.update_last_battle_t_gym(interaction.user.id, last_battle_t)
+    if not updated_battle_t:
+        await interaction.send(content=
+                           f"Sorry you are under a cooldown\t(please wait a little more)",
+                           ephemeral=True
+                           )
+        raise Exception(f"{interaction.user.name} in cooldown")
     _data1 = await db_query.get_owned(interaction.user.id)
     u_flair = f' | {_data1.get("flair", [])[0]}' if len(
         _data1.get("flair", [])) > 0 else ''
@@ -864,9 +871,15 @@ def get_type(doc: dict):
         return types
 
 
-async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zerpmon, old_num, is_reset, xp_mode=None):
+async def proceed_mission(interaction: nextcord.Interaction, user_id, active_zerpmon, last_battle_t, is_reset, xp_mode=None):
     serial, z1 = active_zerpmon
-
+    updated_battle_t = await db_query.update_last_battle_t(user_id, last_battle_t)
+    if not updated_battle_t:
+        await interaction.send(content=
+                           f"Sorry you are under a cooldown\t(please wait a few more seconds)",
+                           ephemeral=True
+                           )
+        raise Exception(f"{interaction.user.name} in cooldown")
     _data1 = await db_query.get_owned(user_id)
     u_flair = f' | {_data1.get("flair", [])[0]}' if len(
         _data1.get("flair", [])) > 0 else ''

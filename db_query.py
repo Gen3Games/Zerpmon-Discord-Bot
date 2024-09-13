@@ -161,19 +161,21 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, r
                         break
             except:
                 pass
-    # if user_obj.get('pvp_decks'):
-    #     for deck in ['1', '3', '5']:
-    #         if user_obj['pvp_decks'].get(deck, {}).get('z'):
-    #             try:
-    #                 for sr, val in user_obj['pvp_decks'][deck]['z']:
-    #                     if sr == 'trainer' and val not in t_serial:
-    #                         set_query[f'pvp_decks.{deck}.z'] = {}
-    #                         break
-    #                     elif val not in serials:
-    #                         set_query[f'pvp_decks.{deck}.z'] = {}
-    #                         break
-    #             except:
-    #                 pass
+    if user_obj.get('pvp_decks'):
+        for deck in ['1', '3', '5']:
+            if user_obj['pvp_decks'].get(deck, {}).get('z'):
+                try:
+                    for sr, val in user_obj['pvp_decks'][deck]['z']:
+                        if sr == 'trainer' and val not in t_serial:
+                            set_query[f'pvp_decks.{deck}.z'] = {}
+                            set_query[f'pvp_decks.{deck}.valid'] = False
+                            break
+                        elif val not in serials:
+                            set_query[f'pvp_decks.{deck}.z'] = {}
+                            set_query[f'pvp_decks.{deck}.valid'] = False
+                            break
+                except:
+                    pass
 
     logging.error(f"{user_obj['address']} \n"
                   f"Set Query {set_query} \n"
@@ -562,12 +564,41 @@ async def update_battle_count(user_id, num):
     if 'battle' in r and r['battle']['num'] > 0 and new_ts - r['battle']['reset_t'] > 80000:
         num = -1
     await users_collection.update_one({'discord_id': str(user_id)},
-                                      {'$set': {'battle': {
-                                          'num': num + 1,
-                                          'reset_t': new_ts
-                                      }}})
+                                      {'$set': {
+                                          'battle.num': num + 1,
+                                          'battle.reset_t': new_ts
+                                        }
+                                      })
     # print(r)
 
+async def update_last_battle_t_gym(user_id, last_battle_t,):
+    users_collection = db['users']
+    if last_battle_t == 0:
+        r = await users_collection.update_one({'discord_id': str(user_id)},
+                                              {
+                                                  '$set': {'gym.last_battle_t': int(time.time())}
+                                              })
+    else:
+        r = await users_collection.update_one({'discord_id': str(user_id), 'gym.last_battle_t': last_battle_t},
+                                              {
+                                                  '$set': {'gym.last_battle_t': int(time.time())}
+                                              })
+    return r.modified_count == 1
+
+async def update_last_battle_t(user_id, last_battle_t,):
+    print('update_last_battle_t', user_id, last_battle_t)
+    users_collection = db['users']
+    if last_battle_t == 0:
+        r = await users_collection.update_one({'discord_id': str(user_id)},
+                                              {
+                                                  '$set': {'battle.last_battle_t': int(time.time())}
+                                              })
+    else:
+        r = await users_collection.update_one({'discord_id': str(user_id), 'battle.last_battle_t': last_battle_t},
+                                              {
+                                                  '$set': {'battle.last_battle_t': int(time.time())}
+                                              })
+    return r.modified_count == 1
 
 async def update_user_wr(user_id, win, total_m, is_reset):
     from utils.checks import get_next_ts
@@ -770,13 +801,13 @@ async def add_revive_potion(address, inc_by, purchased=False, amount=0, db_sep=N
         query['xrp_spent'] = amount
         query['revive_purchase'] = inc_by
     filter_ = {'address': address}
-    if amount < 0:
-        filter_['revive_potion'] = {'gte': amount}
+    if inc_by < 0:
+        filter_['revive_potion'] = {'$gte': abs(inc_by)}
     res = await users_collection.update_one(filter_,
                                             {'$inc': query},
                                             upsert=True)
 
-    return res.modified_count != 0
+    return res.modified_count == 1
 
 
 async def add_mission_potion(address, inc_by, purchased=False, amount=0, db_sep=None):
@@ -787,22 +818,26 @@ async def add_mission_potion(address, inc_by, purchased=False, amount=0, db_sep=
         query['xrp_spent'] = amount
         query['mission_purchase'] = inc_by
     filter_ = {'address': address}
-    if amount < 0:
-        filter_['mission_potion'] = {'gte': amount}
+    if inc_by < 0:
+        filter_['mission_potion'] = {'$gte': abs(inc_by)}
+    print(filter_, query)
     res = await users_collection.update_one(filter_,
                                             {'$inc': query},
                                             upsert=True)
     # print(r)
-    return res.modified_count != 0
+    return res.modified_count == 1
 
 
 async def add_gym_refill_potion(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
 
     query = {'gym.refill_potion': inc_by}
+    filter_ = {'address': address}
     if purchased:
         query['zrp_spent'] = amount
         query['gym.refill_purchase'] = inc_by
+    if inc_by < 0:
+        filter_['gym.refill_potion'] = {'$gte': abs(inc_by)}
     await users_collection.update_one({'address': str(address)},
                                       {'$inc': query},
                                       upsert=True)
@@ -816,7 +851,8 @@ async def reset_respawn_time(user_id):
     for k, z in old['zerpmons'].items():
         old['zerpmons'][k]['active_t'] = 0
 
-    old['battle'] = {'num': 0, 'reset_t': -1}
+    old['battle.num'] = 0
+    old['battle.reset_t'] = -1
 
     r = await users_collection.find_one_and_update({'discord_id': str(user_id)},
                                                    {'$set': old},
@@ -1081,11 +1117,10 @@ async def mission_refill(user_id, addr):
     # old = await users_collection.find_one({'discord_id': str(user_id)})
     # addr = old['address']
     q = {
-        'battle': {
-            'num': 0,
-            'reset_t': -1
+        'battle.num': 0,
+         'battle.reset_t': -1
         }
-    }
+
     success = await add_mission_potion(addr, -1)
     if success:
         r = await users_collection.update_one({'discord_id': str(user_id)},
@@ -1747,12 +1782,18 @@ async def double_xp_24hr(user_id):
 
         r = await users_collection.update_one({'discord_id': str(user_id)}, {"$set": {'double_xp': new_double_xp}})
 
-        if r.acknowledged:
-            return True
-        else:
-            return False
+        return r.acknowledged
     else:
         return False
+
+
+async def add_double_xp_potion(addr, qty=1):
+    users_collection = db['users']
+    filter_ = {'address': addr}
+    if qty < 0:
+        filter_['double_xp_potion'] = {'$gte': abs(qty)}
+    r = await users_collection.update_one(filter_, {"$inc": {'double_xp_potion': qty}})
+    return r.modified_count == 1
 
 
 async def apply_lvl_candy(user_id, zerpmon_name):
@@ -1795,10 +1836,13 @@ async def add_white_candy(address, inc_by, purchased=False, amount=0):
     query = {'white_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': str(address)}
+    if inc_by < 0:
+        filter_['white_candy'] = {'$gte': abs(inc_by)}
+    r = await users_collection.update_one(filter_,
                                       {'$inc': query},
                                       upsert=True)
-    return True
+    return r.modified_count == 1
 
 
 async def add_gold_candy(address, inc_by, purchased=False, amount=0):
@@ -1806,11 +1850,14 @@ async def add_gold_candy(address, inc_by, purchased=False, amount=0):
     query = {'gold_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': address}
+    if inc_by < 0:
+        filter_['gold_candy'] = {'$gte': abs(inc_by)}
+    r = await users_collection.update_one(filter_,
                                       {'$inc': query},
                                       upsert=True)
 
-    return True
+    return r.modified_count == 1
 
 
 async def add_purple_candy(address, inc_by, purchased=False, amount=0):
@@ -1818,7 +1865,10 @@ async def add_purple_candy(address, inc_by, purchased=False, amount=0):
     query = {'purple_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    r = await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': address}
+    if inc_by < 0:
+        filter_['purple_candy'] = {'$gte': abs(inc_by)}
+    r = await users_collection.update_one(filter_,
                                           {'$inc': query},
                                           upsert=True)
 
@@ -1828,7 +1878,7 @@ async def add_purple_candy(address, inc_by, purchased=False, amount=0):
 async def add_lvl_candy(address, inc_by, purchased=False, amount=0):
     users_collection = db['users']
     query = {'lvl_candy': inc_by}
-    filter_ = {'address': str(address)}
+    filter_ = {'address': address}
     if inc_by < 0:
         filter_['lvl_candy'] = {'$gte': abs(inc_by)}
     if purchased:
@@ -1836,7 +1886,7 @@ async def add_lvl_candy(address, inc_by, purchased=False, amount=0):
     r = await users_collection.update_one(filter_,
                                           {'$inc': query})
 
-    return r.modified_count != 0
+    return r.modified_count == 0
 
 
 async def add_overcharge_candy(address, inc_by, purchased=False, amount=0):
@@ -1844,10 +1894,13 @@ async def add_overcharge_candy(address, inc_by, purchased=False, amount=0):
     query = {'overcharge_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': address}
+    if inc_by < 0:
+        filter_['overcharge_candy'] = {'$gte': abs(inc_by)}
+    r = await users_collection.update_one(filter_,
                                       {'$inc': query},
                                       upsert=True)
-    return True
+    return r.modified_count == 1
 
 
 async def add_gummy_candy(address, inc_by, purchased=False, amount=0):
@@ -1855,10 +1908,13 @@ async def add_gummy_candy(address, inc_by, purchased=False, amount=0):
     query = {'gummy_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': address}
+    if inc_by < 0:
+        filter_['gummy_candy'] = {'$gte': abs(inc_by)}
+    r = await users_collection.update_one(filter_,
                                       {'$inc': query},
                                       upsert=True)
-    return True
+    return r.modified_count == 1
 
 
 async def add_sour_candy(address, inc_by, purchased=False, amount=0):
@@ -1866,10 +1922,13 @@ async def add_sour_candy(address, inc_by, purchased=False, amount=0):
     query = {'sour_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': address}
+    if inc_by < 0:
+        filter_['sour_candy'] = {'$gte': abs(inc_by)}
+    r = await users_collection.update_one(filter_,
                                       {'$inc': query},
                                       upsert=True)
-    return True
+    return r.modified_count == 1
 
 
 async def add_star_candy(address, inc_by, purchased=False, amount=0):
@@ -1877,10 +1936,13 @@ async def add_star_candy(address, inc_by, purchased=False, amount=0):
     query = {'star_candy': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': address}
+    if inc_by < 0:
+        filter_['star_candy'] = {'$gte': abs(inc_by)}
+    r = await users_collection.update_one(filter_,
                                       {'$inc': query},
                                       upsert=True)
-    return True
+    return r.modified_count == 1
 
 
 async def add_jawbreaker(address, inc_by, purchased=False, amount=0):
@@ -1888,10 +1950,13 @@ async def add_jawbreaker(address, inc_by, purchased=False, amount=0):
     query = {'jawbreaker': inc_by}
     if purchased:
         query['zrp_spent'] = amount
-    await users_collection.update_one({'address': str(address)},
+    filter_ = {'address': address}
+    if inc_by < 0:
+        filter_['jawbreaker'] = {'$gte': abs(inc_by)}
+    r = await users_collection.update_one(filter_,
                                       {'$inc': query},
                                       upsert=True)
-    return True
+    return r.modified_count == 1
 
 
 async def apply_white_candy(user_id, zerp_name: str, amt=1):

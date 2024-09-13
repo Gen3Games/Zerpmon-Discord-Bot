@@ -161,7 +161,7 @@ async def send_reset_message(client: nextcord.Client):
                         elif loan['expires_at'] <= time.time() and loan['accepted_by']['id'] is None:
                             await db_query.remove_listed_loan(loan['token_id'], loan['listed_by']['id'], is_id=True)
                         else:
-                            if loan['amount_pending'] < 0:
+                            if loan['amount_pending'] < -1.5:
                                 continue
                             if loan['xrp']:
                                 await db_query.add_loan_txn_to_queue(loan['listed_by']['address'], 'XRP',
@@ -197,6 +197,8 @@ async def send_reset_message(client: nextcord.Client):
             print('here')
             for guild in guilds:
                 try:
+                    if guild.id == 1094087341250981962:
+                        config_extra.TEST_GUILD = guild
                     if guild.id in config.MAIN_GUILD:
                         # TOWER EMBED
                         config_extra.MAIN_GUILD = guild

@@ -256,10 +256,22 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
         _user_owned_nfts["data"].get("flair", [])) > 0 else ''
     _user_owned_nfts['user'] += u_flair
     # user_mention = interaction.user.mention + u_flair
-    _b_num = 0 if 'battle' not in _user_owned_nfts['data'] else _user_owned_nfts['data']['battle']['num']
+    currentTs = time.time()
+    if 'battle' not in _user_owned_nfts['data']:
+        _b_num = 0
+        last_battle_t = 0
+    else:
+        _b_num = _user_owned_nfts['data']['battle']['num']
+        last_battle_t = _user_owned_nfts['data']['battle'].get('last_battle_t', 0)
+    if last_battle_t > currentTs - config_extra.MISSION_CD:
+        await interaction.send(content=
+                               f"Sorry you are under a cooldown\t(ends in `{int(last_battle_t + config_extra.MISSION_CD - currentTs + 1)}s`)",
+                               ephemeral=True
+                               )
+        return
     old_num, is_reset = _b_num, False
     if _b_num > 0:
-        if _user_owned_nfts['data']['battle']['reset_t'] > time.time() and _b_num >= 10:
+        if _user_owned_nfts['data']['battle']['reset_t'] > currentTs and _b_num >= 10:
 
             _hours, _minutes, _s = await checks.get_time_left_utc()
 
@@ -286,14 +298,14 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
                                        )
             button.callback = lambda i: use_missionP_callback(i, _user_owned_nfts, True, )
             return
-        elif _user_owned_nfts['data']['battle']['reset_t'] < time.time():
+        elif _user_owned_nfts['data']['battle']['reset_t'] < currentTs:
             # await db_query.update_battle_count(user_id, -1)
             _b_num = 0
             is_reset = True
 
     _active_zerpmons = [(k, i) for k, i in _user_owned_nfts['data']['zerpmons'].items()
                         if 'active_t' not in i or
-                        i['active_t'] < time.time()]
+                        i['active_t'] < currentTs]
     mission_deck_zerpmons = [] if 'mission_deck' not in _user_owned_nfts['data'] else \
         [_i for k, _i in sorted(_user_owned_nfts['data']['mission_deck'].items(), key=lambda x: int(x[0])) if _i]
     alive_deck = [_i for _i in mission_deck_zerpmons if _i in [ke[0] for ke in _active_zerpmons]]
@@ -351,7 +363,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     config.ongoing_missions.append(user_id)
     xp_mode = _user_owned_nfts['data'].get('xp_mode', None)
     try:
-        loser, stats = await battle_function.proceed_mission(interaction, user_id, _battle_z[0], old_num, is_reset,
+        loser, stats,  = await battle_function.proceed_mission(interaction, user_id, _battle_z[0], last_battle_t, is_reset,
                                                              xp_mode=xp_mode)
     except Exception as e:
         logging.error(f"ERROR during mission: {e}\n{traceback.format_exc()}")
@@ -376,7 +388,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     _b_num += 1
     reset_str = ''
     if _b_num >= 10:
-        if _user_owned_nfts['data']['battle']['reset_t'] > time.time():
+        if _user_owned_nfts['data']['battle']['reset_t'] > currentTs:
             _hours, _minutes, _s = await checks.get_time_left_utc()
             reset_str = f' reset time **{_hours}**h **{_minutes}**m'
 
@@ -384,7 +396,7 @@ async def button_callback(user_id, interaction: nextcord.Interaction, loser: int
     (lvl, xp, xp_req, _r, _m), zerp_doc = await db_query.get_lvl_xp(nft['name'],
                                                                     in_mission=True if loser == 2 else False,
                                                                     double_xp=_user_owned_nfts['data'].get('double_xp',
-                                                                                                           0) > time.time(),
+                                                                                                           0) > currentTs,
                                                                     ret_doc=True)
     lvl_obj = {'level': lvl, 'xp_required': xp_req, 'xp': xp}
     embed = checks.populate_lvl_up_embed(zerp_doc, lvl_obj, stats[1], stats[2])
@@ -504,14 +516,14 @@ async def use_reviveP_callback(interaction: nextcord.Interaction, owned_nfts=Non
     return True
 
 
-async def gym_callback(user_id, interaction: nextcord.Interaction, gym_leader):
+async def gym_callback(user_id, interaction: nextcord.Interaction, gym_leader, last_battle_t):
     if user_id in config.ongoing_gym_battles:
         await interaction.send('Please wait another gym battle is already taking place!', ephemeral=True)
         return
     config.ongoing_gym_battles.append(user_id)
     try:
         await interaction.send('Battle beginning!', ephemeral=True)
-        winner = await battle_function.proceed_gym_battle(interaction, gym_leader)
+        winner = await battle_function.proceed_gym_battle(interaction, gym_leader, last_battle_t)
     except Exception as e:
         logging.error(f'ERROR in gym battle: {traceback.format_exc()}')
     finally:
@@ -1700,8 +1712,9 @@ async def gift_callback(interaction: nextcord.Interaction, qty: int, user: nextc
                 f"Successfully gifted {f'**{item}**' if item else f'**{qty}**'} {potion} to **{user.name}**!",
                 ephemeral=False)
             if potion_key not in ['bg', 'flair']:
-                await fn(sender['address'], -qty)
-                await fn(user_owned_nfts['data']['address'], qty)
+                successfully_taken = await fn(sender['address'], -qty)
+                if successfully_taken:
+                    await fn(user_owned_nfts['data']['address'], qty)
             else:
                 await fn(sender['discord_id'], item, -qty)
                 await fn(user_id, item, qty)
@@ -1828,7 +1841,7 @@ async def loan_marketplace_callback(interaction: nextcord.Interaction, page=1, f
                               f"> Min Loan Period: {listing['min_days']} days\n"
                               f"> [view]({my_button})")
         zerp_button = Button(style=ButtonStyle.secondary, label=listing['zerpmon_name'], row=math.ceil(idx / 5))
-        zerp_button.callback = lambda i, listing=listing: show_zerp_callback(interaction,
+        zerp_button.callback = lambda i, listing: show_zerp_callback(interaction,
                                                                              zerpmon_name=listing['zerpmon_name'],
                                                                              listing_obj=listing)
 
@@ -1888,7 +1901,7 @@ async def initiate_loan(interaction: nextcord.Interaction, listing):
         loaner_obj = await db_query.get_owned(listing['listed_by']['id'])
         user_obj = await db_query.get_owned(interaction.user.id)
         await i.send(content='**Validating NFT offer**!', ephemeral=True)
-        offer_valid = await xrpl_functions.get_offer_by_id(listing['offer'], loaner_obj['address'])
+        offer_valid = await xrpl_functions.is_sell_offer_active(listing['offer'], listing['token_id'])
         await asyncio.sleep(1)
         # accepted = True
         if not offer_valid:

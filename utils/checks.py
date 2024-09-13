@@ -10,11 +10,12 @@ import pytz
 import requests
 import concurrent.futures
 import config
+import config_extra
 import db_query
 from db_query import get_owned
 from utils import battle_function, callback
 from globals import CustomEmbed
-from nextcord import ButtonStyle
+from nextcord import ButtonStyle, Guild
 from nextcord.ui import Button, View
 from PIL import Image, ImageDraw, ImageFont
 
@@ -332,44 +333,51 @@ async def check_battle(user_id, opponent, user_owned_nfts, opponent_owned_nfts, 
 
 async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type):
     owned_nfts = {'data': await db_query.get_owned(user_id), 'user': interaction.user.name}
-
+    last_battle_t = 0
     # Sanity checks
 
     user_d = owned_nfts['data']
     if user_d is None:
         await interaction.send(
             f"Sorry no NFTs found for **{owned_nfts['user']}** or haven't yet verified your wallet", ephemeral=True)
-        return False
+        return False, last_battle_t
 
     if len(user_d['zerpmons']) == 0:
         await interaction.send(
             f"Sorry **0** Zerpmon found for **{owned_nfts['user']}**, need **1** to start doing Gym battles",
             ephemeral=True)
-        return False
+        return False, last_battle_t
 
     if len(user_d['trainer_cards']) == 0:
         await interaction.send(
             f"Sorry **0** Trainer cards found for **{owned_nfts['user']}**, need **1** to start doing Gym battles",
             ephemeral=True)
-        return False
+        return False, last_battle_t
     if 'gym_deck' in user_d and len(user_d['gym_deck']) > 0:
         def_deck = user_d['gym_deck']['0']
         if not def_deck.get('trainer', None):
             await interaction.send(
                 f"**{owned_nfts['user']}** you haven't set your Trainer in default gym deck, "
                 f"please set it and try again", ephemeral=True)
-            return False
+            return False, last_battle_t
         elif len([i for i, j in def_deck.items() if j]) - 1 == 0:
             await interaction.send(
                 f"**{owned_nfts['user']}** your default gym deck contains 0 Zerpmon, "
                 f"need 1 to do Gym battles.", ephemeral=True)
-            return False
+            return False, last_battle_t
     if 'gym' in user_d:
         # if user_d['gym']['active_t'] > time.time():
         #     _hours, _minutes, _s = await get_time_left_utc()
         #     await interaction.send(
         #         f"Sorry please wait **{_hours}**h **{_minutes}**m for your next Gym Battle.", ephemeral=True)
         #     return False
+        last_battle_t = user_d['gym'].get('last_battle_t', 0)
+        if last_battle_t + config_extra.GYM_CD > time.time():
+            await interaction.send(content=
+                                   f"Sorry you are under a cooldown\t(ends in `{int(last_battle_t + config_extra.GYM_CD - time.time())}s`)",
+                                   ephemeral=True
+                                   )
+            return False, last_battle_t
         won_gyms = user_d['gym'].get('won', {})
         exclude = [i for i in won_gyms if
                    won_gyms[i]['next_battle_t'] > time.time()]
@@ -378,8 +386,8 @@ async def check_gym_battle(user_id, interaction: nextcord.Interaction, gym_type)
         if type_ in exclude or type_ not in config.GYMS:
             await interaction.send(
                 f"Sorry please enter a valid Gym.", ephemeral=True)
-            return False
-    return True
+            return False, last_battle_t
+    return True, last_battle_t
 
 
 async def check_boss_battle(user_id, interaction: nextcord.Interaction):
@@ -629,6 +637,17 @@ async def get_battle_results(global_dict):
             for result in results:
                 global_dict[result['uid']] = result
                 config.stale_results.append(result['uid'])
+        if len(config_extra.notification_embeds) > 0:
+            embeds = config_extra.notification_embeds
+            config_extra.notification_embeds = []
+            guild: Guild = config_extra.TEST_GUILD
+            announce_channel = nextcord.utils.get(guild.channels, id=config_extra.SOLD_CHANNEL)
+            print('announce_channel', announce_channel)
+            if announce_channel:
+                for embed in embeds:
+                    await announce_channel.send(
+                        embed=embed
+                    )
         await asyncio.sleep(0.2)
         await db_query.delete_battle_results(config.stale_results)
         config.stale_results = []
