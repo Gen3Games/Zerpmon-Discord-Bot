@@ -365,7 +365,7 @@ async def check_wallet_exist(address):
              },
         ]
     })
-    discord_user_exist = result is not None and result.get('discord_id')
+    discord_user_exist = result is not None #and result.get('discord_id')
     # print(f"Found user {result}")
 
     return discord_user_exist
@@ -571,17 +571,17 @@ async def update_battle_count(user_id, num):
                                       })
     # print(r)
 
-async def update_last_battle_t_gym(user_id, last_battle_t,):
+async def update_last_battle_t_gym(user_id, last_battle_t, final_ts=None):
     users_collection = db['users']
     if last_battle_t == 0:
         r = await users_collection.update_one({'discord_id': str(user_id)},
                                               {
-                                                  '$set': {'gym.last_battle_t': int(time.time())}
+                                                  '$set': {'gym.last_battle_t': int(time.time()) if not final_ts else final_ts}
                                               })
     else:
         r = await users_collection.update_one({'discord_id': str(user_id), 'gym.last_battle_t': last_battle_t},
                                               {
-                                                  '$set': {'gym.last_battle_t': int(time.time())}
+                                                  '$set': {'gym.last_battle_t': int(time.time()) if not final_ts else final_ts}
                                               })
     return r.modified_count == 1
 
@@ -838,10 +838,11 @@ async def add_gym_refill_potion(address, inc_by, purchased=False, amount=0):
         query['gym.refill_purchase'] = inc_by
     if inc_by < 0:
         filter_['gym.refill_potion'] = {'$gte': abs(inc_by)}
-    await users_collection.update_one({'address': str(address)},
+    r = await users_collection.update_one({'address': str(address)},
                                       {'$inc': query},
                                       upsert=True)
     # print(r)
+    return r.modified_count == 1
 
 
 async def reset_respawn_time(user_id):
@@ -1608,7 +1609,14 @@ async def add_tower_txn_to_gen_queue(user_data, uid, paymentAmount, memo=None):
     return True
 
 
-async def update_gym_won(discord_id, gym_obj, gym_type, stage, resetTs, lost=False):
+async def update_gym_won(discord_id,
+                         gym_obj,
+                         gym_type,
+                         stage,
+                         resetTs,
+                         last_battle_ts,
+                         lost=False,
+                         ):
     users_collection = db['users']
     next_day_ts = await get_next_ts(1)
     if lost:
@@ -1627,7 +1635,8 @@ async def update_gym_won(discord_id, gym_obj, gym_type, stage, resetTs, lost=Fal
                 }
             },
             'active_t': 0,
-            'match_cnt': 1
+            'match_cnt': 1,
+            'last_battle_t': last_battle_ts,
         }
         await users_collection.update_one(
             {'discord_id': str(discord_id)},
@@ -1647,7 +1656,8 @@ async def update_gym_won(discord_id, gym_obj, gym_type, stage, resetTs, lost=Fal
         await users_collection.update_one(
             {'discord_id': str(discord_id)},
             {'$set': {f'gym.won.{gym_type}': gym_obj['won'][gym_type],
-                      'gym.match_cnt': gym_obj.get('match_cnt', 0) + 1
+                      'gym.match_cnt': gym_obj.get('match_cnt', 0) + 1,
+                      'gym.last_battle_t': last_battle_ts,
                       },
              }
         )
@@ -1886,7 +1896,7 @@ async def add_lvl_candy(address, inc_by, purchased=False, amount=0):
     r = await users_collection.update_one(filter_,
                                           {'$inc': query})
 
-    return r.modified_count == 0
+    return r.modified_count == 1
 
 
 async def add_overcharge_candy(address, inc_by, purchased=False, amount=0):
@@ -2366,7 +2376,7 @@ async def remove_listed_loan(zerp_name_or_id, user_id_or_address, is_id=False, d
         query = {'token_id': zerp_name_or_id,
                  'loan_expires_at': {'$ne': 0}}
     if doubleOffeTo:
-        r = await loan_col.update_one({'offer': None, 'doubleOffeTo':doubleOffeTo})
+        r = await loan_col.update_one(query, {'offer': None, 'doubleOffeTo':doubleOffeTo})
     else:
         r = await loan_col.delete_one(query)
     return r.acknowledged
@@ -2477,8 +2487,7 @@ async def get_active_loans():
             active.append(listing)
         elif listing['offer'] is None:
             if listing['expires_at'] < ts:
-                # await remove_listed_loan(listing['token_id'], listing['listed_by']['id'], is_id=True)
-                pass
+                await remove_listed_loan(listing['token_id'], listing['listed_by']['id'], is_id=True)
             else:
                 expired.append(listing)
     return active, expired

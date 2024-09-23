@@ -346,7 +346,8 @@ async def get_zerp_battle_embed(message, z1, z2, z1_obj, z2_obj, z1_type, z2_typ
 
 
 async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type, last_battle_t):
-    updated_battle_t = await db_query.update_last_battle_t_gym(interaction.user.id, last_battle_t)
+    updated_battle_t = await db_query.update_last_battle_t_gym(interaction.user.id, last_battle_t,
+                                                               int(time.time()) - config_extra.GYM_CD + 3)
     if not updated_battle_t:
         await interaction.send(content=
                            f"Sorry you are under a cooldown\t(please wait a little more)",
@@ -460,13 +461,18 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type, last_b
         trainer_rewards: db_query.AddXPTrainerResult | None = None
         xp_gain = 10 + (stage - 1) * 5
         resetTs, block_number = await db_query.get_gym_reset()
+        cd_ts = int(time.time()) - (
+                config_extra.GYM_ZERP_CD * (5 - len(result['playerAZerpmons']))
+        )
         if loser == 1:
             await db_query.add_gp_queue(_data1, 0, block_number)
             await db_query.update_battle_log(interaction.user.id, None, interaction.user.name, leader_name,
                                              battle_log['teamA'],
                                              battle_log['teamB'], winner=2, battle_type=battle_log['battle_type'])
             # Save user's match
+            # Here we'll also set the actual cooldown ts
             await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, resetTs=resetTs,
+                                          last_battle_ts=cd_ts,
                                           lost=True)
         elif loser == 2:
             # Add GP to user
@@ -477,7 +483,9 @@ async def proceed_gym_battle(interaction: nextcord.Interaction, gym_type, last_b
                                              battle_log['teamB'], winner=1, battle_type=battle_log['battle_type'])
 
             await db_query.update_gym_won(_data1['discord_id'], _data1.get('gym', {}), gym_type, stage, resetTs=resetTs,
+                                          last_battle_ts=cd_ts,
                                           lost=False)
+
         # Now send messages
         await gen_image(str(interaction.id) + '0', url1, '', path1, path2, path3, leader['bg'],
                         trainer_buffs=[result['playerATrainer'].get('buff') if result['playerATrainer'] else None,
