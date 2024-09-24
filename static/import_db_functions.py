@@ -11,6 +11,7 @@ import requests
 from pymongo import ReturnDocument
 from xrpl.asyncio.clients import AsyncWebsocketClient
 from xrpl.models import NFTsByIssuer
+from xrpl.utils import hex_to_str
 
 import config
 import config_extra
@@ -40,7 +41,7 @@ class NFTDict(TypedDict):
 async def fetchNFTsByIssuer(issuer_address, limit=10000, delay_per_request=1):
     try:
         # Can switch to private node after installing clio server
-        ws_client = AsyncWebsocketClient('wss://s2.ripple.com/')
+        ws_client = AsyncWebsocketClient(config_extra.CLIO_WS_URL)
         await ws_client.open()
         all_nfts: [NFTDict] = []
 
@@ -147,34 +148,54 @@ def get_unique_id(entries: list[dict], new_entry: dict):
     return len(entries)
 
 
-def get_effects(effects, entries, l_effect):
+def get_effects(entries, l_effect, disabled):
     match = extract_numbers(l_effect)
+    if disabled:
+        return {
+                "ko_against": None,
+                "unit": "flat",
+                "target": "opponent",
+                "move_type": [
+                    "blue"
+                ],
+            'disabled': True
+            }
+    effect = {'disabled': False}
+    if 'until ko' in l_effect:
+        effect['active_till_ko'] = True
+    if 'party' in l_effect:
+        effect['party'] = True
     try:
         percent_c = match[0]
         rounds = match[1] if len(match) > 1 else (1 if 'next' in l_effect else None)
         inc = 'increase' in l_effect
-        effects['active_rounds'] = min(rounds, percent_c) if rounds else None
-        effects['value'] = (max(rounds, percent_c) if rounds else percent_c) * (1 if inc else -1)
+        if rounds is None and 'damage' in l_effect and effect.get('active_till_ko'):
+            effect['active_rounds'] = -1
+            effect['value'] = percent_c * (1 if inc else -1)
+        else:
+            effect['active_rounds'] = min(rounds, percent_c) if rounds else None
+            effect['value'] = (max(rounds, percent_c) if rounds else percent_c) * (1 if inc else -1)
     except:
         pass
     if 'knock' in l_effect:
-        effects['ko_against'] = 'gold' if 'gold' in l_effect else ('white' if 'white' in l_effect else 'all')
-    effects['unit'] = 'percent' if ('percent' in l_effect or '%' in l_effect) else 'flat'
-    effects['target'] = 'opponent' if 'oppo' in l_effect or 'enemy' in l_effect else 'self'
-    effects['move_type'] = ['white', 'gold'] if 'white/gold' in l_effect else \
+        effect['ko_against'] = 'gold' if 'gold' in l_effect else ('white' if 'white' in l_effect else 'all')
+    effect['each'] = True if ' each ' in l_effect else False
+    effect['unit'] = 'percent' if ('percent' in l_effect or '%' in l_effect) else 'flat'
+    effect['target'] = 'opponent' if 'oppo' in l_effect or 'enemy' in l_effect else 'self'
+    effect['move_type'] = ['white', 'gold'] if ('white' in l_effect and 'gold' in l_effect) else \
         (['gold'] if 'gold' in l_effect else
          (['blue'] if 'blue' in l_effect else
           (['miss'] if 'miss' in l_effect or 'red ' in l_effect else (
-              ['purple'] if 'purple' in l_effect else ('white' if 'white' in l_effect else ['white', 'gold'])))))
-    if ('white' in effects['move_type'] or 'gold' in effects['move_type']) and effects['unit'] == 'percent':
-        effects['select'] = 'lowest' if 'low' in l_effect else ('highest' if 'high' in l_effect else 'all')
-        if effects['select'] != 'all':
-            match effects['move_type']:
+              ['purple'] if 'purple' in l_effect else (['white'] if 'white' in l_effect else ['white', 'gold'])))))
+    if ('white' in effect['move_type'] or 'gold' in effect['move_type']) and effect['unit'] == 'percent':
+        effect['select'] = 'lowest' if 'low' in l_effect else ('highest' if 'high' in l_effect else 'all')
+        if effect['select'] != 'all':
+            match effect['move_type']:
                 case ['white'] | ['gold'] | ['purple']:
-                    if effects['select'] == 'lowest':
-                        effects['sorted_idx'] = 0
+                    if effect['select'] == 'lowest':
+                        effect['sorted_idx'] = 0
                     else:
-                        effects['sorted_idx'] = 1
+                        effect['sorted_idx'] = 1
                 # case :
                 #     if effects['select'] == 'lowest':
                 #         effects['sorted_idx'] = 2
@@ -187,26 +208,36 @@ def get_effects(effects, entries, l_effect):
                 #         effects['sorted_idx'] = 5
                 case ['white', 'gold']:
                     if 'second' in l_effect:
-                        if effects['select'] == 'lowest':
-                            effects['sorted_idx'] = 1
+                        if effect['select'] == 'lowest':
+                            effect['sorted_idx'] = 1
                         else:
-                            effects['sorted_idx'] = 2
+                            effect['sorted_idx'] = 2
                     else:
-                        if effects['select'] == 'lowest':
-                            effects['sorted_idx'] = 0
+                        if effect['select'] == 'lowest':
+                            effect['sorted_idx'] = 0
                         else:
-                            effects['sorted_idx'] = 3
+                            effect['sorted_idx'] = 3
                 case _:
-                    effects['sorted_idx'] = None
-    effects['type_id'] = str(get_unique_id(entries, effects))
-
+                    effect['sorted_idx'] = None
+    effect['type_id'] = str(get_unique_id(entries, effect))
+    return effect
     # except:
     #     print(f'{l_effect}\n{traceback.format_exc()}')
 
 
+def get_purple_move_effects(_id, stars):
+    collection = db['PurpleEffectList']
+    print(_id, stars)
+    return collection.find_one({
+        'purple_id': int(_id),
+        'stars': int(stars),
+    }, projection={'_id': 0})['effects']
+
+
 def import_moves(col_name):
-    with open('ZerpmonMoves-Movelist.csv', 'r') as csvfile:
+    with open('Zerpmon Moves - Move List POST PURPLE UPDATE 270824.csv', 'r') as csvfile:
         collection = db[col_name]
+        print(collection.name)
         csvreader = csv.reader(csvfile)
         entries = []
         for row in csvreader:
@@ -215,10 +246,11 @@ def import_moves(col_name):
             # Insert the row data to MongoDB
             effects = {}
             row[5] = row[5].replace('White/Gold ', '')
-            if row[5]:
-                l_effect = row[5].lower()
-                get_effects(effects, entries, l_effect)
             stars = None if row[3].isdigit() else len(row[3])
+            if row[5] and row[6]:
+                l_effect = row[5].lower()
+                effects = get_purple_move_effects(row[6], stars)
+                # get_effects(effects, entries, l_effect)
             # if col_name == 'MoveList':
             #     if 'turn' in row[5]:
             #         continue
@@ -235,57 +267,56 @@ def import_moves(col_name):
                 'melee': int(row[7]) if row[7] and row[7].isdigit() else None,
                 'effects': effects,
             }}, upsert=True)
+        # collection.create_index({'move_name': 1})
+        # collection.create_index({'move_id': 1})
         print(len(entries))
 
 
 def import_purple_star_ids():
-    with open('ZerpmonMovesPurpleEffectList-040824.csv', 'r') as csvfile:
+    with open('Zerpmon Moves - Purple Effect List 100924.csv', 'r') as csvfile:
         collection = db['PurpleEffectList']
+        print(collection.name)
         collection.drop()
         csvreader = csv.reader(csvfile)
         entries = []
         for row in csvreader:
-            if row[1] == "" or row[0] == 'Purple Move Effect ID':
+            if row[0] == 'Purple Move Effect ID':
                 continue
             # Insert the row data to MongoDB
-            effects = {}
-            extra_effects = {}
-            row.pop()
+            effects = []
+            effect_strings = []
+            row.pop() # Buff/Debuff for now of no use
             stars = row.pop()
             purple_id = row.pop(0)
+            print(purple_id)
+            # filtered_rows = ['effect 1 string', 'effect 1 percent/value', ...']
             filtered_rows = [i for i in row if i and i != '-']
-            disabled = filtered_rows[1].lower() == 'false'
-            l_effect = f'{filtered_rows[0]} by {filtered_rows[1]}'.lower()
-
-            get_effects(effects, entries, l_effect)
-            l_e_effect = None
-            if len(filtered_rows) > 2:
-                l_e_effect = f'{filtered_rows[2]} by {filtered_rows[3]}'.lower()
-                get_effects(extra_effects, entries, l_e_effect)
+            if len(filtered_rows) < 2:
+                continue
+            print(filtered_rows)
+            while len(filtered_rows) >= 2:
+                disabled = filtered_rows[1].lower() == 'false'
+                s1 = filtered_rows.pop(0).strip()
+                s2 = filtered_rows.pop(0).strip()
+                l_effect = f"{s1}{'' if s1.endswith('by') else ' by'} {s2 if s2.lower() not in ['false', 'true'] else f'({s2})'}"
+                effects.append(get_effects(entries, l_effect.lower(), disabled =disabled ))
+                effect_strings.append(l_effect)
             print(l_effect)
-            dummy_effect = {
-                "ko_against": None,
-                "unit": "flat",
-                "target": "opponent",
-                "move_type": [
-                    "blue"
-                ],
-            }
+
             collection.insert_one({
                 'purple_id': int(purple_id),
                 'stars': int(stars),
-                'strings': [l_effect] + ([l_e_effect] if l_e_effect else []),
-                'effects': effects if not disabled else dummy_effect,
-                'extra_effects': extra_effects if extra_effects else None,
-                'disabled': disabled
+                'strings': effect_strings,
+                'effects': effects,
             })
         print(len(entries))
+        # collection.create_index({"purple_id": pymongo.ASCENDING})
 
 
 def import_movesets():
-    with open('ZerpmonMoves-Movsets.csv', 'r') as csvfile:
+    with open('Zerpmon Moves - Zerpmon Movesets 060924.csv', 'r') as csvfile:
         collection = db['MoveSets']
-        movelist_col = db['MoveList']
+        movelist_col = db['MoveList2']
         # c2 = db['MoveSets2']
         # c2.drop()
         csvreader = csv.reader(csvfile)
@@ -369,12 +400,35 @@ def import_movesets():
                 #     ],
                 #     'nft_id': row[39]
                 # }
-                collection.update_one({'name': row[1]}, {'$unset': {'moves': ''}})
-                collection.update_one({'name': row[1]}, {'$set': doc, '$setOnInsert': {'attributes': None,
-                                                                                       'image': None,
+                old_doc = collection.find_one_and_update({'name': row[1]}, {'$unset': {'moves': ''}})
+                attr, img = None, None
+                if old_doc.get('nft_id') is None or str(old_doc.get('nft_id')).startswith('trn-'):
+                    trn_docs = list(collection.find({'name': {'$regex': row[1]}, 'nft_id': {'$regex': 'trn-'}}))
+                    if len(trn_docs) > 0:
+                        doc['isTRN'] = True
+                        # Get all nfts with the same name and differing token_id
+                        for trn_doc in trn_docs:
+                            trn_doc['zerpmonType'] = doc['zerpmonType']
+                            trn_doc['moves'] = doc['moves']
+                            trn_doc['move_types'] = doc['move_types']
+                            collection.update_one({'name': trn_doc['name']}, {'$set': trn_doc, })
+                    with open("./newMetadata.json", "r") as f:
+                        data = json.load(f)
+                        print("null metadata found", data)
+                        for obj in data:
+                            print(obj['name'], row[1])
+                            if obj['name'] == row[1]:
+                                attr = obj['attributes']
+                                img = obj['image']
+                                # doc['attributes'] = obj['attributes']
+                                # doc['image'] = obj['image']
+
+                collection.update_one({'name': row[1]}, {'$set': doc, '$setOnInsert': {'attributes': attr,
+                                                                                       'image': img,
                                                                                        'nft_id': row[38] if row[
                                                                                            38] else None
                                                                                        }}, upsert=True)
+                print(row[1])
                 # c2.insert_one(document=doc)
             except Exception as e:
                 print(traceback.format_exc(), '\n', row)
@@ -437,6 +491,36 @@ def import_trainer_level():
                 collection.create_index({'level': 1})
             except:
                 print(traceback.format_exc())
+
+
+def import_trn_trainer_level():
+    collection = db['levels_trainer_trn']
+    collection.drop()
+    with open('TRN Trainers Levelling.csv', 'r') as file:
+        reader = csv.reader(file)
+        header = next(reader)  # Skip the header row
+        for row in reader:
+            # Replace empty values with ""
+            try:
+                row = ["" if x.strip() == "" else x for x in row]
+                print(row)
+                # Convert XP Required per level, Total XP Earned, Wins, Mission Refreshes and EXP Per Win to integers
+                collection.insert_one({
+                    'level': int(row[0]),
+                    'xp_required': int(row[1]),
+                    'total_xp': int(row[2]),
+                    'wins_needed': float(row[3]),
+                    'revive_potion_reward': 0 if row[4].strip() == "" else int(row[4]),
+                    'mission_potion_reward': 0 if row[5].strip() == "" else int(row[5]),
+                    'candy_frags': 0 if row[6].strip() == "" else int(row[6]),
+                    'damage_buff': 0 if row[7].strip() == "" else float(row[7].replace('%', '')),
+                    'miss_percent_buff': 0 if row[8].strip() == "" else float(row[8].replace('%', '')),
+                    'apply_two_buffs': True
+                })
+                collection.create_index({'level': 1})
+            except:
+                print(traceback.format_exc())
+
 
 
 def import_ascend_levels():
@@ -653,7 +737,7 @@ def update_all_zerp_moves():
         p_candy = document.get('purple_candy', 0)
         if w_candy > 0:
 
-            original_zerp = db['MoveSets2'].find_one({'name': document['name']})
+            original_zerp = db['MoveSets2'].find_one({'name': str(document['name']).split(' #')[0]})
 
             for i, move in enumerate(document['moves']):
                 if move['color'].lower() == 'white':
@@ -662,7 +746,7 @@ def update_all_zerp_moves():
                         1)
             # save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
         if g_candy > 0:
-            original_zerp = db['MoveSets2'].find_one({'name': document['name']})
+            original_zerp = db['MoveSets2'].find_one({'name': str(document['name']).split(' #')[0]})
             for i, move in enumerate(document['moves']):
                 if move['color'].lower() == 'gold':
                     document['moves'][i]['dmg'] = round(
@@ -674,21 +758,22 @@ def update_all_zerp_moves():
                     document['moves'][i]['stars'] += 1
         save_new_zerpmon({'moves': document['moves'], 'name': document['name']})
 
-
-def get_issuer_nfts_data(issuer):
+"""Old"""
+def get_issuer_nfts_data(issuer, marker_provided=None):
     i = 1
     try:
         ti = time.time()
         print("get_collection_5kk")
-        url = f"https://bithomp.com/api/v2/nfts?issuer={issuer}&limit=100"
+        marker = True if marker_provided else False
+        markerVal = marker_provided if marker_provided else None
+        url = f"https://bithomp.com/api/v2/nfts?issuer={issuer}&limit=100" if not marker else \
+            f"https://bithomp.com/api/v2/nfts?issuer={issuer}&marker={markerVal}&limit=100"
         response = requests.get(url, headers={"x-bithomp-token": "76c6dd73-50e1-4b20-847f-75926ae48cef"})
         # print(response.text)
         response = response.json()
-        print(response)
+        print(response, url)
         nfts = response['nfts']
         print('nfts len:', len(nfts))
-        marker = False
-        markerVal = ''
         if 'marker' in response:
             marker = True
             markerVal = response['marker']
@@ -704,7 +789,7 @@ def get_issuer_nfts_data(issuer):
             try:
                 nfts2 = response2['nfts']
                 nfts.extend(nfts2)
-
+                print(markerVal)
                 if 'marker' in response2:
                     marker = True
                     markerVal = response2['marker']
@@ -713,7 +798,7 @@ def get_issuer_nfts_data(issuer):
             except:
                 print(traceback.format_exc(), '\n\n', response2)
                 break
-        print("Total XRPL NFTs: ", len(nfts))
+        print("Total XRPL NFTs: ", len(nfts), marker)
 
         # Grab Xahau nfts as well
         # print("get_collection_xahau")
@@ -753,78 +838,115 @@ def get_issuer_nfts_data(issuer):
         exit()
 
 
-def cache_data(get_eqs=True, get_collab=True):
+async def cache_data(get_eqs=True, get_collab=True):
     try:
-        z_nfts = get_issuer_nfts_data('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME')
-        time.sleep(60)
-        nfts = get_issuer_nfts_data('rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy')
-        # Update trainers col
-        for nft in nfts:
-            obj = {'nft_id': nft['nftokenID'], 'image': nft['metadata']['image'], 'name': nft['metadata']['name']}
+        """Clio call instead of Bithomp"""
+        z_nfts = await fetchNFTsByIssuer('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME')
+        z_nfts = [i for i in z_nfts if not i.get('is_burned')]
+        print(f"Nfts after filtering burned ones: {len(z_nfts)}")
+        """
+        z_nfts item eg
+        {
+            "nft_id": "0008138874D997D20619837CF3C7E1050A785E9F9AC53D7E0000099B00000000",
+            "ledger_index": 76485968,
+            "owner": "rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME",
+            "is_burned": true,
+            "uri": "697066733A2F2F516D62664E6275645675434D3838554E743863547876724D7147415666414662464B586F5838477A47776B756D322F312E6A736F6E",
+            "flags": 8,
+            "transfer_fee": 5000,
+            "issuer": "rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME",
+            "nft_taxon": 0,
+            "nft_serial": 0
+        }
+        """
+        # time.sleep(60)
+        # nfts = get_issuer_nfts_data('rXuRpzTATAm3BNzWNRLmzGwkwJDrHy6Jy', marker_provided=None)
 
-            for key in nft['metadata']['attributes']:
-                key, val = key['trait_type'], key['value']
-                obj[key.lower()] = val
-            db['trainers'].update_one({'nft_id': obj['nft_id']}, {'$setOnInsert': obj}, upsert=True)
-            print(obj)
-        # exit(0)
-        if get_eqs:
-            e_nfts = get_issuer_nfts_data('rEQQ8tTnJm4ECbPv71K9syrHrTJTv6DX3T')
-        else:
-            e_nfts = []
-        if get_collab:
-            c_nfts = get_collab_nfts()
-            for nft in c_nfts:
-                obj = {'nft_id': nft['nftokenID'], 'image': nft['metadata']['image'], 'name': nft['metadata']['name']}
+        """Update trainers col"""
 
-                for key in nft['metadata']['attributes']:
-                    key, val = key['trait_type'], key['value']
-                    obj[key.lower()] = val
-                db['trainers'].update_one({'nft_id': obj['nft_id']}, {'$setOnInsert': obj}, upsert=True)
-                print(obj)
-        else:
-            c_nfts = []
-        # exit(0)
-        z_nfts.extend(nfts)
-        z_nfts.extend(e_nfts)
-        z_nfts.extend(c_nfts)
+        # for nft in nfts:
+        #     obj = {'nft_id': nft['nftokenID'], 'image': nft['metadata']['image'], 'name': nft['metadata']['name']}
+        #
+        #     for key in nft['metadata']['attributes']:
+        #         key, val = key['trait_type'], key['value']
+        #         obj[key.lower()] = val
+        #     db['trainers'].update_one({'nft_id': obj['nft_id']}, {'$setOnInsert': obj}, upsert=True)
+        #     print(obj)
+        #
+
+        # if get_eqs:
+        #     e_nfts = get_issuer_nfts_data('rEQQ8tTnJm4ECbPv71K9syrHrTJTv6DX3T')
+        # else:
+        #     e_nfts = []
+
+        """Collab equipment update"""
+
+        # if get_collab:
+        #     c_nfts = get_collab_nfts()
+        #     for nft in c_nfts:
+        #         obj = {'nft_id': nft['nftokenID'], 'image': nft['metadata']['image'], 'name': nft['metadata']['name']}
+        #
+        #         for key in nft['metadata']['attributes']:
+        #             key, val = key['trait_type'], key['value']
+        #             obj[key.lower()] = val
+        #         db['trainers'].update_one({'nft_id': obj['nft_id']}, {'$setOnInsert': obj}, upsert=True)
+        #         print(obj)
+        # else:
+        #     c_nfts = []
+
+        """Only needs to run occasionally"""
+        # z_nfts.extend(nfts)
+        # z_nfts.extend(e_nfts)
+        # z_nfts.extend(c_nfts)
         tba = get_cached()
+        new_metadata_updates = 0
         for nft in z_nfts:
             if nft['uri'] not in tba:
-                for _i, j in enumerate(nft['metadata']['attributes']):
+                """Fetch metadata here using http req"""
+                uri = hex_to_str(nft['uri'])
+                url = uri if "https:/" in uri else config_extra.ipfsGateway + uri.replace("ipfs://", "")
+                print(url)
+                metadata = requests.get(url).json()
+                print(metadata)
+                for _i, j in enumerate(metadata['attributes']):
                     if j['trait_type'] == 'Type':
-                        nft['metadata']['attributes'][_i]['value'] = str(j['value']).strip().lower().title()
-                tba[nft['uri']] = {
-                    'nftid': nft['nftokenID'],
-                    'metadata': nft['metadata'],
+                        metadata['attributes'][_i]['value'] = str(j['value']).strip().lower().title()
+                meta = {
+                    'nftid': nft['nft_id'],
+                    'metadata': metadata,
                     'uri': nft['uri']
                 }
+
+                tba[nft['uri']] = meta
+                db['nft-uri-cache'].update_one({'nftid': meta['nftid']},
+                                               {'$set': meta}, upsert=True)
+                new_metadata_updates += 1
+        print(f"Updated {new_metadata_updates} docs with new metadata")
         with open("./metadata.json", "w") as f:
             json.dump(tba, f)
-        for k, i in tba.items():
-            db['nft-uri-cache'].update_one({'nftid': i['nftid']},
-                                           {'$set': i}, upsert=True)
+
         collection = db['MoveSets']
         for nft in collection.find({}, {'_id': 0, 'z_flair': 0, 'white_candy': 0, 'gold_candy': 0,
                                         'level': 0, 'maxed_out': 0, 'xp': 0, 'licorice': 0, 'total': 0, 'winrate': 0,
                                         'ascended': 0, 'punished': 0}):
-            if True:
-                if nft.get('nft_id') is None or nft['image'] is None:
-                    found = db['nft-uri-cache'].find_one({'metadata.name': nft['name']})
-                    if found:
-                        nft['nft_id'] = found['nftid']
-                        attrs = found['metadata']['attributes']
-                        image = found['metadata']['image']
-                        nft['attributes'] = attrs
-                        nft['image'] = image
-                        db['MoveSets'].update_one({'name': nft['name']}, {
-                            '$set': {'nft_id': found['nftid'], 'attributes': attrs, 'image': image}}, upsert=True)
-                        print('found:', nft['name'])
-                    else:
-                        continue
-                    # collection.update_one({'name': nft['name']}, {'$set': {'nft_id': found['nftid']}})
+            if nft.get('isTRN') or str(nft.get('nft_id')).startswith('trn-'):
+                continue
+            if nft.get('nft_id') is None or nft['image'] is None:
+                found = db['nft-uri-cache'].find_one({'metadata.name': nft['name']})
+                if found:
+                    nft['nft_id'] = found['nftid']
+                    attrs = found['metadata']['attributes']
+                    image = found['metadata']['image']
+                    nft['attributes'] = attrs
+                    nft['image'] = image
+                    db['MoveSets'].update_one({'name': nft['name']}, {
+                        '$set': {'nft_id': found['nftid'], 'attributes': attrs, 'image': image}}, upsert=True)
+                    print('found:', nft['name'])
+                else:
+                    continue
+                # collection.update_one({'name': nft['name']}, {'$set': {'nft_id': found['nftid']}})
 
-                db['MoveSets2'].update_one({'name': nft['name']}, {'$set': nft}, upsert=True)
+            db['MoveSets2'].update_one({'name': nft['name']}, {'$set': nft}, upsert=True)
 
     except Exception as e:
         print(traceback.format_exc(), ' error')
@@ -854,9 +976,9 @@ def reset_all_gyms():
                                                  return_document=ReturnDocument.AFTER)
 
 
-def import_equipments():
-    with open('ZerpmonMovesEquipment-040824.csv', 'r') as csvfile:
-        collection = db['Equipment']
+def import_equipments(col_name):
+    with open('Zerpmon Moves - Equipment 150924.csv', 'r') as csvfile:
+        collection = db[col_name]
         # collection.drop()
         csvreader = csv.reader(csvfile)
         unique_types = set()
@@ -872,8 +994,10 @@ def import_equipments():
                     separated_note = note.split("@")
                     for s in separated_note:
                         print(s)
-
-                        change = 'decrease' if ('decrease' in s) else 'increase'
+                        if 'increase effects are' in s:
+                            change = 'multiplier'
+                        else:
+                            change = 'decrease' if ('decrease' in s) else ('set' if ('change' in s) else 'increase')
                         change_val_type = 'percent' if 'halved' in s or 'double' in s or 'quartered' in s else 'flat'
                         s = s.replace('halved', '50% less')
                         s = s.replace('quartered', '75% less')
@@ -887,22 +1011,29 @@ def import_equipments():
                         target = 'opponent' if ('oppo' in s and 'by oppo' not in s) or 'enemy' in s else 'self'
                         e_type = ''
                         if True:
-                            if 'survive' in s:
+                            if 'come back' in s:
                                 e_type = 'survive-chance'
                             elif 'pierce' in s:
-                                e_type = 'pierce'
+                                e_type = f'pierce-{change}'
                             elif 'crit' in s:
-                                e_type = 'crit-chance'
-                                p_val *= 1 if change == 'increase' else -1
+                                if 'crit chance to' in s:
+                                    e_type = 'crit-set'
+                                else:
+                                    e_type = 'crit-chance'
+                                    p_val *= 1 if change == 'increase' else -1
                             elif 'purple star' in s or 'purple move star' in s or ('purple' in s and 'weaker' in s):
                                 if 'chance' in s:
                                     e_type = f'purple-buff-chance'
                                 else:
-                                    e_type = f'purple-stars-{change}'
-                            elif 'roll again' in s:
+                                    p_val *= 1 if change == 'increase' else -1
+                                    e_type = f'purple-stars-increase'
+                            elif 'roll again' in s or 'reroll' in s:
                                 e_type = 'reroll-on-miss'
                             elif 'miss' in s:
-                                e_type = f'miss-{change}'
+                                if 'remove own miss upon own miss' in s:
+                                    e_type = f'remove-miss-on-miss'
+                                else:
+                                    e_type = f'miss-{change}'
                             elif 'white attacks into gold attacks' in s:
                                 e_type = f'white-to-gold-chance'
                             elif 'damage' in s and '0 damage' not in s:
@@ -917,7 +1048,7 @@ def import_equipments():
                                     e_type = f'{color}buff-chance'
                                 else:
                                     e_type = f'{color}damage-{change}'
-                            elif 'blue chance' in s:
+                            elif 'blue chance' in s or 'blue move chance' in s:
                                 e_type = f'blue-{change}'
                             elif '0 damage' in s:
                                 if 'omni' in s:
@@ -1068,19 +1199,23 @@ def add_gym_trainers():
 # import_ascend_levels()
 # gift_ascension_reward()
 
-# import_equipments()
+# import_equipments('Equipment')
+# import_equipments('Equipment2')
 
 # add_gym_level_buffs()
 # add_gym_trainers()
 # import_trainer_level()
-import_moves('MoveList')
-# import_moves('MoveList2')
 # import_purple_star_ids()
-import_movesets()
-## import_attrs_img()
-cache_data(get_eqs=False, get_collab=False)
-clean_attrs()
-update_all_zerp_moves()
-save_30_level_zerp()
+# import_moves('MoveList')
+# import_moves('MoveList2')
+# import_movesets()
+# #import_attrs_img()
+# asyncio.run(cache_data(get_eqs=False, get_collab=False))
+# clean_attrs()
+# update_all_zerp_moves()
+# save_30_level_zerp()
 
+# import_trn_trainer_level()
 # save_30_level_trainer()
+# r = asyncio.run(fetchNFTsByIssuer('rBeistBLWtUskF2YzzSwMSM2tgsK7ZD7ME', 100))
+# print(json.dumps(r[0], indent=4))
