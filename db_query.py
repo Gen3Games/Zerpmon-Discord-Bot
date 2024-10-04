@@ -287,7 +287,7 @@ async def get_all_users(field='gym'):
     users_collection = db['users']
 
     result = await users_collection.find({}, projection={'_id': 0, 'address': 1, 'discord_id': 1, 'gym': 1}).to_list(None)
-    return [i for i in result if i.get('discord_id', None)]
+    return [i for i in result]
 
 
 async def get_owned(user_id, autoc=False, db_sep=None):
@@ -1182,6 +1182,15 @@ async def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=No
     zerpmon_collection = db['MoveSets']
 
     old = await zerpmon_collection.find_one({'name': zerpmon_name}) if zerp_obj is None else zerp_obj
+    xp_mul = 1
+    if old.get('evolvesFrom'):
+        stage = [i['value'] for i in old['attributes'] if i['trait_type'] == 'Evolution Stage']
+        if len(stage) > 1:
+            if stage[0] == 'Evo 1':
+                xp_mul = 1.5
+            elif stage[0] == 'Evo 2':
+                xp_mul = 2
+
     lvl_up, rewards = False, {}
     if old:
         level = old.get('level', 0)
@@ -1191,8 +1200,8 @@ async def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=No
         cur_lvl = await level_collection.find_one({'level': level}) if (level < 30 or ascended) else None
         next_lvl = await level_collection.find_one({'level': level + 1}) if (level < 30 or ascended) else None
 
-        if next_lvl and xp + xp_add >= next_lvl['xp_required']:
-            left_xp = (xp + xp_add) - next_lvl['xp_required']
+        if next_lvl and xp + xp_add >= next_lvl['xp_required'] * xp_mul:
+            left_xp = (xp + xp_add) - next_lvl['xp_required'] * xp_mul
             if (next_lvl['level'] == 30 and not ascended) or (next_lvl['level'] == 60 and ascended):
                 left_xp = 0
             query = {'$set': {'level': next_lvl['level'], 'xp': left_xp}}
@@ -1344,6 +1353,14 @@ async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_x
 
     old = await zerpmon_collection.find_one({'name': zerpmon_name})
     level = old['level'] if 'level' in old else 0
+    xp_mul = 1
+    if old.get('evolvesFrom'):
+        stage = [i['value'] for i in old['attributes'] if i['trait_type'] == 'Evolution Stage']
+        if len(stage) > 1:
+            if stage[0] == 'Evo 1':
+                xp_mul = 1.5
+            elif stage[0] == 'Evo 2':
+                xp_mul = 2
     # maxed = old.get('maxed_out', 0)
     # if maxed == 0 and in_mission and (level - 1) >= 10 and (level - 1) % 10 == 0 and (
     #         old['xp'] == 0 or (old['xp'] == 10 and double_xp)):
@@ -1354,13 +1371,13 @@ async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_x
     next_lvl = await level_collection.find_one({'level': min(60, level + 1)})
     if 'level' in old and 'xp' in old:
 
-        vals = old['level'], old['xp'], next_lvl['xp_required'] if not get_candies else (
-            next_lvl['xp_required'], old.get('white_candy', 0)), \
+        vals = old['level'], old['xp'], next_lvl['xp_required'] * xp_mul if not get_candies else (
+            next_lvl['xp_required'] * xp_mul, old.get('white_candy', 0)), \
                next_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
                next_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
     else:
-        vals = 0, 0, next_lvl['xp_required'] if not get_candies else (
-            next_lvl['xp_required'], old.get('white_candy', 0)), \
+        vals = 0, 0, next_lvl['xp_required'] * xp_mul if not get_candies else (
+            next_lvl['xp_required'] * xp_mul, old.get('white_candy', 0)), \
                next_lvl['revive_potion_reward'] if not get_candies else old.get('gold_candy', 0), \
                next_lvl['mission_potion_reward'] if not get_candies else old.get('licorice', 0)
     if ret_doc:
@@ -1716,7 +1733,7 @@ async def get_gym_leaderboard(user_id):
 async def update_user_bg(user_id, gym_type):
     users_collection = db['users']
     user_id = str(user_id)
-    bg_value = f'./static/gym/{gym_type}.png'
+    bg_value = f'{gym_type}'
     await users_collection.update_one({'discord_id': user_id},
                                       {'$push': {'bg': bg_value}})
 
@@ -1732,7 +1749,7 @@ async def add_bg(user_id, gym_type, type_):
     if type_ < 0:
         users_collection = db['users']
         user_id = str(user_id)
-        bg_value = f'./static/gym/{gym_type}.png'
+        bg_value = f'{gym_type}'
         user_obj = await users_collection.find_one({'discord_id': user_id}, {'bg': 1})
         user_obj['bg'].remove(bg_value)
 
@@ -1762,7 +1779,7 @@ async def set_user_bg(user_obj, gym_type):
     user_id = user_obj['discord_id']
     bgs = user_obj['bg']
     users_collection = db['users']
-    bg_value = f'./static/gym/{gym_type}.png'
+    bg_value = f'{gym_type}'
     index = bgs.index(bg_value)
     bgs[0], bgs[index] = bgs[index], bgs[0]
     await users_collection.update_one({'discord_id': user_id},

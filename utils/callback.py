@@ -1536,12 +1536,21 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
     idx = 0
     pending_lvls = len(higher_lvls)
     failed = False
+    """TRN Evo1/2 check"""
+    xp_mul = 1
+    if zerp_doc.get('evolvesFrom'):
+        stage = [i['value'] for i in zerp_doc['attributes'] if i['trait_type'] == 'Evolution Stage']
+        if len(stage) > 1:
+            if stage[0] == 'Evo 1':
+                xp_mul = 1.5
+            elif stage[0] == 'Evo 2':
+                xp_mul = 2
     while idx < pending_lvls:
         cur_lvl = higher_lvls[idx]
         if not failed and cur_lvl['level'] > 30 and not ascended:
             failed = gain_left
             lvl_up_list.append(None)
-        gain_left -= cur_lvl['xp_required']
+        gain_left -= cur_lvl['xp_required'] * xp_mul
         if gain_left < 0:
             break
         lvl_up_list.append(cur_lvl)
@@ -1636,12 +1645,12 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                     else:
                         break
                 print(gain_left, lvl)
-                if gain_left < lvl['xp_required']:
+                if gain_left < lvl['xp_required'] * xp_mul:
                     # dec_idx = True
                     print('breaking')
                     break
                 res, lvl_up, rewards, _ = await db_query.add_xp(zerp_doc['name'], user_doc['address'],
-                                                                lvl['xp_required'],
+                                                                lvl['xp_required'] * xp_mul,
                                                                 ascended=ascended or ascend)
                 l_up |= lvl_up
                 print(rewards)
@@ -1650,7 +1659,7 @@ async def recycle_callback(interaction: nextcord.Interaction, user_doc, zerp_doc
                         reward_list[val] += rewards['extra_candy_cnt']
                     else:
                         reward_list[key] += val
-                gain_left -= lvl['xp_required']
+                gain_left -= lvl['xp_required'] * xp_mul
             _, _, rewards, xp_rn = await db_query.add_xp(zerp_doc['name'], user_doc['address'], gain_left,
                                                          ascended=ascended or ascend)
             for key, val in rewards.items():
