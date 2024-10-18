@@ -1,9 +1,13 @@
 import asyncio
 from asyncio import Future
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 from websockets import client, ConnectionClosed, WebSocketClientProtocol
 import json
+from web3 import Web3
+import asyncio
 
+TEST = True
 # Define the WebSocket URL
 url = "wss://root.rootnet.live/archive/ws"
 
@@ -125,6 +129,8 @@ async def getOwnedRootNFTs(addresses: List[str], fetchMetadataUri=False):
     address -> {zerp_collection_id: [{'token_id': token_id, 'uri': metadata_url}], ...}
     )
     """
+    root_handler = None
+    task = None
     try:
         root_handler = RootWebsocket()
         task = asyncio.create_task(root_handler.run_ws())
@@ -160,11 +166,15 @@ async def getOwnedRootNFTs(addresses: List[str], fetchMetadataUri=False):
         await task
         return True, result
     except:
+        print(f"Unexpected rootTest error: {e}")
+        if root_handler:
+            await root_handler.close()
+        if task:
+            await task
         return False, None
 
 
 async def test():
-
     # print(await getOwnedRootNFTs(["0xfFffFfFF0000000000000000000000000003A860"]))0xFFfFFFFf000000000000000000000000000421a4
     print(await getOwnedRootNFTs(["0xFFfFFFFf000000000000000000000000000421a4"]))
     # print("Sending requests again")
@@ -172,3 +182,56 @@ async def test():
 
 
 # print(asyncio.run(test()))
+
+w3 = Web3(Web3.HTTPProvider('https://root.rootnet.live/archive' if not TEST else 'https://porcini.rootnet.app/archive'))
+
+trn_staking_abi = "[\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_xrpZrpLpToken\",\n                \"type\": \"address\"\n            },\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_rootZrpLpToken\",\n                \"type\": \"address\"\n            },\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonGenesisNft\",\n                \"type\": \"address\"\n            },\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonEvolvedNft\",\n                \"type\": \"address\"\n            },\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonTrainersGenesisNft\",\n                \"type\": \"address\"\n            },\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonTrainersEvolvedNft\",\n                \"type\": \"address\"\n            },\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonEquipmentNft\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"constructor\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"owner\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"OwnableInvalidOwner\",\n        \"type\": \"error\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"account\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"OwnableUnauthorizedAccount\",\n        \"type\": \"error\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"ReentrancyGuardReentrantCall\",\n        \"type\": \"error\"\n    },\n    {\n        \"anonymous\": false,\n        \"inputs\": [\n            {\n                \"indexed\": true,\n                \"internalType\": \"address\",\n                \"name\": \"previousOwner\",\n                \"type\": \"address\"\n            },\n            {\n                \"indexed\": true,\n                \"internalType\": \"address\",\n                \"name\": \"newOwner\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"OwnershipTransferred\",\n        \"type\": \"event\"\n    },\n    {\n        \"anonymous\": false,\n        \"inputs\": [\n            {\n                \"indexed\": true,\n                \"internalType\": \"address\",\n                \"name\": \"user\",\n                \"type\": \"address\"\n            },\n            {\n                \"indexed\": false,\n                \"internalType\": \"uint256\",\n                \"name\": \"amount\",\n                \"type\": \"uint256\"\n            },\n            {\n                \"indexed\": false,\n                \"internalType\": \"string\",\n                \"name\": \"assetType\",\n                \"type\": \"string\"\n            }\n        ],\n        \"name\": \"Staked\",\n        \"type\": \"event\"\n    },\n    {\n        \"anonymous\": false,\n        \"inputs\": [\n            {\n                \"indexed\": true,\n                \"internalType\": \"address\",\n                \"name\": \"user\",\n                \"type\": \"address\"\n            },\n            {\n                \"indexed\": false,\n                \"internalType\": \"uint256\",\n                \"name\": \"amount\",\n                \"type\": \"uint256\"\n            },\n            {\n                \"indexed\": false,\n                \"internalType\": \"string\",\n                \"name\": \"assetType\",\n                \"type\": \"string\"\n            }\n        ],\n        \"name\": \"Withdrawn\",\n        \"type\": \"event\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_rootZrpLpToken\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"changeRootZrpLpToken\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_xrpZrpLpToken\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"changeXrpZrpLpToken\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonEquipmentNft\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"changeZerpmonEquipmentNft\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonEvolvedNft\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"changeZerpmonEvolvedNft\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonGenesisNft\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"changeZerpmonGenesisNft\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonTrainersEvolvedNft\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"changeZerpmonTrainersEvolvedNft\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"_zerpmonTrainersGenesisNft\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"changeZerpmonTrainersGenesisNft\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"getAllStakers\",\n        \"outputs\": [\n            {\n                \"internalType\": \"address[]\",\n                \"name\": \"\",\n                \"type\": \"address[]\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"staker\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"getStakedAssets\",\n        \"outputs\": [\n            {\n                \"components\": [\n                    {\n                        \"internalType\": \"uint256\",\n                        \"name\": \"xrpZrpLp\",\n                        \"type\": \"uint256\"\n                    },\n                    {\n                        \"internalType\": \"uint256\",\n                        \"name\": \"rootZrpLp\",\n                        \"type\": \"uint256\"\n                    },\n                    {\n                        \"internalType\": \"uint256[]\",\n                        \"name\": \"zerpmonGenesisNftIds\",\n                        \"type\": \"uint256[]\"\n                    },\n                    {\n                        \"internalType\": \"uint256[]\",\n                        \"name\": \"zerpmonEvolvedNftIds\",\n                        \"type\": \"uint256[]\"\n                    },\n                    {\n                        \"internalType\": \"uint256[]\",\n                        \"name\": \"zerpmonTrainersGenesisNftIds\",\n                        \"type\": \"uint256[]\"\n                    },\n                    {\n                        \"internalType\": \"uint256[]\",\n                        \"name\": \"zerpmonTrainersEvolvedNftIds\",\n                        \"type\": \"uint256[]\"\n                    },\n                    {\n                        \"internalType\": \"uint256[]\",\n                        \"name\": \"zerpmonEquipmentNftIds\",\n                        \"type\": \"uint256[]\"\n                    }\n                ],\n                \"internalType\": \"struct ZerpmonStaking.StakerAssets\",\n                \"name\": \"\",\n                \"type\": \"tuple\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"operator\",\n                \"type\": \"address\"\n            },\n            {\n                \"internalType\": \"address\",\n                \"name\": \"from\",\n                \"type\": \"address\"\n            },\n            {\n                \"internalType\": \"uint256\",\n                \"name\": \"tokenId\",\n                \"type\": \"uint256\"\n            },\n            {\n                \"internalType\": \"bytes\",\n                \"name\": \"data\",\n                \"type\": \"bytes\"\n            }\n        ],\n        \"name\": \"onERC721Received\",\n        \"outputs\": [\n            {\n                \"internalType\": \"bytes4\",\n                \"name\": \"\",\n                \"type\": \"bytes4\"\n            }\n        ],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"owner\",\n        \"outputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"renounceOwnership\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"rootZrpLpToken\",\n        \"outputs\": [\n            {\n                \"internalType\": \"contract IERC20\",\n                \"name\": \"\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"uint256\",\n                \"name\": \"amount\",\n                \"type\": \"uint256\"\n            }\n        ],\n        \"name\": \"stakeRootZrpLpTokens\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"uint256\",\n                \"name\": \"amount\",\n                \"type\": \"uint256\"\n            }\n        ],\n        \"name\": \"stakeXrpZrpLpTokens\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"uint8\",\n                \"name\": \"collection\",\n                \"type\": \"uint8\"\n            },\n            {\n                \"internalType\": \"uint256\",\n                \"name\": \"nftId\",\n                \"type\": \"uint256\"\n            }\n        ],\n        \"name\": \"stakeZerpmonNft\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"address\",\n                \"name\": \"newOwner\",\n                \"type\": \"address\"\n            }\n        ],\n        \"name\": \"transferOwnership\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"uint256\",\n                \"name\": \"amount\",\n                \"type\": \"uint256\"\n            }\n        ],\n        \"name\": \"withdrawRootZrpLpTokens\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"uint256\",\n                \"name\": \"amount\",\n                \"type\": \"uint256\"\n            }\n        ],\n        \"name\": \"withdrawXrpZrpLpTokens\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [\n            {\n                \"internalType\": \"uint8\",\n                \"name\": \"collection\",\n                \"type\": \"uint8\"\n            },\n            {\n                \"internalType\": \"uint256\",\n                \"name\": \"nftId\",\n                \"type\": \"uint256\"\n            }\n        ],\n        \"name\": \"withdrawZerpmonNft\",\n        \"outputs\": [],\n        \"stateMutability\": \"nonpayable\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"xrpZrpLpToken\",\n        \"outputs\": [\n            {\n                \"internalType\": \"contract IERC20\",\n                \"name\": \"\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"zerpmonEquipmentNft\",\n        \"outputs\": [\n            {\n                \"internalType\": \"contract IERC721\",\n                \"name\": \"\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"zerpmonEvolvedNft\",\n        \"outputs\": [\n            {\n                \"internalType\": \"contract IERC721\",\n                \"name\": \"\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"zerpmonGenesisNft\",\n        \"outputs\": [\n            {\n                \"internalType\": \"contract IERC721\",\n                \"name\": \"\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"zerpmonTrainersEvolvedNft\",\n        \"outputs\": [\n            {\n                \"internalType\": \"contract IERC721\",\n                \"name\": \"\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    },\n    {\n        \"inputs\": [],\n        \"name\": \"zerpmonTrainersGenesisNft\",\n        \"outputs\": [\n            {\n                \"internalType\": \"contract IERC721\",\n                \"name\": \"\",\n                \"type\": \"address\"\n            }\n        ],\n        \"stateMutability\": \"view\",\n        \"type\": \"function\"\n    }\n]"
+
+contract_address = '0xbed9624ea660d9a0d49447499b7aeaef49952ec7'
+staking_contract = w3.eth.contract(address=w3.to_checksum_address(contract_address), abi=trn_staking_abi)
+
+# for running sync code asynchronously
+executor = ThreadPoolExecutor()
+
+# Helper function to call the contract functions asynchronously
+async def call_contract_method_sync(method, *args):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, lambda: method(*args).call())
+
+# Asynchronous function to get TRN staked NFTs
+async def get_trn_staked_nfts(addresses):
+    zerpmons = []
+    trainers = []
+    eqs = []
+
+    try:
+        # Call the contract method to get all stakers asynchronously
+        all_stakers = await call_contract_method_sync(staking_contract.functions.getAllStakers)
+
+        print(f"Total stakers: {len(all_stakers)}")
+
+        # Create a list of tasks for processing stakers
+        tasks = []
+        for address in all_stakers:
+            if address in addresses:
+                # Add each contract call to the list of tasks
+                tasks.append(call_contract_method_sync(staking_contract.functions.getStakedAssets, address))
+
+        # Execute all the tasks concurrently
+        staker_info_raws = await asyncio.gather(*tasks)
+
+        # Process each staker's data
+        for staker_info_raw in staker_info_raws:
+            zerpmons.extend([int(v) for v in staker_info_raw[2]] + [int(v) for v in staker_info_raw[3]])
+            trainers.extend([int(v) for v in staker_info_raw[4]] + [int(v) for v in staker_info_raw[5]])
+            eqs.extend([int(v) for v in staker_info_raw[6]])
+
+        return {
+            "zerpmons": zerpmons,
+            "trainers": trainers,
+            "eqs": eqs
+        }
+    except Exception as e:
+        print(f"Error get_trn_staked_nfts: {e}")
+        return None
+

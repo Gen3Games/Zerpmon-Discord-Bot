@@ -12,7 +12,7 @@ import db_query
 import xrpl_functions
 import config
 from globals import CustomEmbed
-from rootTest import zerp_collection_id, trainer_collection_id, eq_collection_id, getOwnedRootNFTs
+from rootTest import zerp_collection_id, trainer_collection_id, eq_collection_id, getOwnedRootNFTs, get_trn_staked_nfts
 
 
 def get_type(attrs):
@@ -167,12 +167,34 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                 good_status_xrpl = False
                 break
             nfts.extend(found_nfts)
-
+        """Also append staked nfts"""
+        nfts.extend(await db_query.get_xrpl_staked_nfts(xrpl_addresses))
         # 1 min timeout
         success, found_root_nfts = await asyncio.wait_for(root_task, timeout=60)
         if not success:
             good_status_trn = False
-
+        staked_nfts = await get_trn_staked_nfts(root_addresses)
+        # print(staked_nfts)
+        if staked_nfts is None:
+            good_status_trn = False
+        for addr, obj in found_root_nfts.items():
+            for token in staked_nfts['zerpmons']:
+                if obj[zerp_collection_id]:
+                    obj[zerp_collection_id].append(token)
+                else:
+                    obj[zerp_collection_id]=[token]
+            for token in staked_nfts['trainers']:
+                if obj[trainer_collection_id]:
+                    obj[trainer_collection_id].append(token)
+                else:
+                    obj[trainer_collection_id] = [token]
+            for token in staked_nfts['eqs']:
+                if obj[eq_collection_id]:
+                    obj[eq_collection_id].append(token)
+                else:
+                    obj[eq_collection_id] = [token]
+            break
+        # print(found_root_nfts)
         # good_status_xahau, nfts_xahau = await xrpl_functions.get_nfts_xahau(user_obj['address'])
         # if not good_status:
         #     continue
@@ -190,10 +212,10 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     serials.append(sr)
             for sr in user_obj['trainer_cards']:
                 if not str(sr).startswith('trn-'):
-                    serials.append(sr)
+                    t_serial.append(sr)
             for sr in user_obj['equipments']:
                 if not str(sr).startswith('trn-'):
-                    serials.append(sr)
+                    e_serial.append(sr)
         else:
             # Filter fn
             await filter_nfts(user_obj, nfts, serials, t_serial, e_serial)
@@ -203,10 +225,10 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     serials.append(sr)
             for sr in user_obj['trainer_cards']:
                 if str(sr).startswith('trn-'):
-                    serials.append(sr)
+                    t_serial.append(sr)
             for sr in user_obj['equipments']:
                 if str(sr).startswith('trn-'):
-                    serials.append(sr)
+                    e_serial.append(sr)
         else:
             await filter_nfts(user_obj, found_root_nfts, serials, t_serial, e_serial, chain='trn')
 

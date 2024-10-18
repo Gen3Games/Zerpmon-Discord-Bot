@@ -10,6 +10,8 @@ import traceback
 import uuid
 from typing import List
 
+from xrpl.utils import parse_nftoken_id
+
 from utils import battle_effect
 import pymongo
 import pytz
@@ -1183,7 +1185,7 @@ async def add_xp(zerpmon_name, user_address, xp_add, ascended=False, zerp_obj=No
 
     old = await zerpmon_collection.find_one({'name': zerpmon_name}) if zerp_obj is None else zerp_obj
     xp_mul = 1
-    if old.get('evolvesFrom'):
+    if old.get('evolvedFrom'):
         stage = [i['value'] for i in old['attributes'] if i['trait_type'] == 'Evolution Stage']
         if len(stage) > 1:
             if stage[0] == 'Evo 1':
@@ -1354,7 +1356,7 @@ async def get_lvl_xp(zerpmon_name, in_mission=False, get_candies=False, double_x
     old = await zerpmon_collection.find_one({'name': zerpmon_name})
     level = old['level'] if 'level' in old else 0
     xp_mul = 1
-    if old.get('evolvesFrom'):
+    if old.get('evolvedFrom'):
         stage = [i['value'] for i in old['attributes'] if i['trait_type'] == 'Evolution Stage']
         if len(stage) > 1:
             if stage[0] == 'Evo 1':
@@ -3655,3 +3657,30 @@ async def get_player_cnt():
     users_collection = db['users']
     top_users = await users_collection.count_documents({})
     return top_users
+
+async def get_xrpl_staked_nfts(addresses):
+    try:
+        # Fetch staking stats from the 'nft-staking-stats' collection
+        staking_stats = db['nft-staking-stats'].find(
+            {"primaryAddress": {"$in": addresses}}
+        )
+
+        nfts_staked = []
+
+        # Loop through each staking stat and process NFTs
+        async for stat in staking_stats:
+            for nft_id in stat['nfts'].keys():
+                parsed_token = parse_nftoken_id(nft_id)
+                nft_token = {
+                    **parsed_token,
+                    'URI': '',
+                    "nft_serial": parsed_token["Sequence"],
+                    "NFTokenTaxon": parsed_token["Taxon"],
+                }
+                nfts_staked.append(nft_token)
+
+        return nfts_staked
+
+    except Exception as e:
+        print(f"Error fetching staked NFTs: {e}")
+        return []

@@ -7,7 +7,7 @@ import nextcord
 from nextcord import Role
 from xrpl.core.addresscodec import is_valid_classic_address
 
-from rootTest import getOwnedRootNFTs
+from rootTest import getOwnedRootNFTs, get_trn_staked_nfts, zerp_collection_id, trainer_collection_id, eq_collection_id
 from utils.refresh_fn import get_type, filter_nfts
 import config
 from config import TIERS, RANKS
@@ -40,6 +40,14 @@ async def update_nft_holdings(client: nextcord.Client):
             t_role = nextcord.utils.get(main_guild.roles, name="Trainer")
         except:
             logging.error("Failed to grab z_role")
+        try:
+            zrp_player_channel = nextcord.utils.get(main_guild.channels, id=config_extra.ZERPMON_PLAYER_CNT_CHANNEL_ID)
+            if zrp_player_channel:
+                zp = await db_query.get_player_cnt()
+                await zrp_player_channel.edit(
+                    name=f"Zerpmon Players: {zp}")
+        except:
+            logging.error("Failed to edit zerpmon player count channel")
         async for old_user in all_users:
             ti = time.time()
             user_obj = old_user
@@ -51,7 +59,7 @@ async def update_nft_holdings(client: nextcord.Client):
                     continue
                 if 'address' not in user_obj or len(user_obj['address']) < 5 or \
                         user_obj['address'] in ['rHvEgvSS4sQR2DSRioKs8rcNXjHwxa6oSe',
-                                                'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM',
+                                                # 'r9cKrPx9uNZJBUPFZpC6Qf7WHmMSfPsFHM',
                                                 'r9AHwn5mL6GpchBEie1K1z8S8pqejsyU2k']:
                     continue
                 xrpl_addresses, root_addresses = [], []
@@ -70,14 +78,35 @@ async def update_nft_holdings(client: nextcord.Client):
                         good_status_xrpl = False
                         break
                     nfts.extend(found_nfts)
-                if not good_status_xrpl:
-                    continue
+
+                nfts.extend(await db_query.get_xrpl_staked_nfts(xrpl_addresses))
 
                 # 1 min timeout so the loop isn't stuck
                 success, found_root_nfts = await asyncio.wait_for(getOwnedRootNFTs(root_addresses), timeout=60)
                 if not success:
                     good_status_trn = False
-
+                staked_nfts = await get_trn_staked_nfts(root_addresses)
+                # print(staked_nfts)
+                if staked_nfts is None:
+                    good_status_trn = False
+                for addr, obj in found_root_nfts.items():
+                    for token in staked_nfts['zerpmons']:
+                        if obj[zerp_collection_id]:
+                            obj[zerp_collection_id].append(token)
+                        else:
+                            obj[zerp_collection_id] = [token]
+                    for token in staked_nfts['trainers']:
+                        if obj[trainer_collection_id]:
+                            obj[trainer_collection_id].append(token)
+                        else:
+                            obj[trainer_collection_id] = [token]
+                    for token in staked_nfts['eqs']:
+                        if obj[eq_collection_id]:
+                            obj[eq_collection_id].append(token)
+                        else:
+                            obj[eq_collection_id] = [token]
+                    break
+                # print(found_root_nfts)
                 # good_status_xahau, nfts_xahau = await xrpl_functions.get_nfts_xahau(user_obj['address'])
                 # if not good_status:
                 #     continue
@@ -89,18 +118,29 @@ async def update_nft_holdings(client: nextcord.Client):
                     'trainer_cards': [],
                     'equipments': []
                 }
-                # Filter fn
-                await filter_nfts(user_obj, nfts, serials, t_serial, e_serial)
+                if not good_status_xrpl:
+                    for sr in user_obj['zerpmons']:
+                        if not str(sr).startswith('trn-'):
+                            serials.append(sr)
+                    for sr in user_obj['trainer_cards']:
+                        if not str(sr).startswith('trn-'):
+                            t_serial.append(sr)
+                    for sr in user_obj['equipments']:
+                        if not str(sr).startswith('trn-'):
+                            e_serial.append(sr)
+                else:
+                    # Filter fn
+                    await filter_nfts(user_obj, nfts, serials, t_serial, e_serial)
                 if not good_status_trn:
                     for sr in user_obj['zerpmons']:
                         if str(sr).startswith('trn-'):
                             serials.append(sr)
                     for sr in user_obj['trainer_cards']:
                         if str(sr).startswith('trn-'):
-                            serials.append(sr)
+                            t_serial.append(sr)
                     for sr in user_obj['equipments']:
                         if str(sr).startswith('trn-'):
-                            serials.append(sr)
+                            e_serial.append(sr)
                 else:
                     await filter_nfts(user_obj, found_root_nfts, serials, t_serial, e_serial, chain='trn')
                 # if not good_status_xahau:
