@@ -8,8 +8,6 @@ import sys
 import time
 import traceback
 import uuid
-from typing import List
-
 from xrpl.utils import parse_nftoken_id
 
 from utils import battle_effect
@@ -87,11 +85,27 @@ async def save_user(user):
         print(f"Updated user")
 
 
-async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, remove_serials):
+async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, remove_serials, address=None):
     # if len(remove_serials['zerpmons']) + len(remove_serials['trainer_cards']) + len(remove_serials['equipments']) == 0:
     #     logging.error(f"{user_obj['address']} \nNONE")
     #     return
-    user_obj = await get_owned(discord_id)
+    if address:
+        user_obj = await get_user(address)
+    else:
+        user_obj = await get_owned(discord_id)
+
+    if serials is None and t_serial is None and e_serial is None:
+        serials = list(user_obj['zerpmons'].keys())
+        print(serials, remove_serials)
+        if len(remove_serials['zerpmons']) > 0:
+            serials.remove(remove_serials['zerpmons'][0])
+        t_serial = list(user_obj['trainer_cards'].keys())
+        if len(remove_serials['trainer_cards']) > 0:
+            t_serial.remove(remove_serials['trainer_cards'][0])
+        e_serial = list(user_obj['equipments'].keys())
+        if len(remove_serials['equipments']) > 0:
+            e_serial.remove(remove_serials['equipments'][0])
+        print(t_serial, e_serial)
     mission_deck = user_obj["mission_deck"] if 'mission_deck' in user_obj else {}
     battle_deck = user_obj["battle_deck"] if 'battle_deck' in user_obj else {'0': {}, '1': {}, '2': {}, '3': {},
                                                                              '4': {}}
@@ -163,18 +177,36 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, r
                         break
             except:
                 pass
+
+    """Clear PvP decks here"""
     if user_obj.get('pvp_decks'):
         for deck in ['1', '3', '5']:
+            print('here')
             if user_obj['pvp_decks'].get(deck, {}).get('z'):
                 try:
-                    for sr, val in user_obj['pvp_decks'][deck]['z']:
-                        if sr == 'trainer' and val not in t_serial:
-                            set_query[f'pvp_decks.{deck}.z'] = {}
-                            set_query[f'pvp_decks.{deck}.valid'] = False
-                            break
+                    for sr, val in user_obj['pvp_decks'][deck]['z'].items():
+                        if sr == 'trainer':
+                            if val not in t_serial:
+                                set_query[f'pvp_decks.{deck}.z'] = {}
+                                set_query[f'pvp_decks.{deck}.valid'] = False
+                                break
                         elif val not in serials:
                             set_query[f'pvp_decks.{deck}.z'] = {}
                             set_query[f'pvp_decks.{deck}.valid'] = False
+                            break
+                except:
+                    pass
+            for extra_deck in ['deck2', 'deck3']:
+                try:
+                    for sr, val in user_obj['pvp_decks'][deck][extra_deck]['z'].items():
+                        if sr == 'trainer':
+                            if val not in t_serial:
+                                set_query[f'pvp_decks.{deck}.{extra_deck}.z'] = {}
+                                set_query[f'pvp_decks.{deck}.{extra_deck}.valid'] = False
+                                break
+                        elif val not in serials:
+                            set_query[f'pvp_decks.{deck}.{extra_deck}.z'] = {}
+                            set_query[f'pvp_decks.{deck}.{extra_deck}.valid'] = False
                             break
                 except:
                     pass
@@ -213,13 +245,18 @@ async def update_user_decks(user_obj, discord_id, serials, t_serial, e_serial, r
 
 
 async def remove_user_nft_addr(address, serial, trainer=False, equipment=False, db_sep=None):
-    users_collection = db['users'] if db_sep is None else db_sep['users']
-    update_query = {"$unset": {f"equipments.{serial}": ""}} if equipment else (
-        {"$unset": {f"zerpmons.{serial}": ""}} if not trainer else {"$unset": {f"trainer_cards.{serial}": ""}})
-    result = await users_collection.update_one(
-        {'address': address},
-        update_query
-    )
+    remove_srs = {
+        'zerpmons': [],
+        'trainer_cards': [],
+        'equipments': [],
+    }
+    if equipment:
+        remove_srs['equipments'] = [serial]
+    elif trainer:
+        remove_srs['trainer_cards'] = [serial]
+    else:
+        remove_srs['zerpmons'] = [serial]
+    await update_user_decks({}, '', None, None, None, remove_srs, address)
 
 
 async def remove_user_nft(discord_id, serial, trainer=False, equipment=False, db_sep=None):
@@ -380,7 +417,7 @@ async def get_user(address, db_sep=None):
 
     user_id = str(address)
     result = await users_collection.find_one({"address": user_id})
-    print(result)
+    # print(result)
     # print(f"Found user {result}")
 
     return result
@@ -2319,11 +2356,28 @@ async def set_equipment_on(user_id, equipments, deck_type, deck_no):
 
 async def get_eq_by_name(name, gym=False):
     if gym:
-        return await equipment_col.find_one({'type': name}, )
+        eq1 = await equipment_col.find_one({'type': name}, )
+        # Choose a different eq
+        eq2 = await equipment_col.aggregate([
+        {'$match': {
+            'name': {'$ne': eq1['name']},
+            '$or': [
+                {'type': name},
+                {'type': 'Omni'},
+            ]}
+        },
+        {'$sample': {'size': 1}},
+        ]).to_list(None)
+        return [eq1, eq2[0]]
     else:
         return await equipment_col.find_one({'name': name}, )
 
+async def fix_gym_buffs():
+        docs = await db['gym_buffs'].find({'equipment2': 'Tattered Cloak'}).to_list(None)
+        for doc in docs:
+            await db['gym_buffs'].update_one({'_id': doc['_id']}, {'$set':{'equipment2': 'compatible'}})
 
+# print([i['name'] for i in asyncio.run(get_eq_by_name('Fire', True))])
 async def get_all_eqs(limit=None, substr=None, remove_survive=False, remove_random_eq=True):
     if remove_survive:
         q = {
@@ -3684,3 +3738,5 @@ async def get_xrpl_staked_nfts(addresses):
     except Exception as e:
         print(f"Error fetching staked NFTs: {e}")
         return []
+
+asyncio.run(remove_user_nft_addr('', '230', False, False, ))
