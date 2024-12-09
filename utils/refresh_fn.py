@@ -234,7 +234,7 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
 
         for serial in list(user_obj['zerpmons'].keys()):
             if serial not in serials:
-                loaned = user_obj['zerpmons'][serial].get('loaned', False)
+                loaned = user_obj['zerpmons'][serial].get('loaned', False) or user_obj['zerpmons'][serial].get('staked', False)
                 if loaned:
                     serials.append(serial)
                 else:
@@ -242,14 +242,14 @@ async def refresh_nfts(interaction: Interaction, user_doc, old_address=None):
                     remove_serials['zerpmons'].append(serial)
         for serial in list(user_obj['trainer_cards'].keys()):
             if serial not in t_serial:
-                loaned = user_obj['trainer_cards'][serial].get('loaned', False)
+                loaned = user_obj['trainer_cards'][serial].get('loaned', False) or user_obj['trainer_cards'][serial].get('staked', False)
                 if loaned:
                     t_serial.append(serial)
                 else:
                     remove_serials['trainer_cards'].append(serial)
         for serial in list(user_obj['equipments'].keys()):
             if serial not in e_serial:
-                loaned = user_obj['equipments'][serial].get('loaned', False)
+                loaned = user_obj['equipments'][serial].get('loaned', False) or user_obj['equipments'][serial].get('staked', False)
                 if loaned:
                     e_serial.append(serial)
                 else:

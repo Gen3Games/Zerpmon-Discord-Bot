@@ -157,7 +157,7 @@ async def update_nft_holdings(client: nextcord.Client):
                 #     await filter_nfts(user_obj, nfts_xahau, serials, t_serial, e_serial, xahau=True)
                 for serial in list(old_user['zerpmons'].keys()):
                     if serial not in serials:
-                        loaned = old_user['zerpmons'][serial].get('loaned', False)
+                        loaned = old_user['zerpmons'][serial].get('loaned', False) or user_obj['zerpmons'][serial].get('staked', False)
                         if loaned:
                             serials.append(serial)
                         else:
@@ -166,7 +166,7 @@ async def update_nft_holdings(client: nextcord.Client):
                             remove_serials['zerpmons'].append(serial)
                 for serial in list(user_obj['trainer_cards'].keys()):
                     if serial not in t_serial:
-                        loaned = user_obj['trainer_cards'][serial].get('loaned', False)
+                        loaned = user_obj['trainer_cards'][serial].get('loaned', False) or user_obj['trainer_cards'][serial].get('staked', False)
                         if loaned:
                             t_serial.append(serial)
                         else:
@@ -174,7 +174,7 @@ async def update_nft_holdings(client: nextcord.Client):
                             # await db_query.remove_user_nft(user_obj['discord_id'], serial, True)
                 for serial in list(user_obj['equipments'].keys()):
                     if serial not in e_serial:
-                        loaned = user_obj['equipments'][serial].get('loaned', False)
+                        loaned = user_obj['equipments'][serial].get('loaned', False) or user_obj['equipments'][serial].get('staked', False)
                         if loaned:
                             e_serial.append(serial)
                         else:
